@@ -256,7 +256,7 @@ pub fn export_all_to_workspace(
     }
     stages.push(stage(
         "validation",
-        usize::from(validation_ok),
+        0,
         0,
         validation_details,
     ));
