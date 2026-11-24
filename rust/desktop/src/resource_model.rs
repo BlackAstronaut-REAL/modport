@@ -44,8 +44,8 @@ fn model_file_index(roots: &[PathBuf]) -> HashMap<String, PathBuf> {
 fn resolve_parent_path(path: &Path, parent: &str, index: &HashMap<String, PathBuf>) -> Option<PathBuf> {
     if parent.starts_with("builtin/") { return None; }
     let (namespace, model) = parent.split_once(':')
-        .map(|(namespace, model)| (namespace, model))
-        .unwrap_or_else(|| (asset_namespace(path).leak(), parent));
+        .map(|(namespace, model)| (namespace.to_owned(), model.to_owned()))
+        .unwrap_or_else(|| (asset_namespace(path), parent.to_owned()));
     let model = model.trim_start_matches('/').trim_end_matches(".json");
     if model.contains("..") { return None; }
     let path_text = path.to_string_lossy().replace('\\', "/");
@@ -182,7 +182,6 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
     let textures = payload.get("textures").and_then(Value::as_object).cloned().unwrap_or_default();
     let namespace = asset_namespace(path);
     let mut texture_paths = Vec::new();
-    let mut texture_map = HashMap::<String, PathBuf>::new();
     let mut referenced = BTreeSet::<String>::new();
     for value in textures.values().filter_map(Value::as_str) {
         let resolved = resolve_texture_alias(value, &textures, 0);
@@ -191,7 +190,6 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
             if !texture_paths.contains(&texture_path) {
                 texture_paths.push(texture_path.clone());
             }
-            texture_map.insert(resolved, texture_path);
         }
     }
 
@@ -200,7 +198,6 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
         .and_then(|path| image::image_dimensions(path).ok())
         .unwrap_or((16, 16));
     let texture_size = [dimensions.0.max(1), dimensions.1.max(1)];
-    let scale = [texture_size[0] as f32 / 16.0, texture_size[1] as f32 / 16.0];
     let mut nodes = Vec::new();
 
     for (element_index, element) in elements.iter().enumerate() {
@@ -236,8 +233,7 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
             }
         }
         let texture_size = texture_size;
-        let face_uvs = face_uvs(element, &textures, texture_size)
-            .map(|rect| [rect[0] * scale[0], rect[1] * scale[1], rect[2] * scale[0], rect[3] * scale[1]]);
+        let face_uvs = face_uvs(element, &textures, texture_size);
 
         nodes.push(ViewerNode {
             name: element.get("name").and_then(Value::as_str)
