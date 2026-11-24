@@ -658,7 +658,9 @@ impl eframe::App for MojModelBridgeApp {
         if self.playing {
             if let Some(animation) = self.scene.as_ref().and_then(|scene| scene.animations.get(self.selected_animation)) {
                 self.animation_time += delta;
-                if !animation.looping && self.animation_time >= animation.length {
+                if animation.looping && animation.length > f32::EPSILON {
+                    self.animation_time = self.animation_time.rem_euclid(animation.length);
+                } else if self.animation_time >= animation.length {
                     self.animation_time = animation.length;
                     self.playing = false;
                 }
