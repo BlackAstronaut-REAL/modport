@@ -140,6 +140,15 @@ enum Command {
         source_modid: String,
         #[arg(long, default_value_t = 89)]
         imported_fv: i64,
+        /// Run the workspace Gradle build after export and native validation.
+        #[arg(long)]
+        compile: bool,
+        /// Run Gradle without resolving remote dependencies.
+        #[arg(long)]
+        offline: bool,
+        /// Gradle task to execute when --compile is selected (repeatable; defaults to build).
+        #[arg(long = "compile-task")]
+        compile_tasks: Vec<String>,
     },
     /// Compile an existing MCreator workspace through its Gradle wrapper.
     CompileWorkspace {
@@ -475,13 +484,18 @@ fn main() -> Result<()> {
                 eprintln!("[WARN] {warning}");
             }
         }
-        Command::ExportAll { workspace_root, source_roots, source_modid, imported_fv } => {
+        Command::ExportAll { workspace_root, source_roots, source_modid, imported_fv, compile, offline, compile_tasks } => {
             let report = export_all_to_workspace(
                 &source_roots,
                 &workspace_root,
                 &source_modid,
                 imported_fv,
             )?;
+            let compile_report = if compile {
+                Some(compile_workspace(&workspace_root, &compile_tasks, offline, false, false)?)
+            } else {
+                None
+            };
             let total: usize = report.stages.iter().map(|stage| stage.exported).sum();
             let skipped: usize = report.stages.iter().map(|stage| stage.skipped).sum();
             println!(
@@ -500,6 +514,21 @@ fn main() -> Result<()> {
             }
             for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
+            }
+            if let Some(build) = compile_report {
+                println!(
+                    "Gradle compilation: {} (exit={:?}, {:.1}s).",
+                    if build.success { "PASS" } else { "FAIL" },
+                    build.exit_code, build.duration_seconds
+                );
+                println!("Build log: {}", build.log_file.display());
+                println!("Build report: {}", build.report_file.display());
+                for diagnostic in build.diagnostics {
+                    eprintln!("[{}] {}", diagnostic.severity.to_ascii_uppercase(), diagnostic.message);
+                }
+                if !build.success {
+                    std::process::exit(3);
+                }
             }
         }
         Command::CompileWorkspace { root, tasks, offline, skip_validation, fail_on_validation } => {
