@@ -170,3 +170,34 @@ mod tests {
         assert_eq!(model.cube_count(), 24);
     }
 }
+
+
+impl ParsedModel {
+    pub fn new(class_name: String, texture_width: u32, texture_height: u32, parts: Vec<Part>, warnings: Vec<String>) -> Self {
+        Self {
+            class_name, texture_width, texture_height, parts, warnings,
+            animation_analysis: serde_json::json!({}),
+            animation_logic: String::new(),
+            baked_animation_json: serde_json::json!({}),
+            blockbench_animations: Vec::new(),
+            animation_source: String::new(),
+            animation_resource: String::new(),
+            animation_resource_path: String::new(),
+            source_format: default_source_format(),
+            primary_texture: String::new(),
+            texture_variants: Vec::new(),
+            auxiliary_textures: Vec::new(),
+            texture_evidence: Vec::new(),
+            variant_model_outputs: Vec::new(),
+            constructor_args: Vec::new(),
+            scalar_fields: BTreeMap::new(),
+            model_bounds: serde_json::json!({}),
+            linked_entities: Vec::new(),
+            linked_renderers: Vec::new(),
+            cached_cube_count: None,
+            render_instances: BTreeMap::new(),
+            default_render_parts: Vec::new(),
+            render_runtime_rotations: Vec::new(),
+        }
+    }
+}
