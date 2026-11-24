@@ -174,12 +174,15 @@ pub fn export_all_to_workspace(
     let entities = crate::mcreator_workspace::export_living_entities_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
-    warnings.extend(entities.warnings.iter().cloned());
+    let entity_details = serde_json::to_value(&entities)?;
+    if let Some(items) = entity_details.get("warnings").and_then(Value::as_array) {
+        warnings.extend(items.iter().filter_map(Value::as_str).map(str::to_owned));
+    }
     stages.push(stage(
         "living_entities",
-        entities.exported,
-        entities.skipped,
-        serde_json::to_value(&entities)?,
+        count_field(&entity_details, "exported"),
+        count_field(&entity_details, "skipped"),
+        entity_details,
     ));
 
     let projectiles = crate::mcreator_projectile::export_projectiles_to_workspace(
