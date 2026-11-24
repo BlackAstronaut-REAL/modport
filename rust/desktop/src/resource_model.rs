@@ -424,6 +424,23 @@ mod tests {
     use image::RgbaImage;
 
     #[test]
+    fn synthesizes_legacy_block_shape_previews_with_source_texture() {
+        let temp = tempfile::tempdir().unwrap();
+        let texture = temp.path().join("stone.png");
+        RgbaImage::new(32, 32).save(&texture).unwrap();
+
+        let (scene, textures) = synthetic_block_preview("Ancient Stone", "cube", Some(texture.clone())).unwrap();
+        assert_eq!(scene.name, "Ancient Stone");
+        assert_eq!(scene.nodes.len(), 1);
+        assert_eq!(scene.nodes[0].cubes[0].min, [-8.0, -8.0, -8.0]);
+        assert_eq!(scene.texture_size, [32, 32]);
+        assert_eq!(textures, vec![texture]);
+
+        let (plant, _) = synthetic_block_preview("Blue Flower", "plant", None).unwrap();
+        assert_eq!(plant.nodes.len(), 2);
+    }
+
+    #[test]
     fn renders_vanilla_cube_all_and_cross_plant_block_models() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
