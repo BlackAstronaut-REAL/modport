@@ -52,9 +52,9 @@ fn gradle_command(root: &Path) -> Result<PathBuf> {
 
 fn windows_command_line(executable: &Path, args: &[String]) -> Result<String> {
     let raw_path = executable.to_string_lossy();
-    let executable_text = if let Some(unc) = raw_path.strip_prefix(r"\\?\UNC\\") {
-        format!(r"\\\\{unc}")
-    } else if let Some(local) = raw_path.strip_prefix(r"\\?\\") {
+    let executable_text = if let Some(unc) = raw_path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(local) = raw_path.strip_prefix(r"\\?\") {
         local.to_owned()
     } else {
         raw_path.into_owned()
