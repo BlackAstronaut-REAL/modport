@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::scan::scan_project;
 
 #[derive(Debug, Parser)]
@@ -22,7 +23,18 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Safely extract a JAR/ZIP archive into a new directory.
+    /// Convert a decompiled legacy or modern Java model into a Blockbench project.
+    ConvertModel {
+        source: PathBuf,
+        output: PathBuf,
+        /// Directories searched recursively for matching PNG textures.
+        #[arg(long = "texture-root")]
+        texture_roots: Vec<PathBuf>,
+        /// Replace an existing output.
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Safely extract a JAR or ZIP archive.
     Extract {
         archive: PathBuf,
         destination: PathBuf,
@@ -30,24 +42,37 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    match cli.command {
+    match Cli::parse().command {
         Command::Inspect { roots, output } => {
             let report = scan_project(&roots)?;
-            let json = serde_json::to_string_pretty(&report)?;
+            let data = serde_json::to_string_pretty(&report)?;
             if let Some(path) = output {
                 if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent)?;
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent)?;
+                    }
                 }
-                std::fs::write(&path, format!("{json}\n"))?;
+                std::fs::write(&path, format!("{data}\n"))?;
                 println!("Wrote project scan: {}", path.display());
             } else {
-                println!("{json}");
+                println!("{data}");
+            }
+        }
+        Command::ConvertModel { source, output, texture_roots, overwrite } => {
+            let result = convert_model_source(&source, &output, &texture_roots, overwrite)?;
+            println!(
+                "Converted {}: {} parts, {} cubes, {} texture(s), parser={}.",
+                result.source.display(), result.part_count, result.cube_count,
+                result.texture_count, result.source_format
+            );
+            println!("Blockbench project: {}", result.output.display());
+            for warning in result.warnings {
+                eprintln!("[WARN] {warning}");
             }
         }
         Command::Extract { archive, destination } => {
-            let extracted = mojmodelbridge::archive::extract_archive(&archive, &destination)?;
-            println!("Extracted {} to {}", archive.display(), extracted.display());
+            let path = mojmodelbridge::archive::extract_archive(&archive, &destination)?;
+            println!("Extracted {} to {}", archive.display(), path.display());
         }
     }
     Ok(())

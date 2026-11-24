@@ -1,14 +1,16 @@
 //! MojModelBridge native engine.
 //!
-//! This crate is the Rust implementation. The Python Beta 12 engine in
-//! ../oldVer remains a read-only behavioral reference and is not invoked by
-//! this crate or required at runtime.
+//! The Python Beta 12 engine in ../oldVer remains a read-only behavioral
+//! reference. This crate does not invoke Python, import Python modules, or
+//! require a Python installation.
 
 pub mod archive;
+pub mod blockbench;
 pub mod bytecode;
 pub mod discovery;
 pub mod metadata;
 pub mod model;
+pub mod pipeline;
 pub mod scan;
 pub mod source;
 

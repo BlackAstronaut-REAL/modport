@@ -1,73 +1,53 @@
 # Beta 12 → Native Rust Engine Port Map
 
-## Source of truth
+The immutable behavioral reference is oldVer/ (MojModelBridge 3.4.0 Beta 12).
+The Rust implementation is independent under rust/ and must not invoke Python.
 
-The immutable reference is oldVer/ (MojModelBridge 3.4.0 Beta 12). The Rust
-implementation lives only under rust/. No Python source is copied into the
-runtime, and the Rust executable must not invoke Python.
+## Current stage map
 
-## Legacy pipeline and Rust ownership
-
-| Legacy source / entry point | Native Rust subsystem | Required parity |
+| Legacy module / entry point | Native Rust module | State |
 |---|---|---|
-| model_bridge.py::batch_convert | pipeline | Root merge order, resume behavior, paired model handling, per-file failure isolation, reports, MCreator handoff |
-| texture_resolver.py::discover_mod_layout | discovery | Conventional roots, named folders, flat-package fallback, canonical de-duplication |
-| texture_resolver.py::TextureIndex | texture | Java/class reference extraction, companion model links, canonicalization, candidate scores, primary/variant/auxiliary selection |
-| model_bridge.py Java helpers and parse_java_model | source/java_* | Comment stripping, balanced expression parsing, nested calls, constructor arguments, helper expansion, geometry and modern animations |
-| legacy_bridge.py::parse_legacy_class | bytecode/legacy_model | Class-file parsing, constructor selection, operand stack/local slots, ModelRenderer object graph, parent-child relationships |
-| legacy_bridge.py::_parse_animation | animation/legacy | JVM expression recovery, helper-method traversal, axis signs, formula scoring, baked previews and additive keyframes |
-| modern_bytecode_bridge.py | bytecode/modern_model | Constant-pool/invokedynamic handling, method prioritization, CubeListBuilder / PartDefinition / PartPose reconstruction |
-| legacy_mod_graph.py::scan_legacy_mod | graph | Registration discovery, renderer constructor args, entity metadata, registry aliases, source + bytecode merge |
-| model_bridge.py::model_to_bbmodel | export/blockbench | Stable UUIDs, hierarchy, cube faces, UVs, texture embedding, preview baking, animation format |
-| mcreator_export.py::export_mcreator_workspace | export/mcreator | Template clone, workspace descriptor, entity/model Java, animations, textures, procedures, generator-specific resources |
-| mcreator_content_export.py::export_mcreator_content | export/mcreator/content | Items, tools, armor, blocks, plants, recipes, projectiles, biomes, dimensions, worldgen, sounds, language and custom resources |
-| mcreator_source_bridge.py::generate_compile_bridge | export/mcreator/source_bridge | Generated source/resources, registry patching, namespace rewrites and compile bridge |
-| workspace_validator.py::validate_workspace | validate/workspace | Duplicate IDs, missing element files, malformed definitions, texture references, invalid model values, report shape |
-| mod_metadata.py::infer_mod_metadata | metadata | Source priority and fallback merge semantics |
+| texture_resolver.py::discover_mod_layout | discovery | Initial directory-classification port; parity review remains |
+| mod_metadata.py::infer_mod_metadata | metadata | Initial metadata discovery and source-priority port |
+| model_bridge.py Java lexical helpers | source/java | Balanced extraction, splitting, comments and numeric expressions |
+| model_bridge.py::parse_legacy_java_model | source/legacy_model | Initial ModelRenderer/ModelBox geometry parser |
+| model_bridge.py::parse_java_model | source/model | Modern Mojmap and legacy Java parser selection |
+| model_bridge.py::model_to_bbmodel | blockbench | Initial serializer with Beta 12 UUID namespace and coordinate conversion |
+| model_bridge.py::convert_file | pipeline | Java source → Blockbench; basic PNG name matching and sidecars |
+| legacy_bridge.py class interpretation | bytecode | Class-file structure, descriptors and instruction boundaries; interpreter pending |
+| modern_bytecode_bridge.py | bytecode/modern_model | Class-file foundation exists; modern builder interpreter pending |
+| legacy_bridge.py animation interpretation | animation | Not ported: symbolic stack/local values, formula recovery, sampling and baking |
+| texture_resolver.py::TextureIndex | texture | Not ported: resource references, candidate scoring, primary/variant/auxiliary selection |
+| legacy_mod_graph.py::scan_legacy_mod | graph | Not ported: registrations, constructor arguments, entity metadata and aliases |
+| mcreator_export.py::export_mcreator_workspace | export/mcreator | Not ported |
+| mcreator_content_export.py | export/mcreator/content | Not ported |
+| mcreator_source_bridge.py | export/mcreator/source_bridge | Not ported |
+| workspace_validator.py | validate/workspace | Not ported |
+| model_bridge.py::batch_convert | pipeline | Not ported: mixed roots, resume/cache, reports and MCreator handoff |
 
-## Shared native intermediate representations
+## Shared representations
 
-The Rust model IR mirrors the legacy Cube, Part, and ParsedModel structures,
-but replaces Python object cycles with stable part-name references. It must
-preserve all render-instance, constructor-argument, texture-evidence, animation,
-and source-format fields used downstream.
+The Rust model IR mirrors Cube, Part and ParsedModel. Parent/child relations use
+stable part-name references instead of Python object pointers. The JVM class IR
+retains constant-pool entries, method descriptors, Code attributes, exception
+tables, line tables, bootstrap methods and instruction offsets.
 
-Additional IRs will be introduced for:
+Further stages must preserve source spans, bytecode offsets, source/constructor
+selection evidence, inferred values, confidence and warnings. MCreator JSON
+must retain unknown fields so round-tripping does not silently discard data.
 
-- JVM classes: constant pool, class/member metadata, descriptors, code attributes,
-  exception tables, bootstrap methods, line tables, and decoded instructions.
-- Source evidence: file, bytecode offset, declaration/call span, inferred value,
-  confidence, and warning.
-- Mod graph: registrations, entities, renderers, constructor arguments,
-  registry aliases, and source/bytecode provenance.
-- MCreator workspace: raw JSON values plus typed accessors. Unknown fields must
-  round-trip unchanged rather than being discarded by rigid structs.
+## Regression gates
 
-## Compatibility gates
+1. Geometry: selected constructor, class, part order, hierarchy, cube count,
+   coordinates, pivots, rotations, UV, mirror/inflate and UUIDs.
+2. Animations: methods, formulas, channels, loop endpoints, frame timing,
+   position rebasing and preview poses.
+3. Textures: companion references, candidate ranks, primary texture, variants,
+   auxiliary overlays and evidence explanations.
+4. Mod graph: same registrations, constructor args, registry aliases and entity attributes.
+5. MCreator: structurally equal workspace descriptors/elements and generated source/resources.
+6. Whole mod: OreSpawn, Lost Infinity, Twilight Forest and Chaos Persists corpora.
 
-Every ported stage gets fixtures before it is considered complete.
-
-1. Model geometry: same class selection, constructor selection, part order,
-   hierarchy, cube count, cube coordinates, pivots, rotations, UV offsets,
-   mirror/inflate values, and deterministic Blockbench UUIDs.
-2. Animations: same recovered methods, formula count, expression set,
-   channel classification, loop endpoints, keyframe timing, rebasing, and
-   preview poses. Preserve unknown animations rather than dropping them.
-3. Texture resolution: same companion links, candidate ranking, primary
-   texture, variants, auxiliary textures, and evidence explanations.
-4. Mod graph: same entity/renderer registrations and constructor arguments,
-   registry names, and inferred entity attributes.
-5. MCreator: compare generated descriptor and element JSON structurally,
-   generated Java/resource trees byte-for-byte where stable, and validation
-   diagnostics by code/context.
-6. Whole pipeline: run OreSpawn, Lost Infinity, Twilight Forest, and Chaos
-   Persists regression corpora. Differences must be classified as intentional,
-   parity bugs, or unsupported behavior; never silently accepted.
-
-## Performance policy
-
-Rust is not considered faster merely because it is Rust. Profile the complete
-pipeline and optimize expensive scans, bytecode interpretation, repeated
-resource indexing, and JSON generation only after output parity is established.
-Parallelize independent file-level work while preserving deterministic output
-ordering and warning order.
+Classify every difference as intentional, parity bug or unsupported. Rust is not
+considered faster solely because of its language; profile after parity and
+preserve deterministic output while parallelizing.

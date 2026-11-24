@@ -1,43 +1,49 @@
 # MojModelBridge — Native Rust Rewrite
 
 This directory is the independent Rust implementation of MojModelBridge 4.x.
+The Python 3.4.0 Beta 12 engine under ../oldVer is a permanent, read-only
+behavioral reference. The Rust application does not spawn Python, import Python
+modules, or require a Python installation. The Windows release workflow compiles
+the engine into the native executable.
 
-The Python 3.4.0 Beta 12 engine under [../oldVer](../oldVer) is a permanent,
-read-only behavioral reference. The Rust application does not spawn Python,
-import Python modules, or require a Python installation. The final application
-will compile the engine into its native executable.
+## Native stages implemented
 
-## Current implementation status
-
-The initial native foundation includes:
-
-- A serializable model representation carrying the legacy model, animation,
-  texture, render-instance, and source-evidence fields.
-- Mod layout discovery for model, renderer, texture, animation, and resource roots.
-- Metadata inference across mcmod.info, Fabric metadata, Forge/NeoForge
-  mods.toml, Java @Mod annotations, and asset namespaces.
-- Merged compiled/decompiled root inventory.
+- Project layout discovery, metadata inference and merged compiled/decompiled inventory.
 - Bounded, path-safe JAR/ZIP extraction.
+- Direct JVM class-file parsing foundations: constant pool, member and Code
+  attributes, line numbers, bootstrap method metadata and instruction boundaries.
+- JVM field/method descriptor parsing, including arrays and wide local slots.
+- Shared Java lexical helpers, balanced-delimiter extraction, top-level splitting
+  and numeric constant/expression evaluation.
+- Legacy ModelBase/ModelRenderer and ModelBox Java-source geometry reconstruction.
+- Modern Mojmap PartDefinition/ModelPartData and CubeListBuilder Java-source
+  geometry reconstruction.
+- Blockbench 5.x serialization with the Beta 12 UUID namespace, coordinate
+  conversion, hierarchy, model bounds and embedded PNG textures.
+- The convert-model command writes .bbmodel files and preserves recognized
+  procedural animation methods into Java/JSON sidecars.
 
-This is not yet a feature-complete converter. The source/bytecode interpreters,
-Blockbench serializer, MCreator exporters, and workspace validator are being
-ported in subsequent parity-tested stages.
+## Current conversion command
 
-## Build
+    cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel
+    cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
 
-Requires Rust stable and Cargo:
+It currently converts decompiled .java model source. Compiled .class input,
+bytecode interpretation, texture-reference scoring/variant classification,
+animation formula sampling and Blockbench keyframe baking remain in progress.
 
-    cargo test --manifest-path rust/Cargo.toml
-    cargo run --manifest-path rust/Cargo.toml -- inspect /path/to/mod
-    cargo run --manifest-path rust/Cargo.toml -- extract mod.jar /path/to/extracted
+## Remaining major engine ports
 
-No Python runtime or JDK is used by the Rust inspection/extraction foundation.
-The final JVM class-file interpreter will parse .class files directly in Rust.
+The legacy compiled-class ModelRenderer interpreter, modern compiled-model
+interpreter, symbolic animation interpreter and preview baker, full texture
+resolver, entity/renderer mod graph, MCreator workspace/content/source exporters,
+workspace validator and complete batch/resume/report pipeline remain to be
+ported. The app UI is not considered complete until these use the native engine.
 
-## Porting rule
+## Parity rules
 
-Port behavior and data flow, not Python syntax. Keep the old stage ordering,
-selection rules, scoring, defaults, deterministic identifiers, warnings,
-serialization shape, and fallback behavior unless a change is explicitly
-documented and covered by a regression test. Do not silently simplify an
-unsupported source construct; retain evidence and emit a warning.
+Preserve source/constructor selection, part order, hierarchy, geometry coordinates,
+pivots, rotations, UV offsets, inflate/mirror behavior, UUIDs, texture selection,
+animation formulas/timing/loop endpoints, warnings, reports and MCreator output.
+Differences must be documented and covered by regression tests against oldVer/.
+Never silently simplify unsupported input; retain source evidence and warnings.
