@@ -1,8 +1,12 @@
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use walkdir::WalkDir;
+
+static REGISTRY_CACHE: OnceLock<Mutex<HashMap<String, (u64, CompiledRegistryIndex)>>> = OnceLock::new();
 
 use crate::bytecode::{
     decode_instructions, parse_method_descriptor, ClassFile, ConstantPoolEntry, Instruction,
@@ -366,6 +370,36 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
     paths.sort();
     paths.dedup();
 
+    // Several MCreator exporters consume the same compiled index in one
+    // export-all run. Cache by canonical roots plus each class file's size and
+    // modification timestamp so bytecode is parsed once without going stale
+    // when callers replace an input archive between runs.
+    let mut hasher = DefaultHasher::new();
+    let cache_key = roots.iter().map(|root| {
+        fs::canonicalize(root).unwrap_or_else(|_| root.clone()).to_string_lossy().into_owned()
+    }).collect::<Vec<_>>().join("|");
+    cache_key.hash(&mut hasher);
+    for path in &paths {
+        path.hash(&mut hasher);
+        if let Ok(metadata) = fs::metadata(path) {
+            metadata.len().hash(&mut hasher);
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    elapsed.as_nanos().hash(&mut hasher);
+                }
+            }
+        }
+    }
+    let fingerprint = hasher.finish();
+    let cache = REGISTRY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some((cached_fingerprint, cached_index)) = guard.get(&cache_key) {
+            if *cached_fingerprint == fingerprint {
+                return Ok(cached_index.clone());
+            }
+        }
+    }
+
     let mut parsed = HashMap::<String, ClassFile>::new();
     let mut index = CompiledRegistryIndex::default();
     for path in &paths {
@@ -405,6 +439,9 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
 
     for class in parsed.values() {
         scan_registrations(class, &fields, &parsed, &mut index.registries);
+    }
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(cache_key, (fingerprint, index.clone()));
     }
     Ok(index)
 }
