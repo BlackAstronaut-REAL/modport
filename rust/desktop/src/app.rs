@@ -284,7 +284,26 @@ impl MojModelBridgeApp {
         self.playing = false;
         self.selected_error.clear();
 
-        if entry.category == "Armor" {
+        if entry.category == "Blocks"
+            && entry.resource_model_source.is_none()
+            && entry.model_source.is_none()
+            && matches!(entry.render_shape.as_deref(), Some("cube" | "plant" | "floor"))
+        {
+            let shape = entry.render_shape.as_deref().unwrap_or("cube");
+            match crate::resource_model::synthetic_block_preview(
+                &entry.name,
+                shape,
+                entry.icon_path.clone(),
+            ) {
+                Ok((scene, textures)) => {
+                    self.scene = Some(scene);
+                    self.texture_paths = textures;
+                    self.selected_texture = 0;
+                    self.refresh_preview_image();
+                }
+                Err(error) => self.selected_error = format!("Legacy block preview could not be created: {error:#}"),
+            }
+        } else if entry.category == "Armor" {
             if let Some(source) = entry.model_source.as_ref() {
                 if let Err(error) = self.load_legacy_model_preview(&entry, source) {
                     self.selected_error = format!("Armor model preview could not be loaded: {error:#}");
