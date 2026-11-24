@@ -800,6 +800,44 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
 }
 
 
+
+fn compiled_registry_names(class_paths: &[PathBuf]) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    let markers = [b"registerModEntity".as_slice(), b"registerGlobalEntityID".as_slice()];
+    for path in class_paths {
+        let Ok(bytes) = fs::read(path) else { continue; };
+        if !markers.iter().any(|marker| bytes.windows(marker.len()).any(|window| window == *marker)) {
+            continue;
+        }
+        let Ok(class) = ClassFile::parse(&bytes) else { continue; };
+        for method in &class.methods {
+            let Some(code) = method.code.as_ref() else { continue; };
+            let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+            let mut recent_class = String::new();
+            let mut recent_string = String::new();
+            for instruction in &instructions {
+                if (0x12..=0x14).contains(&instruction.opcode) {
+                    match compiled_constant(&class, instruction) {
+                        Some(CompiledValue::Class(value)) => recent_class = simple_name(&value).to_owned(),
+                        Some(CompiledValue::Text(value)) => recent_string = value,
+                        _ => {}
+                    }
+                }
+                if !matches!(instruction.opcode, 0xb6..=0xb9) { continue; }
+                let Some(index) = compiled_u16(&instruction.operands, 0) else { continue; };
+                let Some((_, name, _)) = class.member_reference(index) else { continue; };
+                if matches!(name.as_str(), "registerModEntity" | "registerGlobalEntityID")
+                    && !recent_class.is_empty()
+                    && !recent_string.is_empty()
+                {
+                    result.entry(recent_class.clone()).or_insert_with(|| recent_string.clone());
+                }
+            }
+        }
+    }
+    result
+}
+
 fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
     let mut metadata = EntityMetadata {
         class_name: class_name.to_owned(),
@@ -869,7 +907,12 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     }
 
     let index = source_index(&java_paths);
-    let registry = registry_names(&java_paths);
+    let mut registry = compiled_registry_names(&class_paths);
+    // Source registrations are more descriptive than the compact legacy
+    // compiled call pattern, so explicit source IDs take precedence.
+    for (entity, name) in registry_names(&java_paths) {
+        registry.insert(entity, name);
+    }
     let field_entities = registry_field_entities(&java_paths);
     let mut registrations = Vec::new();
     let mut warnings = Vec::new();
@@ -1002,6 +1045,19 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn recovers_compiled_legacy_registry_name_from_class_and_string_constants() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::write(
+            root.join("LegacyEntityRegistry.class"),
+            include_bytes!("../tests/fixtures/LegacyEntityRegistry.class")
+        ).unwrap();
+
+        let graph = scan_mod_graph(root, &[]).unwrap();
+        assert_eq!(graph.registry_names.get("EntityRedAnt").map(String::as_str), Some("red_ant"));
+    }
 
     #[test]
     fn connects_compiled_entity_class_literal_to_renderer_and_model_constructors() {
