@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::mcreator_model::export_model_sources;
 use mojmodelbridge::mod_graph::scan_mod_graph;
-use mojmodelbridge::mcreator_model::export_model_sources;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
