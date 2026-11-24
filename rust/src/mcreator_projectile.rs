@@ -285,6 +285,14 @@ fn unique_element_name(base: &str, used: &mut HashSet<String>) -> String {
     name
 }
 
+fn source_class_text<'a>(java: &'a [(String,String)], class_name: &str) -> Option<&'a str> {
+    let simple = simple_name(class_name);
+    let declaration = Regex::new(&format!(r"\bclass\s+{}\b",Regex::escape(&simple))).ok()?;
+    java.iter()
+        .find(|(file_name,text)|file_name.eq_ignore_ascii_case(&simple)||declaration.is_match(text))
+        .map(|(_,text)|text.as_str())
+}
+
 fn binding_items(
     workspace: &Value,
     source_roots: &[PathBuf],
@@ -331,7 +339,7 @@ fn binding_items(
 
         let constructor=Regex::new(&format!(r"\bnew\s+{}\s*\(",regex::escape(&projectile.class_name))).unwrap();
         for (source_class,item_name) in &item_source_classes {
-            if let Some((_,text))=all_java.iter().find(|(name,_)|name==source_class) {
+            if let Some(text)=source_class_text(&all_java,source_class) {
                 if constructor.is_match(text){
                     candidates.push((100,item_name.clone()));
                 }
@@ -371,8 +379,7 @@ fn update_ranged_items(
         let Ok(mut element)=serde_json::from_slice::<Value>(&bytes) else {continue};
         let Some(definition)=element.get_mut("definition").and_then(Value::as_object_mut) else {continue};
         if definition.get("enableRanged").and_then(Value::as_bool)!=Some(true){continue;}
-        let source_simple=simple_name(source_class);
-        let Some((_,source_text))=java.iter().find(|(name,_)|name==&source_simple) else {continue};
+        let Some(source_text)=source_class_text(&java,source_class) else {continue};
         for projectile in projectiles {
             let regex=Regex::new(&format!(r"\bnew\s+{}\s*\(",regex::escape(&projectile.class_name))).unwrap();
             if regex.is_match(source_text) {
