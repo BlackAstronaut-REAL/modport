@@ -117,6 +117,50 @@ fn converts_compiled_legacy_model_class_without_javap() {
 }
 
 #[test]
+fn expands_repeated_helper_renders_into_blockbench_geometry() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("ModelHelperInstances.java");
+    let output = temp.path().join("helper/ModelHelperInstances.bbmodel");
+    fs::write(&source, r#"
+        public class ModelHelperInstances {
+            public static LayerDefinition createBodyLayer() {
+                MeshDefinition mesh = new MeshDefinition();
+                PartDefinition root = mesh.getRoot();
+                PartDefinition leg = root.addOrReplaceChild("leg",
+                    CubeListBuilder.create().addBox(-1, -1, -1, 2, 2, 2),
+                    PartPose.ZERO);
+                return LayerDefinition.create(mesh, 64, 32);
+            }
+            private void drawLeg(float px, float py, float pz) {
+                this.leg.x = px;
+                this.leg.y = py;
+                this.leg.z = pz;
+                this.leg.render(null, null, 0, 0);
+            }
+            public void renderToBuffer(PoseStack poseStack, VertexConsumer vertex,
+                                       int light, int overlay, float red, float green,
+                                       float blue, float alpha) {
+                this.drawLeg(1.0F, 2.0F, 3.0F);
+                this.drawLeg(4.0F, 5.0F, 6.0F);
+                this.drawLeg(7.0F, 8.0F, 9.0F);
+            }
+        }
+    "#).unwrap();
+
+    let converted = convert_model_source(&source, &output, &[], false).unwrap();
+    assert_eq!(converted.part_count, 3);
+    assert_eq!(converted.cube_count, 3);
+
+    let project: serde_json::Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(project["elements"].as_array().unwrap().len(), 3);
+    let group_names: Vec<&str> = project["groups"].as_array().unwrap()
+        .iter().filter_map(|group| group["name"].as_str()).collect();
+    assert!(group_names.contains(&"leg"));
+    assert!(group_names.contains(&"leg_2"));
+    assert!(group_names.contains(&"leg_3"));
+}
+
+#[test]
 fn converts_compiled_modern_mojmap_model_without_jdk() {
     let temp = tempdir().unwrap();
     let source = temp.path().join("ModelModernBytecode.class");
