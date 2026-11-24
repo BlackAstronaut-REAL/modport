@@ -314,7 +314,7 @@ pub fn parse_legacy_java_model(
         let pattern = regex(&format!(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.\s*(?:{field_alt})\s*([+-])=\s*([^;]+);"))?;
         for capture in pattern.captures_iter(&body) {
             events.push(Event {
-                position:capture.get(0).unwrap().start(), kind,
+                position:capture.get(0).unwrap().start(), kind:*kind,
                 variable:capture.get(1).unwrap().as_str().to_owned(),
                 raw_args:format!("{}{}", capture.get(2).unwrap().as_str(), capture.get(3).unwrap().as_str()),
             });
