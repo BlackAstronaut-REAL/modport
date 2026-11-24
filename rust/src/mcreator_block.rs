@@ -225,7 +225,7 @@ fn modern_block_registrations(source: &str) -> Vec<(String, String)> {
     result
 }
 
-pub pub fn is_plant_source(source: &BlockSource) -> bool {
+pub fn is_plant_source(source: &BlockSource) -> bool {
     let superclass = source.superclass.to_ascii_lowercase();
     let class = source.class_name.to_ascii_lowercase();
     [
