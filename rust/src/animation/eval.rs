@@ -161,7 +161,15 @@ fn trig_arguments(expression:&str)->Vec<String>{
     let bytes=expression.as_bytes();
     let mut cursor=0usize;
     while cursor<bytes.len(){
-        let Some(relative)=expression[cursor..].find("sin(").or_else(||expression[cursor..].find("cos(")) else{break;};
+        let sin_at = expression[cursor..].find("sin(");
+        let cos_at = expression[cursor..].find("cos(");
+        let relative = match (sin_at, cos_at) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        };
+        let Some(relative) = relative else { break; };
         let start=cursor+relative;
         let open=start+expression[start..].find('(').unwrap();
         let mut depth=0i32;
@@ -185,7 +193,7 @@ fn trig_arguments(expression:&str)->Vec<String>{
         }
         if let Some(end)=end{
             result.push(expression[open+1..end].to_owned());
-            cursor=end+1;
+            cursor=open+1;
         }else{break;}
     }
     result
@@ -220,7 +228,7 @@ mod tests{
             ("ageInTicks".to_owned(),10.0),
         ]);
         let value=evaluate("sin(limbSwing * 0.5F) * limbSwingAmount + cos(ageInTicks * 0.1)",&env).unwrap();
-        assert!((value-0.8535533905932737).abs()<1e-8);
+        assert!((value-0.8938556964614135).abs()<1e-8);
     }
     #[test]
     fn finds_trigonometric_source_coefficients(){
