@@ -1253,6 +1253,95 @@ mod tests {
     }
 
     #[test]
+    fn blockstate_variant_resolves_actual_in_game_model_and_render_shape() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let state = root.join("assets/demo/blockstates/living_flower.json");
+        let model = root.join("assets/demo/models/block/flower_cross.json");
+        fs::create_dir_all(state.parent().unwrap()).unwrap();
+        fs::create_dir_all(model.parent().unwrap()).unwrap();
+        fs::write(&state, r#"{"variants":{"":{"model":"demo:block/flower_cross"}}}"#).unwrap();
+        fs::write(&model, r#"{"parent":"minecraft:block/cross","textures":{"cross":"demo:block/flower"}}"#).unwrap();
+        let files = vec![state, model.clone()];
+
+        let (resolved, shape) = find_block_model_json(&files, "living_flower");
+        assert_eq!(resolved, Some(model.clone()));
+        assert_eq!(shape.as_deref(), Some("plant"));
+        assert_eq!(block_render_shape_from_model(&model), "plant");
+    }
+
+    #[test]
+    fn texture_references_follow_source_resource_locations_not_file_stems() {
+        let references = declared_texture_refs(r#"
+            item.setTextureName("demo:items/ancient_blade");
+            icon = iconRegister.registerIcon("demo:ancient_blade_icon");
+            ResourceLocation texture = new ResourceLocation("demo", "textures/entity/ancient_blade.png");
+            String other = "demo:textures/items/alternate.png";
+        "#);
+        assert!(references.iter().any(|value| value == "demo:items/ancient_blade"));
+        assert!(references.iter().any(|value| value == "demo:textures/entity/ancient_blade.png"));
+        assert!(references.iter().any(|value| value == "demo:textures/items/alternate.png"));
+
+        let temp = tempfile::tempdir().unwrap();
+        let item = temp.path().join("assets/demo/textures/items/ancient_blade.png");
+        let entity = temp.path().join("assets/demo/textures/entity/ancient_blade.png");
+        fs::create_dir_all(item.parent().unwrap()).unwrap();
+        fs::create_dir_all(entity.parent().unwrap()).unwrap();
+        fs::write(&item, b"png").unwrap();
+        fs::write(&entity, b"png").unwrap();
+        let files = vec![item.clone(), entity.clone()];
+        assert_eq!(
+            find_texture_reference(&files, &references),
+            Some(item),
+            "first explicit source reference should determine the item texture"
+        );
+        assert_eq!(
+            find_texture_reference(&files, &references[1..]),
+            Some(entity)
+        );
+    }
+
+    #[test]
+    fn mob_metadata_includes_attributes_ai_and_special_ability_boolean() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("EntityStormDrake.java");
+        fs::write(&source, r#"
+            public class EntityStormDrake extends EntityMob {
+                public void performRangedAttack(EntityLivingBase target, float power) {}
+                public void breatheLightning() {}
+            }
+        "#).unwrap();
+        let entity = EntityMetadata {
+            class_name: "EntityStormDrake".to_owned(),
+            display_name: "Storm Drake".to_owned(),
+            registry_name: "storm_drake".to_owned(),
+            superclass: "EntityMob".to_owned(),
+            width: 1.4,
+            height: 2.8,
+            health: 120.0,
+            movement_speed: 0.32,
+            attack_damage: 14.0,
+            armor: 8.0,
+            follow_range: 48.0,
+            xp: 25,
+            fire_immune: false,
+            water_mob: false,
+            flying_mob: true,
+            ai_classes: vec!["EntityAIAttackMelee".to_owned()],
+            warnings: Vec::new(),
+        };
+        let (lore, components) = mob_component_metadata(&entity, Some(&source));
+        assert!(lore.iter().any(|line| line == "Health: 120"));
+        assert!(lore.iter().any(|line| line == "Attack damage: 14"));
+        assert!(lore.iter().any(|line| line == "Special abilities: true"));
+        let json: Value = serde_json::from_str(&components).unwrap();
+        assert_eq!(json["attributes"]["max_health"], 120.0);
+        assert_eq!(json["attributes"]["attack_damage"], 14.0);
+        assert_eq!(json["special_abilities"], true);
+        assert_eq!(json["ai_goals"][0], "EntityAIAttackMelee");
+    }
+
+    #[test]
     fn humanizes_registry_and_model_names() {
         assert_eq!(humanize("red_ant"), "Red Ant");
         assert_eq!(humanize("FireBeetle"), "Fire Beetle");
