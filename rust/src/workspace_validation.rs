@@ -275,7 +275,7 @@ pub fn validate_workspace(workspace_root: &Path, workspace_override: Option<Valu
         if kind == "projectile" && python_string(definition.get("projectileItem"), "").trim().is_empty() {
             report.warning("projectile_item_unbound", "Projectile has no bound item; it cannot be selected by normal ranged-item generation.", name.clone(), registry.clone(), "");
         }
-        if let Some(files) = object_value(descriptor, "metadata").and_then(|m| m.get("files")).and_then(Value::as_array) {
+        if let Some(files) = descriptor.get("metadata").and_then(Value::as_object).and_then(|m| m.get("files")).and_then(Value::as_array) {
             for rel in files {
                 let relative = python_string(Some(rel), "");
                 if !root.join(&relative).exists() {
