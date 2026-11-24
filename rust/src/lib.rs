@@ -11,6 +11,7 @@ pub mod animation;
 pub mod blockbench;
 pub mod block_model_bridge;
 pub mod bytecode;
+pub mod compiled_registry;
 pub mod discovery;
 pub mod metadata;
 pub mod mcreator_model;
