@@ -67,7 +67,11 @@ fn registry_element_map(workspace_file: &Path) -> Result<BTreeMap<String,String>
 }
 
 fn count_field(value: &Value, field: &str) -> usize {
-    value.get(field).and_then(Value::as_u64).unwrap_or(0) as usize
+    match value.get(field) {
+        Some(Value::Array(items)) => items.len(),
+        Some(Value::Number(number)) => number.as_u64().unwrap_or(0) as usize,
+        _ => 0,
+    }
 }
 
 fn stage(name: &str, exported: usize, skipped: usize, details: Value) -> ExportStageResult {
@@ -332,6 +336,13 @@ mod tests {
         assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
         assert_eq!(report.source_modid, "examplemod");
         assert_eq!(report.workspace_file, descriptor);
+    }
+
+    #[test]
+    fn count_field_supports_numeric_and_record_array_reports() {
+        assert_eq!(count_field(&json!({"exported":4}), "exported"), 4);
+        assert_eq!(count_field(&json!({"exported":[{},{}]}), "exported"), 2);
+        assert_eq!(count_field(&json!({"exported":null}), "exported"), 0);
     }
 
     #[test]
