@@ -294,7 +294,7 @@ fn png_refs(text: &str) -> Vec<String> {
     refs
 }
 
-fn source_texture_references(source: &str) -> Vec<String> {
+fn texture_references_in_region(source: &str) -> Vec<String> {
     let mut references = png_refs(source);
     let two_args = Regex::new(
         r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:fromNamespaceAndPath|tryParse))\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"#
@@ -314,8 +314,32 @@ fn source_texture_references(source: &str) -> Vec<String> {
     for capture in texture_constants.captures_iter(source) {
         references.push(capture[1].replace('\\', "/"));
     }
-    references.sort_by_key(|value| value.to_ascii_lowercase());
-    references.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    references
+}
+
+fn append_unique_texture_refs(target: &mut Vec<String>, values: Vec<String>) {
+    for value in values {
+        if !target.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+            target.push(value);
+        }
+    }
+}
+
+fn source_texture_references(source: &str) -> Vec<String> {
+    let mut references = Vec::new();
+    // A mob's own texture accessor is more authoritative than unrelated
+    // renderer textures such as overlays, eyes, or auxiliary layers.
+    let texture_method = Regex::new(
+        r"(?s)\b(?:getEntityTexture|getEntityTextureLocation|getTextureLocation|getTextureResource|getTexture)\s*\([^)]*\)\s*\{"
+    ).unwrap();
+    for method in texture_method.find_iter(source) {
+        let Some(open) = source[method.start()..method.end()].rfind('{')
+            .map(|offset| method.start() + offset) else { continue; };
+        if let Ok((body, _)) = extract_balanced(source, open, '{', '}') {
+            append_unique_texture_refs(&mut references, texture_references_in_region(&body));
+        }
+    }
+    append_unique_texture_refs(&mut references, texture_references_in_region(source));
     references
 }
 
@@ -1437,6 +1461,20 @@ mod tests {
         assert!(metadata.fire_immune);
         assert!(metadata.flying_mob);
         assert!(metadata.ai_classes.contains(&"EntityAIAttackMelee".to_owned()));
+    }
+
+    #[test]
+    fn prioritizes_the_entity_texture_accessor_over_renderer_overlays() {
+        let source = r#"
+            static ResourceLocation SHADOW = new ResourceLocation("examplemod", "textures/entity/shadow.png");
+            public ResourceLocation getEntityTexture(Entity entity) {
+                return new ResourceLocation("examplemod", "textures/entity/storm_drake");
+            }
+        "#;
+        let references = source_texture_references(source);
+        assert_eq!(references.first().map(String::as_str),
+            Some("examplemod:textures/entity/storm_drake"));
+        assert!(references.iter().any(|value| value == "examplemod:textures/entity/shadow.png"));
     }
 
     #[test]
