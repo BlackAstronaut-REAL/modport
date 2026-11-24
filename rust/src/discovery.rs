@@ -18,12 +18,12 @@ pub struct ModLayout {
 impl ModLayout {
     pub fn describe(&self) -> serde_json::Value {
         serde_json::json!({
-            "root": self.root,
-            "model_roots": self.model_roots,
-            "render_roots": self.render_roots,
-            "texture_roots": self.texture_roots,
-            "animation_roots": self.animation_roots,
-            "resource_roots": self.resource_roots
+            "root": &self.root,
+            "model_roots": &self.model_roots,
+            "render_roots": &self.render_roots,
+            "texture_roots": &self.texture_roots,
+            "animation_roots": &self.animation_roots,
+            "resource_roots": &self.resource_roots
         })
     }
 }
