@@ -74,9 +74,17 @@ the full texture-selection edge-case corpus remain in progress.
 ## Remaining major engine ports
 
 The bytecode interpreters and initial legacy animation/texture stages now exist,
-but still need wider parity coverage. Remaining major ports are compiled JVM renderer-registration and full entity-stat
-reconstruction, modern compiled animation extraction, advanced animation control-
-flow and loop baking, Remaining MCreator block/plant/biome/dimension/projectile exports, compiled-only equipment registry recovery, full armor defense/material/repair inference, full compile bridge and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
+but still need wider parity coverage. The native `export-all` pipeline now orchestrates
+equipment, armor, blocks, plants, resource-authored worldgen, renderer-linked living
+entities, projectiles and recipes in dependency order. Remaining major parity work is
+compiled-only equipment/armor/block registration recovery, complete tool material and
+repair-item inference, custom armor-model adaptation, detailed block-state/property and
+loot/drop procedures, custom plant growth and biome-placement procedures, configured/
+placed feature conversion into MCreator generation procedures, custom projectile hit/
+collision procedures, fuller compiled JVM renderer/entity-stat reconstruction, modern
+compiled animation extraction, advanced animation control-flow and loop baking, and
+the Gradle compile/validation bridge plus durable batch/resume reporting. The app UI is
+not considered complete until these use the native engine.
 
 ## Parity rules
 
@@ -140,7 +148,7 @@ mojmodelbridge export-worldgen .\\MCreatorWorkspace .\\DecompiledMod --source-mo
 
 ### Complete native export pipeline
 
-The `export-all` command invokes the registered native exporters in dependency order: equipment, armor, blocks, plants, worldgen, living entities, projectiles, then recipes. Recipe element references are built from the workspace after content exporters have run. Each stage reports exported/skipped counts and warnings; a hard stage error stops the pipeline so it does not silently report a complete conversion.
+The `export-all` command invokes the registered native exporters in dependency order: equipment, armor, blocks, plants, worldgen, living entities, projectiles, then recipes. The living-entity stage builds a merged ModGraph from the supplied source roots and honors `--source-modid` for generated source/resource paths. Recipe element references are built from the workspace after content exporters have run. Each stage reports exported/skipped counts and warnings; a hard stage error stops the pipeline so it does not silently report a complete conversion.
 
 ```powershell
 mojmodelbridge export-all .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
