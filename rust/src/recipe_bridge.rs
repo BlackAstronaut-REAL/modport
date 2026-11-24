@@ -651,3 +651,90 @@ mod export_tests {
         assert_eq!(element["_fv"], 89);
     }
 }
+
+
+/// Load a workspace, emit recipe elements, copy recipe data and persist its descriptor.
+pub fn export_recipes_to_workspace(
+    source_roots: &[PathBuf],
+    workspace_root: &Path,
+    source_modid: &str,
+    registry_to_element: &BTreeMap<String, String>,
+    imported_fv: i64,
+) -> anyhow::Result<RecipeExportReport> {
+    let mut candidates = Vec::<(i64, usize, PathBuf, Value)>::new();
+    for entry in fs::read_dir(workspace_root)? {
+        let path = entry?.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("mcreator") {
+            continue;
+        }
+        let Some(value) = read_recipe_object(&path) else { continue };
+        if !value.get("workspaceSettings").is_some_and(Value::is_object) {
+            continue;
+        }
+        let version = value.get("mcreatorVersion").and_then(Value::as_i64).unwrap_or(0);
+        let count = value.get("mod_elements").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+        candidates.push((version, count, path, value));
+    }
+    candidates.sort_by_key(|(version, count, path, _)| (*version, *count, path.to_string_lossy().to_lowercase()));
+    let Some((_, _, descriptor_path, mut workspace)) = candidates.pop() else {
+        anyhow::bail!("No readable .mcreator workspace definition found in {}", workspace_root.display());
+    };
+
+    let report = emit_recipe_elements(
+        source_roots,
+        &workspace_root.join("elements"),
+        &mut workspace,
+        source_modid,
+        registry_to_element,
+        imported_fv,
+    )?;
+    let target_modid = workspace.get("workspaceSettings")
+        .and_then(|settings| settings.get("modid"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(source_modid);
+    let mut report = report;
+    report.copied_recipe_resources = copy_recipe_resources(source_roots, workspace_root, target_modid)?;
+    fs::write(&descriptor_path, format!("{}\n", serde_json::to_string_pretty(&workspace)?))
+        .with_context(|| format!("Writing updated workspace descriptor {}", descriptor_path.display()))?;
+    Ok(report)
+}
+
+
+#[cfg(test)]
+mod workspace_export_tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn exports_recipe_resources_and_updates_selected_workspace_file() {
+        let temp = tempdir().unwrap();
+        let workspace_root = temp.path().join("workspace");
+        let source_root = temp.path().join("source");
+        fs::create_dir_all(&workspace_root).unwrap();
+        let recipe = source_root.join("data/demo/recipes/stone_from_dirt.json");
+        fs::create_dir_all(recipe.parent().unwrap()).unwrap();
+        fs::write(&recipe, br#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:dirt"],"result":{"item":"minecraft:stone"}}"#).unwrap();
+
+        let workspace_file = workspace_root.join("test.mcreator");
+        fs::write(&workspace_file, serde_json::to_vec(&json!({
+            "mcreatorVersion":202600,
+            "workspaceSettings":{"modid":"converted"},
+            "mod_elements":[]
+        })).unwrap()).unwrap();
+
+        let report = export_recipes_to_workspace(
+            &[source_root], &workspace_root, "demo", &BTreeMap::new(), 89
+        ).unwrap();
+
+        assert_eq!(report.exported.len(), 1);
+        assert_eq!(report.exported[0].element_name, "StoneFromDirtRecipe");
+        assert_eq!(report.copied_recipe_resources.len(), 1);
+        let descriptor: Value = serde_json::from_slice(&fs::read(workspace_file).unwrap()).unwrap();
+        assert_eq!(descriptor["mod_elements"][0]["registry_name"], "stone_from_dirt");
+        assert_eq!(descriptor["mod_elements"][0]["path"], "~/demo/Recipes");
+        assert!(workspace_root.join("elements/StoneFromDirtRecipe.mod.json").is_file());
+        assert!(workspace_root.join("src/main/resources/data/converted/recipes/stone_from_dirt.json").is_file());
+    }
+}
