@@ -337,16 +337,6 @@ fn animation_keyframes(animator: &Value, channel: &str) -> Vec<(f64, [f64; 3])> 
     frames
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct McreatorAnimationRecord {
-    pub field: String,
-    pub source_name: String,
-    pub length: f64,
-    pub channel_count: usize,
-    pub helper_count: usize,
-    pub walking: bool,
-}
-
 #[derive(Debug, Clone)]
 pub struct GeneratedAnimationJava {
     pub source: String,
@@ -454,18 +444,6 @@ pub fn generate_animation_definition_java(model: &ParsedModel, class_name: &str)
         String::new(),
     ]).collect::<Vec<_>>().join("\n");
     Ok(Some(GeneratedAnimationJava { source, records }))
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ModelSourceExport {
-    pub source: PathBuf,
-    pub model_path: PathBuf,
-    pub animation_path: Option<PathBuf>,
-    pub class_name: String,
-    pub part_count: usize,
-    pub cube_count: usize,
-    pub animations: Vec<McreatorAnimationRecord>,
-    pub warnings: Vec<String>,
 }
 
 /// Parse a Java or compiled class model, expand repeated render instances, and
