@@ -18,6 +18,7 @@ use mojmodelbridge::mcreator_plant::export_plants_to_workspace;
 use mojmodelbridge::mcreator_worldgen::export_worldgen_to_workspace;
 use mojmodelbridge::mcreator_projectile::export_projectiles_to_workspace;
 use mojmodelbridge::mcreator_pipeline::export_all_to_workspace;
+use mojmodelbridge::gradle_bridge::compile_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -139,6 +140,22 @@ enum Command {
         source_modid: String,
         #[arg(long, default_value_t = 89)]
         imported_fv: i64,
+    },
+    /// Compile an existing MCreator workspace through its Gradle wrapper.
+    CompileWorkspace {
+        root: PathBuf,
+        /// Gradle tasks to execute (defaults to build).
+        #[arg(long = "task")]
+        tasks: Vec<String>,
+        /// Do not resolve dependencies from remote repositories.
+        #[arg(long)]
+        offline: bool,
+        /// Skip native workspace validation before compilation.
+        #[arg(long)]
+        skip_validation: bool,
+        /// Return failure when native workspace validation fails.
+        #[arg(long)]
+        fail_on_validation: bool,
     },
     /// Validate an exported MCreator workspace and write parity diagnostics.
     ValidateWorkspace {
@@ -483,6 +500,29 @@ fn main() -> Result<()> {
             }
             for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::CompileWorkspace { root, tasks, offline, skip_validation, fail_on_validation } => {
+            let report = compile_workspace(&root, &tasks, offline, skip_validation, fail_on_validation)?;
+            println!(
+                "Gradle compilation: {} (exit={:?}, {:.1}s).",
+                if report.success { "PASS" } else { "FAIL" },
+                report.exit_code, report.duration_seconds
+            );
+            println!("Build log: {}", report.log_file.display());
+            println!("Build report: {}", report.report_file.display());
+            if let Some(ok) = report.validation_ok {
+                println!(
+                    "Pre-build workspace validation: {} ({} error(s), {} warning(s)).",
+                    if ok { "PASS" } else { "FAIL" },
+                    report.validation_errors, report.validation_warnings
+                );
+            }
+            for diagnostic in report.diagnostics {
+                eprintln!("[{}] {}", diagnostic.severity.to_ascii_uppercase(), diagnostic.message);
+            }
+            if !report.success {
+                std::process::exit(3);
             }
         }
         Command::ValidateWorkspace { root, no_reports } => {
