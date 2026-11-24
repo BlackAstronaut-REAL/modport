@@ -255,7 +255,7 @@ pub fn parse_legacy_java_model(
         for capture in pattern.captures_iter(&body) {
             let full = capture.get(0).unwrap();
             if let Ok((args, _)) = extract_balanced(&body, full.end()-1, '(', ')') {
-                events.push(Event { position:full.start(), kind, variable:capture.get(1).unwrap().as_str().to_owned(), raw_args:args });
+                events.push(Event { position:full.start(), kind:*kind, variable:capture.get(1).unwrap().as_str().to_owned(), raw_args:args });
             }
         }
     }
@@ -409,7 +409,7 @@ pub fn parse_legacy_java_model(
                 "model_box" => {
                     if args.len() >= 9 {
                         let first = args[0].trim();
-                        let has_owner_arg = first.parse::<f64>().is_err();
+                        let has_owner_arg = eval_number(first, &constants).is_err();
                         let offset = if has_owner_arg { 1 } else { 0 };
                         let values = &args[offset..];
                         if values.len() >= 8 {
