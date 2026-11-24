@@ -111,6 +111,17 @@ pub fn render_scene(
     dimensions: [usize; 2],
     camera: &mut Camera,
 ) -> ColorImage {
+    let textures = texture.into_iter().cloned().collect::<Vec<_>>();
+    render_scene_with_textures(scene, pose, &textures, dimensions, camera)
+}
+
+pub fn render_scene_with_textures(
+    scene: &ViewerScene,
+    pose: &[NodePose],
+    textures: &[RgbaImage],
+    dimensions: [usize; 2],
+    camera: &mut Camera,
+) -> ColorImage {
     let width = dimensions[0].clamp(96, 1024);
     let height = dimensions[1].clamp(96, 1024);
     let background = [22_u8, 27_u8, 38_u8, 255_u8];
@@ -142,7 +153,7 @@ pub fn render_scene(
         let Some(world) = worlds.get(index).copied() else { continue; };
         for cube in &node.cubes {
             draw_cube(
-                cube, world, camera, texture, scene.texture_size,
+                cube, world, camera, textures, scene.texture_size,
                 width, height, focal, aspect, light, &mut pixels, &mut depth,
             );
         }
@@ -212,7 +223,7 @@ fn draw_cube(
     cube: &ViewerCube,
     world: Transform,
     camera: &Camera,
-    texture: Option<&RgbaImage>,
+    textures: &[RgbaImage],
     texture_size: [u32; 2],
     width: usize,
     height: usize,
@@ -232,47 +243,30 @@ fn draw_cube(
     let dx = x1 - x0;
     let dy = y1 - y0;
 
-    let mut faces = Vec::<([MeshVertex; 4], [f32; 3])>::with_capacity(6);
+    // Store face geometry first, then choose the correct image and UV scaling
+    // per face. Legacy cubes have no explicit texture map and use texture 0.
+    let faces = [
+        (0, [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]], [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy], [1.0,0.0,0.0]),
+        (1, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [u, v+dz, u+dz, v+dz+dy], [-1.0,0.0,0.0]),
+        (2, [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]], [u+dz, v, u+dz+dx, v+dz], [0.0,-1.0,0.0]),
+        (3, [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]], [u+dz+dx, v+dz, u+dz+2.0*dx, v], [0.0,1.0,0.0]),
+        (4, [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], [u+dz, v+dz, u+dz+dx, v+dz+dy], [0.0,0.0,-1.0]),
+        (5, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy], [0.0,0.0,1.0]),
+    ];
 
-    // Face vertex order and UV corner order mirror the vanilla ModelBox /
-    // TexturedQuad layout, including its non-obvious top/bottom placement.
-    faces.push((cube_face_quad(
-        cube, 0,
-        [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]],
-        [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy], tw, th
-    ), [1.0, 0.0, 0.0]));
+    for (face_index, points, default_rect, normal) in faces {
+        let texture_index = cube.face_texture_indices
+            .and_then(|indices| indices.get(face_index).copied())
+            .unwrap_or(0);
+        let texture = textures.get(texture_index).or_else(|| textures.first());
+        let (texture_width, texture_height) = texture
+            .map(|image| (image.width().max(1) as f32, image.height().max(1) as f32))
+            .unwrap_or((texture_size[0].max(1) as f32, texture_size[1].max(1) as f32));
+        let vertices = cube_face_quad(
+            cube, face_index, points, default_rect,
+            texture_width, texture_height,
+        );
 
-    faces.push((cube_face_quad(
-        cube, 1,
-        [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],
-        [u, v+dz, u+dz, v+dz+dy], tw, th
-    ), [-1.0, 0.0, 0.0]));
-
-    faces.push((cube_face_quad(
-        cube, 2,
-        [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]],
-        [u+dz, v, u+dz+dx, v+dz], tw, th
-    ), [0.0, -1.0, 0.0]));
-
-    faces.push((cube_face_quad(
-        cube, 3,
-        [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]],
-        [u+dz+dx, v+dz, u+dz+2.0*dx, v], tw, th
-    ), [0.0, 1.0, 0.0]));
-
-    faces.push((cube_face_quad(
-        cube, 4,
-        [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],
-        [u+dz, v+dz, u+dz+dx, v+dz+dy], tw, th
-    ), [0.0, 0.0, -1.0]));
-
-    faces.push((cube_face_quad(
-        cube, 5,
-        [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],
-        [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy], tw, th
-    ), [0.0, 0.0, 1.0]));
-
-    for (vertices, normal) in faces {
         let world_normal = normalize(world.direction(normal));
         let view_normal = rotate_camera(world_normal, camera.yaw, camera.pitch);
         let illumination = (0.25 + dot(view_normal, light).max(0.0) * 0.75).clamp(0.18, 1.0);
