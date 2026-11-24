@@ -70,6 +70,7 @@ pub struct MojModelBridgeApp {
     scene: Option<ViewerScene>,
     texture_paths: Vec<PathBuf>,
     selected_texture: usize,
+    texture_images: Vec<RgbaImage>,
     preview_image: Option<RgbaImage>,
     texture_animation: Option<AnimatedTexture>,
     preview_texture: Option<TextureHandle>,
@@ -196,6 +197,7 @@ impl MojModelBridgeApp {
             scene: None,
             texture_paths: Vec::new(),
             selected_texture: 0,
+            texture_images: Vec::new(),
             preview_image: None,
             texture_animation: None,
             preview_texture: None,
@@ -225,6 +227,7 @@ impl MojModelBridgeApp {
                 self.selected_entry = None;
                 self.scene = None;
                 self.texture_paths.clear();
+                self.texture_images.clear();
                 self.preview_image = None;
                 self.preview_texture = None;
                 self.selected_error.clear();
@@ -275,6 +278,7 @@ impl MojModelBridgeApp {
         self.components_json = entry.components_json.clone();
         self.scene = None;
         self.texture_paths.clear();
+        self.texture_images.clear();
         self.selected_texture = 0;
         self.preview_image = None;
         self.texture_animation = None;
@@ -380,17 +384,23 @@ impl MojModelBridgeApp {
 
     fn refresh_preview_image(&mut self) {
         self.texture_animation = None;
-        self.preview_image = self.texture_paths.get(self.selected_texture)
-            .and_then(|path| image::open(path).ok())
-            .map(|image| image.to_rgba8());
+        self.texture_images = self.texture_paths.iter().map(|path| {
+            image::open(path).map(|image| image.to_rgba8())
+                .unwrap_or_else(|_| RgbaImage::new(1, 1))
+        }).collect();
+        self.preview_image = self.texture_images.get(self.selected_texture).cloned();
 
         let Some(path) = self.texture_paths.get(self.selected_texture) else { return; };
-        let Some(image) = self.preview_image.as_ref() else { return; };
+        let Some(image) = self.texture_images.get(self.selected_texture) else { return; };
         let metadata_path = PathBuf::from(format!("{}.mcmeta", path.display()));
         let Ok(bytes) = fs::read(&metadata_path) else { return; };
         let Ok(metadata) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return; };
         let Some(animated) = parse_animated_texture((image.width(), image.height()), &metadata) else { return; };
-        self.preview_image = Some(animated.crop(image, 0));
+        let frame = animated.crop(image, 0);
+        self.preview_image = Some(frame.clone());
+        if let Some(texture) = self.texture_images.get_mut(self.selected_texture) {
+            *texture = frame;
+        }
         self.texture_animation = Some(animated);
     }
 
@@ -729,10 +739,11 @@ impl MojModelBridgeApp {
                 (rect.width() * render_scale).round().max(96.0) as usize,
                 (rect.height() * render_scale).round().max(96.0) as usize,
             ];
-            let rendered = renderer::render_scene(
+            let rendered = renderer::render_scene_with_textures(
                 scene,
                 &pose,
-                self.preview_image.as_ref(),
+                &self.texture_images,
+                self.selected_texture,
                 image_size,
                 &mut self.camera,
             );
@@ -927,7 +938,11 @@ impl eframe::App for MojModelBridgeApp {
                 animation.current_frame = next;
                 if let Some(path) = self.texture_paths.get(self.selected_texture) {
                     if let Ok(image) = image::open(path) {
-                        self.preview_image = Some(animation.crop(&image.to_rgba8(), next));
+                        let frame = animation.crop(&image.to_rgba8(), next);
+                        self.preview_image = Some(frame.clone());
+                        if let Some(texture) = self.texture_images.get_mut(self.selected_texture) {
+                            *texture = frame;
+                        }
                     }
                 }
             }
