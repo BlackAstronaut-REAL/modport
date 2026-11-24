@@ -6,6 +6,7 @@ use image::RgbaImage;
 use mojmodelbridge::pipeline::load_model_preview;
 use mojmodelbridge::viewer::ViewerScene;
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,6 +17,44 @@ const SURFACE_LIGHT: Color32 = Color32::from_rgb(34, 44, 61);
 const TEXT: Color32 = Color32::from_rgb(232, 237, 245);
 const MUTED: Color32 = Color32::from_rgb(145, 158, 179);
 const ACCENT: Color32 = Color32::from_rgb(84, 151, 242);
+
+#[derive(Debug, Clone)]
+struct AnimatedTextureFrame {
+    index: u32,
+    duration_seconds: f32,
+}
+
+#[derive(Debug, Clone)]
+struct AnimatedTexture {
+    frame_width: u32,
+    frame_height: u32,
+    columns: u32,
+    frames: Vec<AnimatedTextureFrame>,
+    elapsed_seconds: f32,
+    current_frame: usize,
+}
+
+impl AnimatedTexture {
+    fn frame_at(&self, elapsed: f32) -> usize {
+        let total: f32 = self.frames.iter().map(|frame| frame.duration_seconds).sum();
+        if total <= f32::EPSILON { return 0; }
+        let mut time = elapsed.rem_euclid(total);
+        for (index, frame) in self.frames.iter().enumerate() {
+            if time < frame.duration_seconds { return index; }
+            time -= frame.duration_seconds;
+        }
+        0
+    }
+
+    fn crop(&self, image: &RgbaImage, frame: usize) -> RgbaImage {
+        let index = self.frames.get(frame).map(|entry| entry.index).unwrap_or(0);
+        let x = (index % self.columns.max(1)) * self.frame_width;
+        let y = (index / self.columns.max(1)) * self.frame_height;
+        image::imageops::crop_imm(
+            image, x, y, self.frame_width, self.frame_height,
+        ).to_image()
+    }
+}
 
 pub struct MojModelBridgeApp {
     active_page: String,
@@ -32,6 +71,7 @@ pub struct MojModelBridgeApp {
     texture_paths: Vec<PathBuf>,
     selected_texture: usize,
     preview_image: Option<RgbaImage>,
+    texture_animation: Option<AnimatedTexture>,
     preview_texture: Option<TextureHandle>,
     icon_textures: HashMap<PathBuf, TextureHandle>,
     camera: Camera,
@@ -82,6 +122,7 @@ impl MojModelBridgeApp {
             texture_paths: Vec::new(),
             selected_texture: 0,
             preview_image: None,
+            texture_animation: None,
             preview_texture: None,
             icon_textures: HashMap::new(),
             camera: Camera::default(),
@@ -137,6 +178,7 @@ impl MojModelBridgeApp {
         self.texture_paths.clear();
         self.selected_texture = 0;
         self.preview_image = None;
+        self.texture_animation = None;
         self.camera.reset();
         self.selected_animation = 0;
         self.animation_time = 0.0;
@@ -166,9 +208,64 @@ impl MojModelBridgeApp {
     }
 
     fn refresh_preview_image(&mut self) {
+        self.texture_animation = None;
         self.preview_image = self.texture_paths.get(self.selected_texture)
             .and_then(|path| image::open(path).ok())
             .map(|image| image.to_rgba8());
+
+        let Some(path) = self.texture_paths.get(self.selected_texture) else { return; };
+        let Some(image) = self.preview_image.as_ref() else { return; };
+        let metadata_path = PathBuf::from(format!("{}.mcmeta", path.display()));
+        let Ok(bytes) = fs::read(&metadata_path) else { return; };
+        let Ok(metadata) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return; };
+        let Some(animation) = metadata.get("animation").and_then(serde_json::Value::as_object) else { return; };
+
+        let width = animation.get("width").and_then(serde_json::Value::as_u64)
+            .map(|value| value as u32).unwrap_or(image.width());
+        let height = animation.get("height").and_then(serde_json::Value::as_u64)
+            .map(|value| value as u32).unwrap_or(width);
+        if width == 0 || height == 0 || width > image.width() || height > image.height() {
+            return;
+        }
+        let columns = image.width() / width;
+        let rows = image.height() / height;
+        if columns == 0 || rows == 0 { return; }
+        let frame_count = columns.saturating_mul(rows);
+        let default_duration = animation.get("frametime").and_then(serde_json::Value::as_u64)
+            .unwrap_or(1).max(1) as f32 / 20.0;
+
+        let frames = if let Some(raw_frames) = animation.get("frames").and_then(serde_json::Value::as_array) {
+            raw_frames.iter().filter_map(|raw| {
+                let (index, duration) = if let Some(index) = raw.as_u64() {
+                    (index as u32, default_duration)
+                } else {
+                    let object = raw.as_object()?;
+                    let index = object.get("index")?.as_u64()? as u32;
+                    let ticks = object.get("time").and_then(serde_json::Value::as_u64)
+                        .unwrap_or((default_duration * 20.0) as u64).max(1);
+                    (index, ticks as f32 / 20.0)
+                };
+                (index < frame_count).then_some(AnimatedTextureFrame { index, duration_seconds: duration })
+            }).collect::<Vec<_>>()
+        } else {
+            (0..frame_count).map(|index| AnimatedTextureFrame {
+                index,
+                duration_seconds: default_duration,
+            }).collect()
+        };
+        if frames.is_empty() { return; }
+
+        let mut animated = AnimatedTexture {
+            frame_width: width,
+            frame_height: height,
+            columns,
+            frames,
+            elapsed_seconds: 0.0,
+            current_frame: 0,
+        };
+        self.preview_image = Some(animated.crop(image, 0));
+        animated.current_frame = animated.frame_at(0.0);
+        self.texture_animation = Some(animated);
     }
 
     fn image_texture(&mut self, context: &egui::Context, path: &Path) -> Option<TextureHandle> {
@@ -309,7 +406,10 @@ impl MojModelBridgeApp {
         ui.heading("Categories");
         ui.label(RichText::new(format!("{} indexed", self.browser.entries.len())).size(10.0).color(MUTED));
         ui.add_space(7.0);
-        egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height().max(48.0))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
             for category in browser::CATEGORIES {
                 let count = self.browser.in_category(category).len();
                 let label = format!("{category}  ({count})");
@@ -334,7 +434,10 @@ impl MojModelBridgeApp {
         let items = self.browser.in_category(&self.category);
         ui.label(RichText::new(format!("{} entries", items.len())).size(10.0).color(MUTED));
         ui.add_space(5.0);
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height().max(48.0))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
             for index in items {
                 let Some(entry) = self.browser.entries.get(index).cloned() else { continue; };
                 if !self.item_search.trim().is_empty()
@@ -489,9 +592,12 @@ impl MojModelBridgeApp {
 
         if let Some(scene) = self.scene.as_ref() {
             let pose = scene.sample_pose(self.selected_animation, self.animation_time);
+            let render_scale = (960.0 / rect.width().max(1.0))
+                .min(720.0 / rect.height().max(1.0))
+                .min(1.0);
             let image_size = [
-                (rect.width() as usize).clamp(120, 960),
-                (rect.height() as usize).clamp(120, 720),
+                (rect.width() * render_scale).round().max(96.0) as usize,
+                (rect.height() * render_scale).round().max(96.0) as usize,
             ];
             let rendered = renderer::render_scene(
                 scene,
@@ -510,9 +616,14 @@ impl MojModelBridgeApp {
                 ));
             }
             if let Some(handle) = self.preview_texture.as_ref() {
+                let source_size = handle.size_vec2();
+                let contain_scale = (rect.width() / source_size.x.max(1.0))
+                    .min(rect.height() / source_size.y.max(1.0));
+                let draw_size = source_size * contain_scale;
+                let draw_rect = egui::Rect::from_center_size(rect.center(), draw_size);
                 ui.painter().image(
                     handle.id(),
-                    rect,
+                    draw_rect,
                     egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                     Color32::WHITE,
                 );
@@ -537,6 +648,10 @@ impl MojModelBridgeApp {
             if let Some(handle) = self.preview_texture.as_ref() {
                 let desired = egui::vec2((height * 0.75).min(width * 0.7), (height * 0.75).min(width * 0.7));
                 let image_rect = egui::Rect::from_center_size(rect.center(), desired);
+                let source_size = handle.size_vec2();
+                let contain_scale = (width * 0.85 / source_size.x.max(1.0))
+                    .min(height * 0.85 / source_size.y.max(1.0));
+                let image_rect = egui::Rect::from_center_size(rect.center(), source_size * contain_scale);
                 ui.painter().image(
                     handle.id(),
                     image_rect,
@@ -676,6 +791,19 @@ impl eframe::App for MojModelBridgeApp {
             } else {
                 self.playing = false;
             }
+        }
+        if let Some(animation) = self.texture_animation.as_mut() {
+            animation.elapsed_seconds += delta;
+            let next = animation.frame_at(animation.elapsed_seconds);
+            if next != animation.current_frame {
+                animation.current_frame = next;
+                if let Some(path) = self.texture_paths.get(self.selected_texture) {
+                    if let Ok(image) = image::open(path) {
+                        self.preview_image = Some(animation.crop(&image.to_rgba8(), next));
+                    }
+                }
+            }
+            context.request_repaint_after(Duration::from_millis(50));
         }
     }
 
