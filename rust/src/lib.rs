@@ -5,6 +5,7 @@
 //! require a Python installation.
 
 pub mod archive;
+pub mod animation;
 pub mod blockbench;
 pub mod bytecode;
 pub mod discovery;

@@ -12,6 +12,9 @@ the engine into the native executable.
 - Bounded, path-safe JAR/ZIP extraction.
 - Direct JVM class-file parsing foundations: constant pool, member and Code
   attributes, line numbers, bootstrap method metadata and instruction boundaries.
+- Native legacy compiled animation extraction: pose-field symbolic expressions,
+  runtime parameter mapping, same-class helper inlining, and walk/idle/head
+  channel classification.
 - JVM field/method descriptor parsing, including arrays and wide local slots.
 - Shared Java lexical helpers, balanced-delimiter extraction, top-level splitting
   and numeric constant/expression evaluation.
@@ -29,8 +32,8 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
 
 It currently converts decompiled .java model source. Compiled .class input,
-bytecode interpretation, texture-reference scoring/variant classification,
-animation formula sampling and Blockbench keyframe baking remain in progress.
+bytecode interpretation, texture-reference scoring/variant classification, numeric formula sampling,
+loop-period inference and Blockbench keyframe baking remain in progress.
 
 ## Remaining major engine ports
 

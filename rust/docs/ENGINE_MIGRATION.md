@@ -16,7 +16,7 @@ The Rust implementation is independent under rust/ and must not invoke Python.
 | model_bridge.py::convert_file | pipeline | Java source → Blockbench; basic PNG name matching and sidecars |
 | legacy_bridge.py class interpretation | bytecode | Class-file structure, descriptors and instruction boundaries; interpreter pending |
 | modern_bytecode_bridge.py | bytecode/modern_model | Class-file foundation exists; modern builder interpreter pending |
-| legacy_bridge.py animation interpretation | animation | Not ported: symbolic stack/local values, formula recovery, sampling and baking |
+| legacy_bridge.py::_parse_animation | animation/legacy | Initial direct JVM symbolic pose/formula extraction, runtime parameter mapping and same-class helper inlining; formula sampling/keyframe baking pending |
 | texture_resolver.py::TextureIndex | texture | Not ported: resource references, candidate scoring, primary/variant/auxiliary selection |
 | legacy_mod_graph.py::scan_legacy_mod | graph | Not ported: registrations, constructor arguments, entity metadata and aliases |
 | mcreator_export.py::export_mcreator_workspace | export/mcreator | Not ported |

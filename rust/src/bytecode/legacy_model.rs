@@ -626,7 +626,20 @@ pub fn parse_legacy_class_file(path: &Path, constructor_args: &[serde_json::Valu
         "source_format":model.source_format,
         "mode":"geometry_recovered",
         "animation_port_status":"pending",
-        "note":"Model geometry was reconstructed by the native class-file interpreter. Procedural JVM animation interpretation and keyframe baking remain separate stages."
+        "note":"Model geometry was reconstructed by the native class-file interpreter."
     });
+    match crate::animation::legacy::extract_legacy_animation(&class, &model.parts, &model.scalar_fields) {
+        Ok(Some(animation)) => {
+            model.animation_analysis = animation.analysis;
+            model.animation_logic = animation.logic;
+            model.animation_source = animation.source;
+        }
+        Ok(None) => {
+            model.warnings.push("No supported procedural pose assignments were recovered from the compiled animation methods.".to_owned());
+        }
+        Err(error) => {
+            model.warnings.push(format!("Compiled animation analysis was incomplete: {error}"));
+        }
+    }
     Ok(model)
 }
