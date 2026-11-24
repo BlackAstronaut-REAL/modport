@@ -673,7 +673,8 @@ impl eframe::App for MojModelBridgeApp {
             .show(&context, |ui| {
                 self.show_header(context, ui);
                 ui.separator();
-                match self.active_page.as_str() {
+                let active_page = self.active_page.clone();
+                match active_page.as_str() {
                     "Content Browser" => self.show_browser(context, ui),
                     "Dashboard" => self.show_dashboard(ui),
                     _ => {
