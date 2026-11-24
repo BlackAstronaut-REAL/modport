@@ -245,29 +245,31 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let registry = normalize_registry(&source.registry_name);
         let (resource_model_source, blockstate_shape) = find_block_model_json(&all_files, &registry);
         let texture_refs = block_texture_refs(&source.source_text);
+        let (legacy_model_source, legacy_model_textures) =
+            find_linked_legacy_block_model(&all_files, &source.source_text);
+        let mut texture_paths = legacy_model_textures;
+        if let Some(path) = resource_model_source.as_ref() {
+            append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
+        }
         let icon_path = find_texture_reference(&all_files, &texture_refs)
-            .or_else(|| resource_model_source.as_ref()
-                .and_then(|path| resource_model_texture_paths(&all_files, path).first().cloned()));
+            .or_else(|| texture_paths.first().cloned());
         let render_shape = resource_model_source.as_ref()
             .map(|path| block_render_shape(path, source))
             .or(blockstate_shape)
             .or_else(|| is_plant_source(source).then(|| "plant".to_owned()))
-            .unwrap_or_else(|| "custom".to_owned());
+            .unwrap_or_else(|| if legacy_model_source.is_some() { "custom".to_owned() } else { "cube".to_owned() });
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
         let components_json = find_item_components(&all_files, &registry)
             .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
             .unwrap_or_else(|| "{}".to_owned());
-        let texture_paths = resource_model_source.as_ref()
-            .map(|path| resource_model_texture_paths(&all_files, path))
-            .unwrap_or_default();
         add(BrowserEntry {
             category: "Blocks".to_owned(),
             name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
             detail: format!("{} · {}", registry, source.class_name),
             icon_kind: IconKind::Texture,
             icon_path,
-            model_source: None,
+            model_source: legacy_model_source,
             resource_model_source,
             texture_paths,
             render_shape: Some(render_shape),
@@ -1035,6 +1037,81 @@ fn find_held_renderer_model(files: &[PathBuf], registry: &str) -> (Option<PathBu
         }
     }
     (model_source, textures)
+}
+
+fn java_render_id(source: &str, method_name: &str) -> Option<String> {
+    let method = Regex::new(&format!(r"(?s)\b{}\s*\([^)]*\)\s*\{{", regex::escape(method_name))).ok()?;
+    let found = method.find(source)?;
+    let body = method_body(source, found.start())?;
+    let returned = Regex::new(r"\breturn\s+([A-Za-z_$][A-Za-z0-9_$.]*|\d+)\s*;").ok()?;
+    let token = returned.captures(body)?.get(1)?.as_str().to_owned();
+    if token.parse::<i64>().is_ok() {
+        return Some(token);
+    }
+    let constant = Regex::new(&format!(
+        r"(?m)\b{}\s*=\s*(-?\d+)\s*;",
+        regex::escape(token.rsplit('.').next().unwrap_or(&token))
+    )).ok()?;
+    constant.captures(source).and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_owned())
+}
+
+fn find_linked_legacy_block_model(files: &[PathBuf], block_source: &str) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let model_pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    let mut candidates = Vec::<String>::new();
+
+    // Some legacy blocks directly instantiate their model in the block class.
+    if block_source.contains("getRenderType") || block_source.contains("renderBlock")
+        || block_source.contains("BlockEntityRenderer") || block_source.contains("getModel")
+    {
+        candidates.push(block_source.to_owned());
+    }
+
+    let block_render_id = java_render_id(block_source, "getRenderType");
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        let Ok(text) = fs::read_to_string(path) else { continue; };
+        let is_legacy_handler = text.contains("renderWorldBlock")
+            || text.contains("renderInventoryBlock")
+            || text.contains("ISimpleBlockRenderingHandler")
+            || text.contains("BlockEntityRenderer");
+        if !is_legacy_handler { continue; }
+        let renderer_id = java_render_id(&text, "getRenderId");
+        if block_render_id.is_some() && renderer_id == block_render_id {
+            candidates.push(text);
+        } else if text.contains("BlockEntityRenderer")
+            && (text.contains("BlockEntityType") || text.contains("BlockEntity"))
+        {
+            candidates.push(text);
+        }
+    }
+
+    for text in candidates {
+        let search_regions = ["renderWorldBlock", "renderInventoryBlock", "render", "getModel"]
+            .iter()
+            .filter_map(|method| {
+                let pattern = Regex::new(&format!(r"\b{}\s*\([^)]*\)\s*\{{", regex::escape(method))).ok()?;
+                let found = pattern.find(&text)?;
+                method_body(&text, found.start()).map(str::to_owned)
+            }).collect::<Vec<_>>();
+        let mut model = None;
+        for region in search_regions.iter().chain(std::iter::once(&text)) {
+            if let Some(found) = model_pattern.captures(region).and_then(|capture| {
+                find_model_source_by_class(files, &capture[1])
+            }) {
+                model = Some(found);
+                break;
+            }
+        }
+        if let Some(model) = model {
+            let textures = declared_texture_refs(&text).into_iter()
+                .filter_map(|reference| find_texture_reference(files, std::slice::from_ref(&reference)))
+                .collect::<Vec<_>>();
+            return (Some(model), textures);
+        }
+    }
+    (None, Vec::new())
 }
 
 fn find_linked_java_model(files: &[PathBuf], source: &str, armor: bool) -> Option<PathBuf> {
