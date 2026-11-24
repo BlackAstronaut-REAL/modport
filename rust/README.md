@@ -41,6 +41,7 @@ the engine into the native executable.
 - Native item/tool MCreator element builders and Java source discovery, including legacy registerItem/registerBlock and modern ITEMS/BLOCKS.register calls; workspace element, texture, metadata and language-map updates.
 - Native MCreator armor set discovery and grouped four-piece export, including independent item icons, layer-1/layer-2 texture copying, metadata manifests and localization.
 - Native registered block export using block/blockstate JSON inference, render-type classification, source model/blockstate copying, texture materialization, and hardness/resistance/light/tool-property recovery.
+- Native registered plant export for flower/bush/crop/sapling subclasses, with PlantSchema fields, cross-model texture resolution, source resource copying, metadata and localization.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -57,6 +58,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- export-equipment path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-armor path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-blocks path/to/MCreatorWorkspace path/to/source --source-modid oldmod
+    cargo run --manifest-path rust/Cargo.toml -- export-plants path/to/MCreatorWorkspace path/to/source --source-modid oldmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -113,6 +115,14 @@ The `export-blocks` command discovers registered Java Block subclasses, resolves
 
 ```powershell
 mojmodelbridge export-blocks .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
+```
+
+### MCreator plant export
+
+The `export-plants` command discovers registered flower/bush/crop/sapling-style Block subclasses and emits PlantSchema elements with cross-model defaults, copied source blockstate/model resources, texture and `.mcmeta` files, and workspace metadata/localization. It preserves referenced model resources but does not yet reconstruct custom growth procedures, biome placement conditions, or loot/drop behavior.
+
+```powershell
+mojmodelbridge export-plants .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
 ```
 
 ### Renderer-linked MCreator entity export
