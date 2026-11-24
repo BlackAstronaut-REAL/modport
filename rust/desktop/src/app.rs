@@ -431,6 +431,13 @@ impl MojModelBridgeApp {
                         });
                     let label = if self.playing { "Ⅱ Pause" } else { "▶ Play" };
                     if ui.button(label).clicked() {
+                        if !self.playing {
+                            if let Some(animation) = scene.animations.get(self.selected_animation) {
+                                if self.animation_time >= animation.length {
+                                    self.animation_time = 0.0;
+                                }
+                            }
+                        }
                         self.playing = !self.playing;
                         self.last_frame = Instant::now();
                     }
