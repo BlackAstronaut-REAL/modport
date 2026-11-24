@@ -153,8 +153,8 @@ impl<'a> Interpreter<'a>{
     fn invoke_helper(&mut self,method_index:usize,args:&[Value])->Result<Option<Value>>{
         if self.call_stack.contains(&method_index){return Ok(None);}
         self.call_stack.push(method_index);
-        let method=&self.class.methods[method_index];
-        let result=self.execute_method(method,args);
+        let method=self.class.methods[method_index].clone();
+        let result=self.execute_method(&method,args);
         self.call_stack.pop();
         result
     }
@@ -464,8 +464,8 @@ impl<'a> Interpreter<'a>{
         }
         for method_index in candidates{
             self.parts.clear();self.objects.clear();self.root=None;self.warnings.clear();self.call_stack.clear();
-            let method=&self.class.methods[method_index];
-            let args=self.default_args(method)?;
+            let method=self.class.methods[method_index].clone();
+            let args=self.default_args(&method)?;
             match self.invoke_helper(method_index,&args){
                 Ok(_)=>{},
                 Err(error)=>self.warnings.push(format!("Bytecode interpretation failed in {}: {error}",method.name))
