@@ -390,6 +390,34 @@ pub fn load_block_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, 
     load_resource_model(path, roots, true)
 }
 
+/// Build a preview for legacy blocks that use a vanilla render shape but do not
+/// ship modern blockstate/model JSON resources.
+pub fn synthetic_block_preview(
+    name: &str,
+    shape: &str,
+    texture: Option<PathBuf>,
+) -> Result<(ViewerScene, Vec<PathBuf>)> {
+    let texture_paths = texture.into_iter().collect::<Vec<_>>();
+    let texture_size = texture_paths.first()
+        .and_then(|path| image::image_dimensions(path).ok())
+        .unwrap_or((16, 16));
+    let texture_size = [texture_size.0.max(1), texture_size.1.max(1)];
+    let nodes = builtin_block_nodes(shape, texture_size);
+    if nodes.is_empty() {
+        bail!("Unsupported synthetic legacy block render shape '{shape}'.");
+    }
+    let scene = ViewerScene {
+        name: name.to_owned(),
+        texture_size,
+        texture: texture_paths.first().map(|path| path.to_string_lossy().to_string()).unwrap_or_default(),
+        texture_variants: texture_paths.iter().map(|path| path.to_string_lossy().to_string()).collect(),
+        nodes,
+        animations: Vec::<ViewerAnimation>::new(),
+        warnings: vec![format!("Preview uses the inferred legacy '{shape}' render shape because this block has no resource model JSON.")],
+    };
+    Ok((scene, texture_paths))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
