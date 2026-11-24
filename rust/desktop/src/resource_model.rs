@@ -424,6 +424,26 @@ mod tests {
     }
 
     #[test]
+    fn follows_custom_parent_chain_to_builtin_cross_shape() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let models = root.join("assets/demo/models/block");
+        let textures = root.join("assets/demo/textures/block");
+        fs::create_dir_all(&models).unwrap();
+        fs::create_dir_all(&textures).unwrap();
+        let texture_path = textures.join("flower.png");
+        RgbaImage::new(16, 16).save(&texture_path).unwrap();
+        let base = models.join("shared_plant.json");
+        fs::write(&base, r#"{"parent":"minecraft:block/cross","textures":{"cross":"demo:block/flower"}}"#).unwrap();
+        let derived = models.join("custom_flower.json");
+        fs::write(&derived, r#"{"parent":"demo:block/shared_plant"}"#).unwrap();
+
+        let (scene, resolved_textures) = load_block_model(&derived, &[root.to_path_buf()]).unwrap();
+        assert_eq!(scene.nodes.len(), 2);
+        assert_eq!(resolved_textures, vec![texture_path]);
+    }
+
+    #[test]
     fn renders_flat_floor_block_models_as_thin_cuboids() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
