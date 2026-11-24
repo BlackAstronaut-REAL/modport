@@ -361,24 +361,26 @@ mod tests {
 
     #[test]
     fn strips_comments_but_keeps_strings_and_newlines() {
-        let source = "String a = \\"// not comment\\"; // gone\\n/* block\\ncomment */ int x = 1;";
+        let source = r#"String a = "// not comment"; // gone
+/* block
+comment */ int x = 1;"#;
         let cleaned = strip_java_comments(source);
-        assert!(cleaned.contains("\\"// not comment\\""));
-        assert_eq!(source.matches('\\n').count(), cleaned.matches('\\n').count());
+        assert!(cleaned.contains(r#""// not comment""#));
+        assert_eq!(source.matches('\n').count(), cleaned.matches('\n').count());
         assert!(!cleaned.contains("gone"));
     }
 
     #[test]
     fn extracts_nested_balanced_call() {
-        let source = "foo(1, nested(\\" ) \\", 3), [4, 5]) tail";
+        let source = r#"foo(1, nested(" ) ", 3), [4, 5]) tail"#;
         let (inside, end) = extract_balanced(source, 3, '(', ')').unwrap();
-        assert_eq!(inside, "1, nested(\\" ) \\", 3), [4, 5]");
+        assert_eq!(inside, r#"1, nested(" ) ", 3), [4, 5]"#);
         assert_eq!(&source[end..], " tail");
     }
 
     #[test]
     fn splits_only_top_level_commas() {
-        let values = split_top_level("a, call(1, 2), new Pair<String, List<Integer>>(), \\"x,y\\"", ',');
+        let values = split_top_level(r#"a, call(1, 2), new Pair<String, List<Integer>>(), "x,y""#, ',');
         assert_eq!(values.len(), 4);
         assert_eq!(values[1], "call(1, 2)");
     }
