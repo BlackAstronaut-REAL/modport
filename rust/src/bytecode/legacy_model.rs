@@ -300,35 +300,41 @@ fn run_constructor(
             0xb2 | 0xb4 => {
                 let cp_index = u16_at(&instruction.operands, 0).unwrap_or(0);
                 let reference = class.member_reference(cp_index);
-                let owner = if op == 0xb4 { pop(&mut stack) } else { Value::Null };
-                if let Some((_, name, _)) = reference {
-                    if op == 0xb4 {
-                      if let Value::Object(part_index) = owner {
-                        if name == "field_78804_l" || name == "cubeList" {
-                            stack.push(Value::CubeList(part_index));
-                        } else if let Some(part) = parts.get(part_index) {
-                            let value = match name.as_str() {
-                                "field_78795_f" | "rotateAngleX" => Value::Number(part.rotation[0]),
-                                "field_78796_g" | "rotateAngleY" => Value::Number(part.rotation[1]),
-                                "field_78808_h" | "rotateAngleZ" => Value::Number(part.rotation[2]),
-                                "field_78798_e" | "rotationPointX" => Value::Number(part.offset[0]),
-                                "field_78797_d" | "rotationPointY" => Value::Number(part.offset[1]),
-                                "field_78800_c" | "rotationPointZ" => Value::Number(part.offset[2]),
-                                _ => Value::Opaque(name),
-                            };
-                            stack.push(value);
-                        } else {
-                            stack.push(Value::Opaque(name));
-                        }
-                      } else if matches!(&owner, Value::This) && name == "field_78090_t" {
-                          stack.push(Value::Opaque("__texture_width".into()));
-                      } else if matches!(&owner, Value::This) && name == "field_78089_u" {
-                          stack.push(Value::Opaque("__texture_height".into()));
-                      } else {
-                          stack.push(Value::Opaque(name));
-                      }
-                    } else {
+                if op == 0xb2 {
+                    if let Some((_, name, _)) = reference {
                         stack.push(Value::Opaque(name));
+                    }
+                } else {
+                    let owner = pop(&mut stack);
+                    if let Some((_, name, _)) = reference {
+                        match owner {
+                            Value::Object(part_index) if name == "field_78804_l" || name == "cubeList" => {
+                                stack.push(Value::CubeList(part_index));
+                            }
+                            Value::Object(part_index) => {
+                                if let Some(part) = parts.get(part_index) {
+                                    let value = match name.as_str() {
+                                        "field_78795_f" | "rotateAngleX" => Value::Number(part.rotation[0]),
+                                        "field_78796_g" | "rotateAngleY" => Value::Number(part.rotation[1]),
+                                        "field_78808_h" | "rotateAngleZ" => Value::Number(part.rotation[2]),
+                                        "field_78798_e" | "rotationPointX" => Value::Number(part.offset[0]),
+                                        "field_78797_d" | "rotationPointY" => Value::Number(part.offset[1]),
+                                        "field_78800_c" | "rotationPointZ" => Value::Number(part.offset[2]),
+                                        _ => Value::Opaque(name),
+                                    };
+                                    stack.push(value);
+                                } else {
+                                    stack.push(Value::Opaque(name));
+                                }
+                            }
+                            Value::This if name == "field_78090_t" || name == "textureWidth" => {
+                                stack.push(Value::Opaque("__texture_width".into()));
+                            }
+                            Value::This if name == "field_78089_u" || name == "textureHeight" => {
+                                stack.push(Value::Opaque("__texture_height".into()));
+                            }
+                            _ => stack.push(Value::Opaque(name)),
+                        }
                     }
                 }
             }
