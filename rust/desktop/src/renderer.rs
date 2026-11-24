@@ -112,13 +112,14 @@ pub fn render_scene(
     camera: &mut Camera,
 ) -> ColorImage {
     let textures = texture.into_iter().cloned().collect::<Vec<_>>();
-    render_scene_with_textures(scene, pose, &textures, dimensions, camera)
+    render_scene_with_textures(scene, pose, &textures, 0, dimensions, camera)
 }
 
 pub fn render_scene_with_textures(
     scene: &ViewerScene,
     pose: &[NodePose],
     textures: &[RgbaImage],
+    default_texture_index: usize,
     dimensions: [usize; 2],
     camera: &mut Camera,
 ) -> ColorImage {
@@ -153,7 +154,7 @@ pub fn render_scene_with_textures(
         let Some(world) = worlds.get(index).copied() else { continue; };
         for cube in &node.cubes {
             draw_cube(
-                cube, world, camera, textures, scene.texture_size,
+                cube, world, camera, textures, default_texture_index, scene.texture_size,
                 width, height, focal, aspect, light, &mut pixels, &mut depth,
             );
         }
@@ -224,6 +225,7 @@ fn draw_cube(
     world: Transform,
     camera: &Camera,
     textures: &[RgbaImage],
+    default_texture_index: usize,
     texture_size: [u32; 2],
     width: usize,
     height: usize,
@@ -257,7 +259,7 @@ fn draw_cube(
     for (face_index, points, default_rect, normal) in faces {
         let texture_index = cube.face_texture_indices
             .and_then(|indices| indices.get(face_index).copied())
-            .unwrap_or(0);
+            .unwrap_or(default_texture_index);
         let texture = textures.get(texture_index).or_else(|| textures.first());
         let (texture_width, texture_height) = texture
             .map(|image| (image.width().max(1) as f32, image.height().max(1) as f32))
