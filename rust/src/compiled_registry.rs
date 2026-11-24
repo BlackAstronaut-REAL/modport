@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::{self, File};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use tempfile::Builder;
@@ -549,6 +548,8 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use zip::write::FileOptions;
 
     #[test]
     fn registry_normalization_rejects_noise_and_preserves_paths() {
@@ -598,6 +599,31 @@ mod tests {
             lambda_class(&class, &instruction, &HashMap::new()).as_deref(),
             Some("RubyItem"),
         );
+    }
+
+    #[test]
+    fn indexes_compiled_registrations_directly_from_a_mod_jar() {
+        let temp = tempfile::tempdir().unwrap();
+        let archive_path = temp.path().join("compiled-only-mod.jar");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            writer.start_file(
+                "com/example/LegacyEntityRegistry.class",
+                FileOptions::default(),
+            ).unwrap();
+            writer.write_all(include_bytes!("../tests/fixtures/LegacyEntityRegistry.class")).unwrap();
+            writer.finish().unwrap();
+        }
+
+        let index = scan_compiled_registrations(&[archive_path]).unwrap();
+        assert_eq!(
+            index.registries.get("EntityRedAnt").and_then(|values| values.iter().next()).map(String::as_str),
+            Some("red_ant"),
+        );
+        let class = index.classes.get("LegacyEntityRegistry").unwrap();
+        assert!(class.path.is_file());
+        assert_eq!(index.archive_extractions.len(), 1);
     }
 
     #[test]
