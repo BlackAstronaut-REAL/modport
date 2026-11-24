@@ -35,6 +35,7 @@ the engine into the native executable.
 - Native source resource bridge for namespace-aware assets/data import, sound path canonicalization, generated-worldgen exclusions and Forge-to-NeoForge biome modifier migration.
 - Native model/animation Java source copying, texture animation metadata copying and element metadata manifest updates.
 - MCreator Mojmap model Java generation and sampled AnimationDefinition export, with helper splitting for large clips and repeated-render instance support.
+- Resource-only biome/dimension discovery and conversion of dimension-type flags, biome effects and spawn tables into MCreator definition fields.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
