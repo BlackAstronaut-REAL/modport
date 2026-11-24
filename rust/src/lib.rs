@@ -13,6 +13,7 @@ pub mod metadata;
 pub mod mod_graph;
 pub mod model;
 pub mod pipeline;
+pub mod resource_bridge;
 pub mod scan;
 pub mod source;
 pub mod texture;
