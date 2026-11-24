@@ -1056,13 +1056,6 @@ pub fn java_recipe_item_ref(
     String::new()
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct JavaRecipePayload {
-    pub name: String,
-    pub payload: Value,
-    pub warnings: Vec<String>,
-}
-
 /// Recover addShapedRecipe/addShapelessRecipe Java helper calls when recipe JSON is absent.
 pub fn java_recipe_payloads(
     source_roots: &[PathBuf],
