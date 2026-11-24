@@ -39,3 +39,5 @@ pub mod mcreator_armor;
 pub mod mcreator_block;
 
 pub mod mcreator_plant;
+
+pub mod mcreator_worldgen;
