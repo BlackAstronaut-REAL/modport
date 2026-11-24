@@ -50,6 +50,25 @@ fn gradle_command(root: &Path) -> Result<PathBuf> {
     Ok(executable)
 }
 
+fn windows_command_line(executable: &Path, args: &[String]) -> Result<String> {
+    let mut values = Vec::with_capacity(args.len() + 1);
+    values.push(executable.display().to_string());
+    values.extend(args.iter().cloned());
+
+    // cmd.exe /S /C treats the first and last quote specially. Pass one
+    // explicitly quoted command string so wrapper paths with spaces and
+    // Gradle arguments containing shell metacharacters stay individual args.
+    // Quotes/newlines are rejected rather than being interpreted as cmd syntax.
+    let mut quoted = Vec::with_capacity(values.len());
+    for value in values {
+        if value.contains('"') || value.contains('\r') || value.contains('\n') {
+            bail!("Gradle executable/arguments cannot contain quotes or newlines when using the Windows batch wrapper");
+        }
+        quoted.push(format!(""{value}""));
+    }
+    Ok(quoted.join(" "))
+}
+
 fn parse_diagnostics(output: &str) -> Vec<CompileDiagnostic> {
     let mut diagnostics = Vec::new();
     for line in output.lines() {
@@ -131,11 +150,11 @@ pub fn compile_workspace(
     args.extend(selected_tasks);
     #[cfg(windows)]
     let mut command = {
-        // Gradle wrappers on Windows are batch files and must be launched through
-        // cmd.exe. Keep every task/flag as a separate argument to avoid building
-        // a manually concatenated command string.
+        // A batch wrapper must run under cmd.exe. /S applies the documented
+        // first/last-quote handling to the one complete command string.
+        let command_line = windows_command_line(&executable, &args)?;
         let mut command = Command::new("cmd.exe");
-        command.arg("/D").arg("/C").arg(&executable).args(&args);
+        command.arg("/D").arg("/S").arg("/C").arg(command_line);
         command
     };
     #[cfg(not(windows))]
@@ -191,6 +210,16 @@ pub fn compile_workspace(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quotes_windows_wrapper_paths_and_gradle_arguments_for_cmd() {
+        let executable = Path::new(r"C:\Users\Dev User\MCreator Workspace\gradlew.bat");
+        let args = vec!["--no-daemon".to_owned(), "compileJava".to_owned()];
+        assert_eq!(
+            windows_command_line(executable, &args).unwrap(),
+            r#""C:\Users\Dev User\MCreator Workspace\gradlew.bat" "--no-daemon" "compileJava""#,
+        );
+    }
 
     #[test]
     fn extracts_compiler_errors_and_warnings_without_gradle_noise() {
