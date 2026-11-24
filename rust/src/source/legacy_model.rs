@@ -285,7 +285,7 @@ pub fn parse_legacy_java_model(
         let pattern = regex(&format!(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.\s*(?:{field_alt})\s*=\s*([^;]+);"))?;
         for capture in pattern.captures_iter(&body) {
             events.push(Event {
-                position:capture.get(0).unwrap().start(), kind,
+                position:capture.get(0).unwrap().start(), kind:*kind,
                 variable:capture.get(1).unwrap().as_str().to_owned(),
                 raw_args:capture.get(2).unwrap().as_str().to_owned(),
             });
@@ -380,7 +380,7 @@ pub fn parse_legacy_java_model(
                 "position_delta_x" | "position_delta_y" | "position_delta_z" => {
                     let raw = event.raw_args.trim();
                     let sign = if raw.starts_with('-') { -1.0 } else { 1.0 };
-                    let expr = raw.strip_prefix(['+', '-']).unwrap_or(raw);
+                    let expr = raw.strip_prefix('+').or_else(|| raw.strip_prefix('-')).unwrap_or(raw);
                     let axis = match event.kind { "position_delta_x" => 0, "position_delta_y" => 1, _ => 2 };
                     builder.parts[index].offset[axis] += eval_number(expr, &constants)? * sign;
                 }
