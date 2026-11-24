@@ -37,7 +37,7 @@ the engine into the native executable.
 - MCreator Mojmap model Java generation and sampled AnimationDefinition export, with helper splitting for large clips and repeated-render instance support.
 - Resource-only biome/dimension discovery and conversion of dimension-type flags, biome effects and spawn tables into MCreator definition fields.
 - Native block model/blockstate inference for MCreator render types, plus referenced texture materialization with animation sidecars and collision-safe names.
-- Native Minecraft recipe discovery, MCreator element emission, workspace descriptor updates and data-pack copying for shaped/shapeless crafting, cooking, stonecutting and smithing; item/block/tag references are mapped to MCreator tokens.
+- Native Minecraft recipe discovery, MCreator element emission, workspace descriptor updates and data-pack copying for shaped/shapeless crafting, cooking, stonecutting and smithing; item/block/tag references are mapped to MCreator tokens; legacy addShapedRecipe/addShapelessRecipe Java calls are recovered when JSON recipes are absent.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
