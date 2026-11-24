@@ -42,7 +42,7 @@ py -3 -m PyInstaller --noconfirm --clean MojModelBridge.spec
 
 The executable is created at dist\MojModelBridge.exe. The original engine Python modules and MCreator schemas are bundled as data inside the one-file EXE. A JDK is still required at runtime when converting compiled Java classes; the EXE does not bundle a Java runtime.
 
-A GitHub Actions workflow builds a Windows x64 executable on pushes affecting the application/engine and uploads it as the MojModelBridge-Windows-x64 artifact.
+A GitHub Actions workflow runs the legacy regression suite as a report-only check, then builds a Windows x64 executable on pushes affecting the application/engine and uploads it as the MojModelBridge-Windows-x64 artifact. Some historical tests depend on sample folders outside the repository; the current CI report also identifies two animation-loop endpoint assertions that remain unchanged in the preserved engine.
 
 ## Current baseline limits
 
