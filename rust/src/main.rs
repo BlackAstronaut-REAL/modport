@@ -8,6 +8,7 @@ use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
+use mojmodelbridge::source_bridge::{copy_model_sources, ensure_workspace_metadata, copy_animation_metadata};
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -77,6 +78,15 @@ enum Command {
         source_modid: Option<String>,
         #[arg(long)]
         target_modid: Option<String>,
+    },
+    /// Copy model and animation Java sources into the target MCreator package.
+    CopyModelSources {
+        output_root: PathBuf,
+        package: String,
+        #[arg(long = "model")]
+        model_files: Vec<PathBuf>,
+        #[arg(long = "animation")]
+        animation_files: Vec<PathBuf>,
     },
     /// Safely extract a JAR or ZIP archive.
     Extract {
@@ -184,6 +194,10 @@ fn main() -> Result<()> {
                 target_modid.as_deref(),
             )?;
             println!("Copied {copied} source resource/data file(s) into {}.", output_resources.display());
+        }
+        Command::CopyModelSources { output_root, package, model_files, animation_files } => {
+            let written = copy_model_sources(&output_root, &package, &model_files, &animation_files)?;
+            println!("Copied {} model/animation Java source file(s) into {}.", written.len(), output_root.display());
         }
         Command::Extract { archive, destination } => {
             let path = mojmodelbridge::archive::extract_archive(&archive, &destination)?;
