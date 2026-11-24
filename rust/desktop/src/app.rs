@@ -241,10 +241,10 @@ impl MojModelBridgeApp {
             match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
                 Ok((scene, textures)) => {
                     self.scene = Some(scene);
-                    self.texture_paths = if !entry.texture_paths.is_empty() {
-                        entry.texture_paths.clone()
-                    } else {
+                    self.texture_paths = if !textures.is_empty() {
                         textures
+                    } else {
+                        entry.texture_paths.clone()
                     };
                     self.selected_texture = 0;
                     self.refresh_preview_image();
