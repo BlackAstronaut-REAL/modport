@@ -7,7 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, ConstantValue, Instruction};
+use crate::bytecode::classfile::ConstantValue;
+use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, Instruction};
 use crate::source::java::{extract_balanced, split_top_level, strip_java_comments, unquote_java_string};
 
 const FILE_LIMIT: usize = 250_000;
@@ -556,7 +557,6 @@ fn compiled_value_json(value: &CompiledValue, objects: &[CompiledObject], depth:
 }
 
 fn compiled_registration_from_call(
-    class_name: &str,
     method_name: &str,
     arguments: &[CompiledValue],
     objects: &[CompiledObject],
@@ -769,7 +769,6 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
                             }
                         }
                     } else if let Some(registration) = compiled_registration_from_call(
-                        &class_name,
                         &name,
                         &arguments,
                         &objects,
