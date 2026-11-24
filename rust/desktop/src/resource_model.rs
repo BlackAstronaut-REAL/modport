@@ -72,7 +72,7 @@ fn merge_model_chain(
     if !visiting.insert(canonical.clone()) {
         bail!("Cyclic item model parent chain at {}", path.display());
     }
-    let mut payload = read_json(path)?;
+    let payload = read_json(path)?;
     let parent_ref = payload.get("parent").and_then(Value::as_str).map(str::to_owned);
     let mut parent = if let Some(parent_ref) = parent_ref.as_deref() {
         resolve_parent_path(path, parent_ref, index)
@@ -206,7 +206,7 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
         let rotation = element.get("rotation");
         let origin = vector3(rotation.and_then(|rotation| rotation.get("origin")), [8.0, 8.0, 8.0]);
         let relative_origin = [origin[0] - 8.0, origin[1] - 8.0, origin[2] - 8.0];
-        let (mut base_rotation, mut local_translation) = ([0.0_f32; 3], relative_origin);
+        let (mut base_rotation, local_translation) = ([0.0_f32; 3], relative_origin);
         if let Some(rotation) = rotation {
             let angle = rotation.get("angle").and_then(Value::as_f64).unwrap_or(0.0) as f32;
             let axis = rotation.get("axis").and_then(Value::as_str).unwrap_or("");
@@ -274,6 +274,7 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use image::RgbaImage;
 
     #[test]
     fn parses_item_model_geometry_and_resolves_texture_face_uvs() {
