@@ -7,7 +7,7 @@ use crate::blockbench::model_to_bbmodel;
 use crate::bytecode::parse_any_model_class;
 use crate::discovery::discover_mod_layout;
 use crate::source::parse_java_model;
-use crate::model::expand_render_instances;
+use crate::model::{expand_render_instances, ParsedModel};
 use crate::texture::TextureIndex;
 
 fn resolve_texture_set(source: &Path, model_name: &str, supplied_roots: &[PathBuf]) -> Result<crate::texture::TextureSetResolution> {
@@ -35,6 +35,59 @@ fn resolve_texture_set(source: &Path, model_name: &str, supplied_roots: &[PathBu
     }
     let index = TextureIndex::new(&roots, &shallow_roots)?;
     index.resolve_set(source, model_name, None, 32)
+}
+
+/// Parsed model and the body texture files resolved by the same pipeline used
+/// by the Blockbench exporter. The desktop viewer consumes this structure and
+/// does not run a second Java/bytecode parser.
+#[derive(Debug, Clone)]
+pub struct ModelPreviewAsset {
+    pub model: ParsedModel,
+    pub texture_paths: Vec<PathBuf>,
+}
+
+pub fn load_model_preview(source: &Path, texture_roots: &[PathBuf]) -> Result<ModelPreviewAsset> {
+    if !source.is_file() {
+        bail!("Model source does not exist or is not a file: {}", source.display());
+    }
+    let extension = source.extension().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mut model = match extension.as_str() {
+        "java" => {
+            let source_text = fs::read_to_string(source)
+                .with_context(|| format!("Reading model source {}", source.display()))?;
+            parse_java_model(&source_text, &source.to_string_lossy(), &[])?
+        }
+        "class" => parse_any_model_class(source, &[])?,
+        _ => bail!("The viewer accepts decompiled .java or compiled legacy .class model files."),
+    };
+    let texture_resolution = resolve_texture_set(source, &model.class_name, texture_roots)?;
+    let texture_paths = texture_resolution.variants.clone();
+    model.texture_evidence = texture_resolution.evidence.clone();
+    model.texture_evidence.extend(texture_resolution.candidate_details.iter().map(|(path, score, reason)| {
+        format!("{} [{score:.3}]: {reason}", path.display())
+    }));
+    model.texture_variants = texture_paths.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    model.auxiliary_textures = texture_resolution.auxiliaries.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    if let Some(primary) = texture_resolution.primary.as_ref() {
+        model.primary_texture = primary.to_string_lossy().to_string();
+        model.warnings.push(format!(
+            "Primary texture resolved to '{}' ({})",
+            primary.display(),
+            texture_resolution.evidence.join("; ")
+        ));
+    } else if !texture_resolution.auxiliaries.is_empty() {
+        model.warnings.push(format!(
+            "Only auxiliary textures matched; no eye/glow/overlay texture was selected as the body skin. Skipped: {}",
+            texture_resolution.auxiliaries.iter().map(|path| path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_owned()).collect::<Vec<_>>().join(", ")
+        ));
+    } else {
+        model.warnings.push("No body PNG could be resolved from model/renderer references or conservative texture-family matching.".to_owned());
+    }
+    expand_render_instances(&mut model);
+    if model.cube_count() == 0 {
+        bail!("No model cubes were recovered from {}. Parser warnings: {}", source.display(), model.warnings.join(" | "));
+    }
+    Ok(ModelPreviewAsset { model, texture_paths })
 }
 
 #[derive(Debug, Serialize)]
