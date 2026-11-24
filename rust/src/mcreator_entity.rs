@@ -120,7 +120,7 @@ fn ai_xml(ai_classes: &[String]) -> String {
     if contains_any(&["swimming"]) {
         blocks.push(("swim_in_water", vec![("condition", "null,null")]));
     }
-    if contains_any(&["attackoncollide", "meleeattack"]) {
+    if contains_any(&["attackoncollide", "attackmelee", "meleeattack"]) {
         blocks.push(("attack_on_collide", vec![
             ("speed", "1.2"), ("longmemory", "FALSE"), ("condition", "null,null")
         ]));
