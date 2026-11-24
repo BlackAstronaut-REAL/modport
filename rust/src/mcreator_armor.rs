@@ -673,6 +673,7 @@ pub fn export_armor_to_workspace(
     let mut workspace: Value = serde_json::from_slice(&bytes)?;
     let target_modid = json_string(workspace.get("workspaceSettings").unwrap_or(&Value::Null),"modid","converted_mod");
     let discovered = discover_armor_sources(source_roots)?;
+    let recovered_armor_stats = source_armor_stats(source_roots);
 
     let mut report = ArmorWorkspaceExportReport {
         workspace_file:workspace_file.clone(),discovered:discovered.len(),exported:0,skipped:0,records:Vec::new(),warnings:Vec::new()
@@ -801,7 +802,6 @@ pub fn export_armor_to_workspace(
         }
 
         let element_name=unique_element_name(&set.prefix,&mut used_names);
-        let recovered_armor_stats = source_armor_stats(source_roots);
         let stats = recovered_armor_stats.get(&compact_id(&set.prefix))
             .or_else(|| recovered_armor_stats.get(&compact_id(&set.registry_name)));
         let (element,mut builder_warnings)=build_armor_element(
