@@ -263,6 +263,28 @@ mod tests {
     }
 
     #[test]
+    fn export_all_initializes_every_stage_for_an_empty_source_tree() {
+        let temp = tempdir().unwrap();
+        let workspace = temp.path().join("workspace");
+        let source = temp.path().join("source");
+        fs::create_dir_all(&workspace).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        fs::write(workspace.join("test.mcreator"), serde_json::to_vec(&json!({
+            "mcreatorVersion":202600,
+            "workspaceSettings":{"modid":"converted"},
+            "mod_elements":[],
+            "language_map":{"en_us":{}}
+        })).unwrap()).unwrap();
+
+        let report = export_all_to_workspace(&[source], &workspace, "demo", 89).unwrap();
+        assert_eq!(report.stages.iter().map(|stage| stage.name.as_str()).collect::<Vec<_>>(), vec![
+            "equipment","armor","blocks","plants","worldgen","living_entities","projectiles","recipes"
+        ]);
+        assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
+        assert!(report.workspace_file.ends_with("test.mcreator"));
+    }
+
+    #[test]
     fn stage_serialization_keeps_skipped_and_exported_counts() {
         let value = json!({"exported":3,"skipped":2});
         let result = stage("blocks", count_field(&value,"exported"), count_field(&value,"skipped"), value);
