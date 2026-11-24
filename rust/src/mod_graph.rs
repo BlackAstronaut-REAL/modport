@@ -1297,13 +1297,15 @@ mod tests {
     fn recovers_compiled_entity_dimensions_attributes_xp_and_ai() {
         let temp = tempdir().unwrap();
         let path = temp.path().join("EntityStatFixture.class");
-        fs::write(
-            &path,
-            include_bytes!("../tests/fixtures/EntityStatFixture.class")
-        ).unwrap();
+        let fixture = include_bytes!("../tests/fixtures/EntityStatFixture.class");
+        assert_eq!(&fixture[..4], &[0xca, 0xfe, 0xba, 0xbe], "fixture must be a valid JVM class file");
+        let parsed_class = ClassFile::parse(fixture).expect("compiled entity fixture should parse");
+        assert!(parsed_class.methods.iter().any(|method| method.name == "init" && method.code.is_some()),
+            "fixture should expose the init method Code attribute");
+        fs::write(&path, fixture).unwrap();
 
         let metadata = parse_entity_class_metadata(&path, "EntityStatFixture", None);
-        assert!((metadata.width - 1.2).abs() < 1e-5);
+        assert!((metadata.width - 1.2).abs() < 1e-5, "metadata recovered: {metadata:#?}");
         assert!((metadata.height - 1.4).abs() < 1e-5);
         assert!((metadata.health - 42.0).abs() < 1e-8);
         assert!((metadata.movement_speed - 0.28).abs() < 1e-8);
