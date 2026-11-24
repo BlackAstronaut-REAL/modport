@@ -750,27 +750,78 @@ fn find_linked_java_model(files: &[PathBuf], source: &str, armor: bool) -> Optio
     None
 }
 
-fn find_linked_armor_model(files: &[PathBuf], source: &str, prefix: &str) -> Option<PathBuf> {
-    let mut sources = Vec::new();
-    if !source.is_empty() { sources.push(source.to_owned()); }
-    let prefix = compact(prefix);
-    for path in files.iter().filter(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))) {
-        if !path.file_stem().and_then(|value| value.to_str()).map(|stem| compact(stem).contains(&prefix)).unwrap_or(false) {
-            continue;
-        }
-        if let Ok(text) = fs::read_to_string(path) {
-            if text.contains("getArmorModel") { sources.push(text); }
+fn armor_model_owner_key(path: &Path) -> String {
+    let mut stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_owned();
+    if stem.to_ascii_lowercase().starts_with("item") {
+        stem = stem[4..].to_owned();
+    }
+    for suffix in ["helmet", "chestplate", "leggings", "boots", "armor"] {
+        if stem.to_ascii_lowercase().ends_with(suffix) {
+            stem.truncate(stem.len() - suffix.len());
+            break;
         }
     }
-    for text in sources {
-        if !text.contains("getArmorModel") { continue; }
-        if let Some(method) = Regex::new(r"\bgetArmorModel\s*\([^)]*\)\s*\{").unwrap().find(&text) {
-            let body_start = method.end();
-            let body = text[body_start..].split_once('}').map(|(body, _)| body).unwrap_or("");
-            if let Some(capture) = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap().captures(body) {
-                if let Some(path) = find_model_source_by_class(files, &capture[1]) {
-                    return Some(path);
-                }
+    compact(&stem)
+}
+
+fn method_body(text: &str, method_start: usize) -> Option<&str> {
+    let open = text[method_start..].find('{')? + method_start;
+    let bytes = text.as_bytes();
+    let mut depth = 0_i32;
+    let mut quote = 0_u8;
+    let mut escaped = false;
+    for index in open..bytes.len() {
+        let ch = bytes[index];
+        if quote != 0 {
+            if escaped {
+                escaped = false;
+            } else if ch == b'\\' {
+                escaped = true;
+            } else if ch == quote {
+                quote = 0;
+            }
+            continue;
+        }
+        if ch == b'"' || ch == b'\'' {
+            quote = ch;
+        } else if ch == b'{' {
+            depth += 1;
+        } else if ch == b'}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(&text[open + 1..index]);
+            }
+        }
+    }
+    None
+}
+
+fn find_linked_armor_model(files: &[PathBuf], source: &str, prefix: &str) -> Option<PathBuf> {
+    let target = compact(prefix);
+    let method_pattern = Regex::new(r"\bgetArmorModel\s*\([^)]*\)\s*\{").unwrap();
+    let model_pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    let mut candidates = Vec::<String>::new();
+    if !source.is_empty() {
+        candidates.push(source.to_owned());
+    }
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        if armor_model_owner_key(path) != target { continue; }
+        let Ok(text) = fs::read_to_string(path) else { continue; };
+        if text.contains("getArmorModel") {
+            candidates.push(text);
+        }
+    }
+
+    for text in candidates {
+        let Some(method) = method_pattern.find(&text) else { continue; };
+        let body = method_body(&text, method.start()).unwrap_or("");
+        let model = model_pattern.captures(body)
+            .or_else(|| model_pattern.captures(&text));
+        if let Some(model) = model {
+            if let Some(path) = find_model_source_by_class(files, &model[1]) {
+                return Some(path);
             }
         }
     }
