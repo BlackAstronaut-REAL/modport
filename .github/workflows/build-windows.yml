@@ -25,6 +25,11 @@ jobs:
           python-version: '3.12'
       - name: Install packager
         run: python -m pip install --upgrade pip pyinstaller
+      - name: Run original engine regression tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests -q
+        working-directory: oldVer
       - name: Build executable
         run: python -m PyInstaller --noconfirm --clean MojModelBridge.spec
       - name: Upload executable

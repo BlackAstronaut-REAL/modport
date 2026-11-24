@@ -361,9 +361,11 @@ class MojModelBridgeApp(tk.Tk):
         self.log_queue.put(f"\n__MOJMODELBRIDGE_DONE__:{status}\n")
 
     def _append_log(self, value: str) -> None:
-        if hasattr(self, "port_log"):
-            self.port_log.insert("end", value)
-            self.port_log.see("end")
+        for name in ("port_log", "build_log"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.insert("end", value)
+                widget.see("end")
 
     def _drain_log_queue(self) -> None:
         try:
@@ -443,6 +445,15 @@ class MojModelBridgeApp(tk.Tk):
         ttk.Button(panel, text="Run Gradle build", command=self._build_latest_workspace).pack(anchor="w", pady=(8, 0))
         self.build_status = ttk.Label(panel, text="No build started.", style="PanelMuted.TLabel")
         self.build_status.pack(anchor="w", pady=(12, 0))
+        log_panel = self._panel(body, "Build output", "Live Gradle output from the generated workspace.")
+        log_panel.pack(fill="both", expand=True, pady=(12, 0))
+        log_holder = tk.Frame(log_panel, bg="#101722")
+        log_holder.pack(fill="both", expand=True, pady=(8, 0))
+        self.build_log = tk.Text(log_holder, bg="#0d131d", fg="#cbd6e4", insertbackground="#ffffff", relief="flat", wrap="word", font=("Consolas", 9), padx=10, pady=10)
+        scroll = ttk.Scrollbar(log_holder, orient="vertical", command=self.build_log.yview)
+        self.build_log.configure(yscrollcommand=scroll.set)
+        self.build_log.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
 
     def _build_projects(self, page: tk.Frame) -> None:
         self._page_header(page, "Projects", "Keep output folders organized and reopen previous ports.")
