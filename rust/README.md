@@ -174,6 +174,27 @@ mojmodelbridge export-all .\\MCreatorWorkspace .\\DecompiledMod --source-modid e
 mojmodelbridge export-all .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod --compile
 ```
 
+### Gradle / MCreator compilation bridge
+
+`compile-workspace` resolves the workspace directory, runs the native workspace
+validator, prefers the workspace's `gradlew` / `gradlew.bat`, and falls back to a
+system Gradle installation. It defaults to the `build` task. Compiler output is
+saved to `MOJMODELBRIDGE_GRADLE_BUILD.log`, with structured diagnostics and exit
+status in `MOJMODELBRIDGE_GRADLE_BUILD.json`.
+
+```powershell
+mojmodelbridge compile-workspace .\MCreatorWorkspace
+mojmodelbridge compile-workspace .\MCreatorWorkspace --task compileJava
+mojmodelbridge compile-workspace .\MCreatorWorkspace --task build --offline
+```
+
+Use `export-all --compile` to run the same bridge after the export pipeline. This
+stage compiles the Gradle project currently present in the workspace; it does not
+silently pretend that MCreator's editor-side regeneration has occurred. When an
+MCreator version requires editor regeneration before Gradle sources are current,
+open/reload the workspace in MCreator first, then run the bridge to validate the
+resulting project.
+
 ### MCreator projectile export
 
 The `export-projectiles` command discovers source-instantiated or bytecode-registered arrow/throwable/projectile subclasses, emits ProjectileSchema elements, resolves pickup-item references from registered item fields, and links ranged item/tool elements back to their custom projectile elements. Compiled-only behavior defaults conservatively; custom collision/hit procedures and projectile renderer models remain outstanding.
