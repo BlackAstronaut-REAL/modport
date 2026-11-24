@@ -300,7 +300,7 @@ fn source_texture_references(source: &str) -> Vec<String> {
         r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:fromNamespaceAndPath|tryParse))\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"#
     ).unwrap();
     for capture in two_args.captures_iter(source) {
-        references.push(format!("{}:{}", capture[1], capture[2]));
+        references.push(format!("{}:{}", &capture[1], &capture[2]));
     }
     let one_arg = Regex::new(
         r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:parse|withDefaultNamespace))\s*\(\s*"([^"]+)"#
