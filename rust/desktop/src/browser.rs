@@ -197,9 +197,10 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             let components_json = find_item_components(&all_files, &registry)
                 .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
                 .unwrap_or_else(|| "{}".to_owned());
-            let texture_paths = resource_model_source.as_ref()
-                .map(|path| resource_model_texture_paths(&all_files, path))
-                .unwrap_or_default();
+            let mut texture_paths = find_armor_layer_textures(&all_files, &set.prefix, &set.source_text);
+            if let Some(model_path) = resource_model_source.as_ref() {
+                append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, model_path));
+            }
             add(BrowserEntry {
                 category: "Armor".to_owned(),
                 name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
@@ -605,6 +606,48 @@ fn find_block_model_json(files: &[PathBuf], registry: &str) -> Option<PathBuf> {
     }).cloned().collect::<Vec<_>>();
     candidates.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     candidates.into_iter().next()
+}
+
+fn append_paths(target: &mut Vec<PathBuf>, values: &[PathBuf]) {
+    for value in values {
+        if !target.contains(value) { target.push(value.clone()); }
+    }
+}
+
+fn find_armor_layer_textures(files: &[PathBuf], prefix: &str, source: &str) -> Vec<PathBuf> {
+    let prefix = compact(prefix.trim_end_matches("Armor").trim_end_matches("armor"));
+    let mut candidates = Vec::<PathBuf>::new();
+    let mut references = Vec::<String>::new();
+    let resource_location = Regex::new(r#"["']([^"'\s]+(?:textures/)?(?:models/armor|armor)/[^"'\s]+\.png)["']"#).unwrap();
+    for capture in resource_location.captures_iter(source) {
+        references.push(capture[1].to_owned());
+    }
+
+    for reference in &references {
+        if let Some(path) = find_texture_reference(files, std::slice::from_ref(reference)) {
+            if !candidates.contains(&path) { candidates.push(path); }
+        }
+    }
+    let mut matching = files.iter().filter(|path| {
+        if !path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("png")) {
+            return false;
+        }
+        let normalized = path.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+        let armor_directory = normalized.contains("/textures/models/armor/")
+            || normalized.contains("/textures/armor/");
+        if !armor_directory { return false; }
+        let stem = compact(path.file_stem().and_then(|value| value.to_str()).unwrap_or(""));
+        prefix.is_empty() || stem.contains(&prefix)
+    }).cloned().collect::<Vec<_>>();
+    matching.sort_by_key(|path| {
+        let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+        let layer = if name.contains("layer_1") || name.contains("layer1") { 0 }
+            else if name.contains("layer_2") || name.contains("layer2") { 1 }
+            else { 2 };
+        (layer, path.to_string_lossy().to_ascii_lowercase())
+    });
+    append_paths(&mut candidates, &matching);
+    candidates
 }
 
 fn resource_model_texture_paths(files: &[PathBuf], model: &Path) -> Vec<PathBuf> {
