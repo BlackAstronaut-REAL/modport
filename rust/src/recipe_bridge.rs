@@ -561,7 +561,7 @@ pub fn emit_recipe_elements(
         );
         let element = json!({"_fv":imported_fv.clamp(0, 89),"_type":"recipe","definition":definition});
         let output = output_elements.join(format!("{element_name}.mod.json"));
-        fs::write(&output, format!("{}\\n", serde_json::to_string_pretty(&element)?))?;
+        fs::write(&output, format!("{}\n", serde_json::to_string_pretty(&element)?))?;
         descriptors.push(json!({
             "name":element_name,
             "type":"recipe",
@@ -1404,5 +1404,55 @@ mod java_recipe_tests {
         assert_eq!(recovered[1].payload["type"], "minecraft:crafting_shaped");
         assert_eq!(recovered[1].payload["pattern"][0], " D ");
         assert_eq!(recovered[1].payload["key"]["D"]["item"], "Items.DIAMOND");
+    }
+}
+
+
+#[cfg(test)]
+mod java_field_registry_tests {
+    use super::*;
+
+    #[test]
+    fn derives_custom_field_registry_names_from_registration_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("ModItems.java"), r#"
+            public final class ModItems {
+                public static void register() {
+                    registerItem(ModItems.IRON_INGOT, "demo:iron_ingot");
+                    registerBlock(ModBlocks.COPPER_ORE, "copper_ore");
+                }
+            }
+        "#).unwrap();
+        let fields = source_field_registered_names(&[source], "demo");
+        assert_eq!(fields["IRON_INGOT"].iter().next().unwrap(), "iron_ingot");
+        assert_eq!(fields["COPPER_ORE"].iter().next().unwrap(), "copper_ore");
+    }
+
+    #[test]
+    fn emitter_recovers_java_recipes_when_resource_json_is_absent() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("ModItems.java"), r#"
+            public class ModItems {
+                public static void register() {
+                    registerItem(ModItems.IRON_INGOT, "iron_ingot");
+                    addShapelessRecipe(cpId("iron_dust"), 0, ModItems.IRON_INGOT,
+                        Items.REDSTONE, Ingredient.of(Items.GLOWSTONE_DUST));
+                }
+            }
+        "#).unwrap();
+        let mut workspace = serde_json::json!({"mod_elements":[]});
+        let registry_map = BTreeMap::from([("ironingot".to_owned(), "IronIngot".to_owned())]);
+        let output = temp.path().join("elements");
+        let report = emit_recipe_elements(&[source], &output, &mut workspace, "demo", &registry_map, 89).unwrap();
+        assert_eq!(report.exported.len(), 1);
+        assert_eq!(report.exported[0].registry_name, "iron_dust");
+        let element: Value = serde_json::from_slice(&std::fs::read(output.join("IronDustRecipe.mod.json")).unwrap()).unwrap();
+        assert_eq!(element["definition"]["recipeReturnStack"], "CUSTOM:IronIngot");
+        assert_eq!(element["definition"]["recipeSlots"][0], "Items.REDSTONE");
+        assert_eq!(element["definition"]["recipeSlots"][1], "Items.GLOWSTONE_DUST");
     }
 }
