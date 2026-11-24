@@ -97,12 +97,12 @@ impl ModelBuilder {
         let child_index = self.ensure_part(child_variable);
         if child_index == parent_index { return; }
         let parent_name = self.parts[parent_index].name.clone();
+        let child_name = self.parts[child_index].name.clone();
         if let Some(old_parent) = self.parts[child_index].parent.clone() {
             if let Some(old_index) = self.parts.iter().position(|part| part.name == old_parent) {
-                self.parts[old_index].children.retain(|name| name != &self.parts[child_index].name);
+                self.parts[old_index].children.retain(|name| name != &child_name);
             }
         }
-        let child_name = self.parts[child_index].name.clone();
         self.parts[child_index].parent = Some(parent_name.clone());
         self.parts[child_index].parent_variable = self.parts[parent_index].variable.clone();
         if !self.parts[parent_index].children.contains(&child_name) {
@@ -153,7 +153,7 @@ fn constructor_body(
     if candidates.is_empty() { return (clean.to_owned(), BTreeMap::new()); }
 
     if !constructor_args.is_empty() {
-        candidates.sort_by_key(|(arity,_,_)| (usize::from(*arity != constructor_args.len()), arity.abs_diff(constructor_args.len()), *arity));
+        candidates.sort_by_key(|(arity,_,_)| (if *arity == constructor_args.len() { 0usize } else { 1usize }, (*arity).abs_diff(constructor_args.len()), *arity));
     } else {
         candidates.sort_by_key(|(arity,_,_)| *arity);
     }
@@ -373,7 +373,7 @@ pub fn parse_legacy_java_model(
                 "rotation_delta_x" | "rotation_delta_y" | "rotation_delta_z" => {
                     let raw = event.raw_args.trim();
                     let sign = if raw.starts_with('-') { -1.0 } else { 1.0 };
-                    let expr = raw.strip_prefix(['+', '-']).unwrap_or(raw);
+                    let expr = raw.strip_prefix('+').or_else(|| raw.strip_prefix('-')).unwrap_or(raw);
                     let axis = match event.kind { "rotation_delta_x" => 0, "rotation_delta_y" => 1, _ => 2 };
                     builder.parts[index].rotation[axis] += eval_number(expr, &constants)? * sign;
                 }
