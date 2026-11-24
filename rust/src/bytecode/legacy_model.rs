@@ -175,6 +175,15 @@ fn constant_class_name(class: &ClassFile, index: u16) -> Option<String> {
     }
 }
 
+fn model_renderer_position_axis(name: &str) -> Option<usize> {
+    match name {
+        "field_78800_c" | "rotationPointX" => Some(0),
+        "field_78797_d" | "rotationPointY" => Some(1),
+        "field_78798_e" | "rotationPointZ" => Some(2),
+        _ => None,
+    }
+}
+
 fn run_constructor(
     class: &ClassFile,
     method: &crate::bytecode::MemberInfo,
@@ -313,14 +322,15 @@ fn run_constructor(
                             }
                             Value::Object(part_index) => {
                                 if let Some(part) = parts.get(part_index) {
-                                    let value = match name.as_str() {
-                                        "field_78795_f" | "rotateAngleX" => Value::Number(part.rotation[0]),
-                                        "field_78796_g" | "rotateAngleY" => Value::Number(part.rotation[1]),
-                                        "field_78808_h" | "rotateAngleZ" => Value::Number(part.rotation[2]),
-                                        "field_78800_c" | "rotationPointX" => Value::Number(part.offset[0]),
-                                        "field_78797_d" | "rotationPointY" => Value::Number(part.offset[1]),
-                                        "field_78798_e" | "rotationPointZ" => Value::Number(part.offset[2]),
-                                        _ => Value::Opaque(name),
+                                    let value = if let Some(axis) = model_renderer_position_axis(&name) {
+                                        Value::Number(part.offset[axis])
+                                    } else {
+                                        match name.as_str() {
+                                            "field_78795_f" | "rotateAngleX" => Value::Number(part.rotation[0]),
+                                            "field_78796_g" | "rotateAngleY" => Value::Number(part.rotation[1]),
+                                            "field_78808_h" | "rotateAngleZ" => Value::Number(part.rotation[2]),
+                                            _ => Value::Opaque(name),
+                                        }
                                     };
                                     stack.push(value);
                                 } else {
@@ -374,15 +384,16 @@ fn run_constructor(
                                 }
                                 Value::Object(index) => {
                                     if let Some(part) = parts.get_mut(*index) {
-                                        match name.as_str() {
-                                            "field_78809_i" | "mirror" => part.mirror = number != 0.0,
-                                            "field_78795_f" | "rotateAngleX" | "xRot" => part.rotation[0] = number,
-                                            "field_78796_g" | "rotateAngleY" | "yRot" => part.rotation[1] = number,
-                                            "field_78808_h" | "rotateAngleZ" | "zRot" => part.rotation[2] = number,
-                                            "field_78800_c" | "rotationPointX" => part.offset[0] = number,
-                                            "field_78797_d" | "rotationPointY" => part.offset[1] = number,
-                                            "field_78798_e" | "rotationPointZ" => part.offset[2] = number,
-                                            _ => {}
+                                        if let Some(axis) = model_renderer_position_axis(&name) {
+                                            part.offset[axis] = number;
+                                        } else {
+                                            match name.as_str() {
+                                                "field_78809_i" | "mirror" => part.mirror = number != 0.0,
+                                                "field_78795_f" | "rotateAngleX" | "xRot" => part.rotation[0] = number,
+                                                "field_78796_g" | "rotateAngleY" | "yRot" => part.rotation[1] = number,
+                                                "field_78808_h" | "rotateAngleZ" | "zRot" => part.rotation[2] = number,
+                                                _ => {}
+                                            }
                                         }
                                     }
                                 }
@@ -643,4 +654,19 @@ pub fn parse_legacy_class_file(path: &Path, constructor_args: &[serde_json::Valu
         }
     }
     Ok(model)
+}
+
+#[cfg(test)]
+mod position_field_tests {
+    use super::*;
+
+    #[test]
+    fn maps_legacy_modelrenderer_srg_position_fields_to_xyz() {
+        assert_eq!(model_renderer_position_axis("field_78800_c"), Some(0));
+        assert_eq!(model_renderer_position_axis("field_78797_d"), Some(1));
+        assert_eq!(model_renderer_position_axis("field_78798_e"), Some(2));
+        assert_eq!(model_renderer_position_axis("rotationPointX"), Some(0));
+        assert_eq!(model_renderer_position_axis("rotationPointY"), Some(1));
+        assert_eq!(model_renderer_position_axis("rotationPointZ"), Some(2));
+    }
 }
