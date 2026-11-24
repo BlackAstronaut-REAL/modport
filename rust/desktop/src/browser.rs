@@ -907,6 +907,83 @@ mod tests {
     }
 
     #[test]
+    fn discovers_registered_custom_item_renderer_model_and_texture() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("src/main/java/demo")).unwrap();
+        fs::create_dir_all(root.join("src/main/resources/assets/demo/textures/items")).unwrap();
+        fs::write(root.join("src/main/java/demo/ModItems.java"), r#"
+            class ModItems {
+                static Item BIG_BLADE = new Item();
+                void register() { GameRegistry.registerItem(BIG_BLADE, "big_blade"); }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/ClientProxy.java"), r#"
+            class ClientProxy {
+                void register() { MinecraftForgeClient.registerItemRenderer(ModItems.BIG_BLADE, new BigBladeRenderer()); }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/BigBladeRenderer.java"), r#"
+            class BigBladeRenderer implements IItemRenderer {
+                ModelBigBlade model = new ModelBigBlade();
+                String texture = "demo:textures/items/big_blade.png";
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/ModelBigBlade.java"), "class ModelBigBlade {}").unwrap();
+        let skin = root.join("src/main/resources/assets/demo/textures/items/big_blade.png");
+        fs::write(&skin, b"png").unwrap();
+
+        let files = vec![
+            root.join("src/main/java/demo/ModItems.java"),
+            root.join("src/main/java/demo/ClientProxy.java"),
+            root.join("src/main/java/demo/BigBladeRenderer.java"),
+            root.join("src/main/java/demo/ModelBigBlade.java"),
+            skin.clone(),
+        ];
+        let (model, textures) = find_held_renderer_model(&files, "big_blade");
+        assert_eq!(model.and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().to_string())).as_deref(), Some("ModelBigBlade"));
+        assert!(textures.contains(&skin));
+    }
+
+    #[test]
+    fn discovers_armor_model_and_both_armor_layer_textures() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let armor_source = root.join("ItemDragonArmor.java");
+        fs::write(&armor_source, r#"
+            class ItemDragonArmor {
+                ModelDragonArmor model = new ModelDragonArmor();
+                ModelBiped getArmorModel() { return model; }
+            }
+        "#).unwrap();
+        let model_path = root.join("ModelDragonArmor.java");
+        fs::write(&model_path, "class ModelDragonArmor {}").unwrap();
+        let texture_dir = root.join("assets/demo/textures/models/armor");
+        fs::create_dir_all(&texture_dir).unwrap();
+        let layer_one = texture_dir.join("dragon_layer_1.png");
+        let layer_two = texture_dir.join("dragon_layer_2.png");
+        fs::write(&layer_one, b"png").unwrap();
+        fs::write(&layer_two, b"png").unwrap();
+        let files = vec![armor_source, model_path.clone(), layer_one.clone(), layer_two.clone()];
+
+        let model = find_linked_armor_model(&files, "", "Dragon");
+        assert_eq!(model, Some(model_path));
+        let textures = find_armor_layer_textures(&files, "Dragon", "");
+        assert_eq!(textures, vec![layer_one, layer_two]);
+    }
+
+    #[test]
+    fn reads_item_components_from_resource_item_definition() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("assets/demo/items/ancient_sword.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, r#"{"components":{"minecraft:custom_name":{"text":"Ancient Sword","color":"gold"},"minecraft:lore":[{"text":"Old magic","italic":true}]}}"#).unwrap();
+        let components = find_item_components(&[path], "ancient_sword").unwrap();
+        assert_eq!(components["minecraft:custom_name"]["text"], "Ancient Sword");
+        assert_eq!(components["minecraft:lore"][0]["text"], "Old magic");
+    }
+
+    #[test]
     fn humanizes_registry_and_model_names() {
         assert_eq!(humanize("red_ant"), "Red Ant");
         assert_eq!(humanize("FireBeetle"), "Fire Beetle");
