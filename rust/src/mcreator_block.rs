@@ -225,7 +225,7 @@ fn modern_block_registrations(source: &str) -> Vec<(String, String)> {
     result
 }
 
-pub fn is_plant_source(source: &BlockSource) -> bool {
+pub pub fn is_plant_source(source: &BlockSource) -> bool {
     let superclass = source.superclass.to_ascii_lowercase();
     let class = source.class_name.to_ascii_lowercase();
     [
@@ -291,13 +291,16 @@ pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSourc
         let Some(source_text) = class_texts.get(&class) else { continue };
         let Some(source_path) = class_paths.get(&class) else { continue };
         for registry in registries {
-            output.push(BlockSource {
+            let source = BlockSource {
                 class_name:class.clone(),
                 superclass:superclass.clone(),
                 registry_name:registry,
                 source_path:source_path.to_string_lossy().replace('\\', "/"),
                 source_text:source_text.clone(),
-            });
+            };
+            if !is_plant_source(&source) {
+                output.push(source);
+            }
         }
     }
     output.sort_by(|a,b| a.registry_name.cmp(&b.registry_name).then(a.class_name.cmp(&b.class_name)));
@@ -647,6 +650,23 @@ mod tests{
         };
         assert!(is_plant_source(&plant));
         assert!(!is_plant_source(&ordinary));
+    }
+
+    #[test]
+    fn excludes_plant_subclasses_from_block_elements() {
+        let temp=tempdir().unwrap();
+        let root=temp.path();
+        fs::write(root.join("Registry.java"),r#"
+            public class Registry {
+                public static Block FLOWER = new RubyFlower();
+                public static void register() {
+                    GameRegistry.registerBlock(FLOWER, "ruby_flower");
+                }
+            }
+            class RubyFlower extends BlockFlower { }
+        "#).unwrap();
+        let found=discover_block_sources(&[root.to_path_buf()]).unwrap();
+        assert!(found.is_empty());
     }
 
     #[test]
