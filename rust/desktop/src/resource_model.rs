@@ -171,12 +171,12 @@ fn vector3(value: Option<&Value>, default: [f32; 3]) -> [f32; 3] {
 
 /// Read a Minecraft Java Edition cuboid item model. This is deliberately a
 /// resource-model adapter, separate from the Java ModelRenderer parser.
-pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, Vec<PathBuf>)> {
+fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape: bool) -> Result<(ViewerScene, Vec<PathBuf>)> {
     let index = model_file_index(roots);
     let mut visiting = BTreeSet::new();
     let payload = merge_model_chain(path, &index, &mut visiting, 0)?;
     let elements = payload.get("elements").and_then(Value::as_array).cloned().unwrap_or_default();
-    if elements.is_empty() {
+    if elements.is_empty() && !allow_builtin_block_shape {
         bail!("Item model {} has no cuboid elements in its own or inherited definition.", path.display());
     }
     let textures = payload.get("textures").and_then(Value::as_object).cloned().unwrap_or_default();
@@ -199,6 +199,13 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
         .unwrap_or((16, 16));
     let texture_size = [dimensions.0.max(1), dimensions.1.max(1)];
     let mut nodes = Vec::new();
+    if elements.is_empty() {
+        let shape = builtin_block_shape(path);
+        nodes = builtin_block_nodes(&shape, texture_size);
+        if nodes.is_empty() {
+            bail!("Block model {} has no explicit elements and uses an unsupported built-in parent.", path.display());
+        }
+    }
 
     for (element_index, element) in elements.iter().enumerate() {
         let from = vector3(element.get("from"), [0.0, 0.0, 0.0]);
@@ -269,6 +276,101 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
         warnings,
     };
     Ok((scene, texture_paths))
+}
+
+fn builtin_block_shape(path: &Path) -> String {
+    let parent = read_json(path).ok()
+        .and_then(|payload| payload.get("parent").and_then(Value::as_str).map(str::to_owned))
+        .unwrap_or_default().to_ascii_lowercase();
+    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+    if ["block/cross", "block/tinted_cross", "block/crop", "block/flower"]
+        .iter().any(|value| parent.ends_with(value))
+        || ["flower", "sapling", "crop", "fern", "tall_grass", "cross"]
+            .iter().any(|value| stem.contains(value))
+    {
+        "plant".to_owned()
+    } else if ["block/torch", "block/template_torch", "block/template_torch_wall"]
+        .iter().any(|value| parent.ends_with(value))
+        || ["redstone", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
+            .iter().any(|value| stem.contains(value))
+    {
+        "floor".to_owned()
+    } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
+        .iter().any(|value| parent.ends_with(value))
+    {
+        "cube".to_owned()
+    } else {
+        String::new()
+    }
+}
+
+fn builtin_cube(
+    name: &str,
+    min: [f32; 3],
+    max: [f32; 3],
+    rotation: [f32; 3],
+    texture_size: [u32; 2],
+) -> ViewerNode {
+    let width = texture_size[0].max(1) as f32;
+    let height = texture_size[1].max(1) as f32;
+    ViewerNode {
+        name: name.to_owned(),
+        parent: None,
+        local_translation: [0.0; 3],
+        base_rotation: rotation,
+        cubes: vec![ViewerCube {
+            min,
+            max,
+            uv_origin: [0.0; 2],
+            face_uvs: Some([[0.0, 0.0, width, height]; 6]),
+            mirror: false,
+            name: format!("{name}_cube"),
+        }],
+    }
+}
+
+fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
+    match shape {
+        "cube" => vec![builtin_cube(
+            "cube",
+            [-8.0, -8.0, -8.0],
+            [8.0, 8.0, 8.0],
+            [0.0; 3],
+            texture_size,
+        )],
+        "floor" => vec![builtin_cube(
+            "floor",
+            [-8.0, -8.0, -8.0],
+            [8.0, -7.65, 8.0],
+            [0.0; 3],
+            texture_size,
+        )],
+        "plant" => vec![
+            builtin_cube(
+                "plant_front",
+                [-7.5, -8.0, -0.18],
+                [7.5, 8.0, 0.18],
+                [0.0, 45.0_f32.to_radians(), 0.0],
+                texture_size,
+            ),
+            builtin_cube(
+                "plant_back",
+                [-7.5, -8.0, -0.18],
+                [7.5, 8.0, 0.18],
+                [0.0, -45.0_f32.to_radians(), 0.0],
+                texture_size,
+            ),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, Vec<PathBuf>)> {
+    load_resource_model(path, roots, false)
+}
+
+pub fn load_block_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, Vec<PathBuf>)> {
+    load_resource_model(path, roots, true)
 }
 
 #[cfg(test)]
