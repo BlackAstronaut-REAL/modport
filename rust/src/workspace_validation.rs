@@ -261,7 +261,8 @@ pub fn validate_workspace(workspace_root: &Path, workspace_override: Option<Valu
         }
         if kind == "dimension" {
             match definition.get("biomesInDimension").and_then(Value::as_array) {
-                None | Some([]) => report.error("dimension_biomes_empty", "Dimension has no surface biome; generated multi-noise biome sources cannot be empty.", name.clone(), registry.clone(), ""),
+                None => report.error("dimension_biomes_empty", "Dimension has no surface biome; generated multi-noise biome sources cannot be empty.", name.clone(), registry.clone(), ""),
+                Some(biomes) if biomes.is_empty() => report.error("dimension_biomes_empty", "Dimension has no surface biome; generated multi-noise biome sources cannot be empty.", name.clone(), registry.clone(), ""),
                 Some(biomes) => for biome in biomes {
                     if let Some(custom) = biome.as_str().and_then(|s| s.strip_prefix("CUSTOM:")) {
                         if !custom_biomes.contains(custom) {
