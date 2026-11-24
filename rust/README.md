@@ -12,9 +12,10 @@ the engine into the native executable.
 - Bounded, path-safe JAR/ZIP extraction.
 - Direct JVM class-file parsing foundations: constant pool, member and Code
   attributes, line numbers, bootstrap method metadata and instruction boundaries.
-- Compiled-only content registration recovery for legacy GameRegistry calls,
-  static registry-holder fields, modern DeferredRegister supplier lambdas, and
-  entity registration APIs. The shared index is reused across exporters.
+- Compiled-only content registration recovery from loose `.class` files and
+  JAR/ZIP inputs, covering legacy GameRegistry calls, static registry-holder
+  fields, modern DeferredRegister supplier lambdas and constructor references,
+  plus entity registration APIs. The shared index is reused across exporters.
 - Native legacy compiled animation extraction: pose-field symbolic expressions,
   runtime parameter mapping, same-class helper inlining, and walk/idle/head
   channel classification.
@@ -97,6 +98,9 @@ entities, projectiles and recipes in dependency order, and can optionally invoke
 after export. Compiled-only registration recovery is now a shared first-pass facility;
 it does not yet reproduce constructor-only stats, all anonymous/indirect registry
 patterns, reflection-driven registration, or arbitrary registration control flow.
+Archive class extraction is limited to class entries; resources and textures in raw
+JAR files still need to be supplied through extracted resource roots for complete
+asset fidelity.
 Remaining major parity work includes complete tool material and repair-item inference,
 custom armor-model adaptation, detailed block-state/property and loot/drop procedures,
 custom plant growth and biome-placement procedures, configured/placed feature
