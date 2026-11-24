@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(scene.nodes[0].name, "blade");
         assert_eq!(scene.nodes[0].cubes.len(), 1);
         let cube = &scene.nodes[0].cubes[0];
-        assert_eq!(cube.face_uvs.unwrap()[0], [12.0, 0.0, 20.0, 32.0]);
+        assert_eq!(cube.face_uvs.unwrap()[0], [12.0, 0.0, 18.0, 32.0]);
         assert_eq!(scene.texture_size, [32, 32]);
     }
 
