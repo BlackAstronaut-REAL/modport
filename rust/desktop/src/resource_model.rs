@@ -270,3 +270,69 @@ pub fn load_item_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, V
     };
     Ok((scene, texture_paths))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_item_model_geometry_and_resolves_texture_face_uvs() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model_path = root.join("assets/demo/models/item/ancient_sword.json");
+        let texture_path = root.join("assets/demo/textures/item/ancient_sword.png");
+        fs::create_dir_all(model_path.parent().unwrap()).unwrap();
+        fs::create_dir_all(texture_path.parent().unwrap()).unwrap();
+        RgbaImage::new(32, 32).save(&texture_path).unwrap();
+        fs::write(&model_path, r##"{
+            "textures":{"layer0":"demo:item/ancient_sword"},
+            "elements":[{
+                "name":"blade",
+                "from":[6,0,7],
+                "to":[10,16,9],
+                "faces":{
+                    "north":{"uv":[6,0,10,16],"texture":"#layer0"},
+                    "south":{"uv":[6,0,10,16],"texture":"#layer0"},
+                    "east":{"uv":[6,0,9,16],"texture":"#layer0"},
+                    "west":{"uv":[6,0,9,16],"texture":"#layer0"},
+                    "up":{"uv":[6,0,10,2],"texture":"#layer0"},
+                    "down":{"uv":[6,0,10,2],"texture":"#layer0"}
+                }
+            }]
+        }"##).unwrap();
+
+        let (scene, textures) = load_item_model(&model_path, &[root.to_path_buf()]).unwrap();
+        assert_eq!(textures, vec![texture_path]);
+        assert_eq!(scene.nodes.len(), 1);
+        assert_eq!(scene.nodes[0].name, "blade");
+        assert_eq!(scene.nodes[0].cubes.len(), 1);
+        let cube = &scene.nodes[0].cubes[0];
+        assert_eq!(cube.face_uvs.unwrap()[0], [12.0, 0.0, 18.0, 16.0]);
+        assert_eq!(scene.texture_size, [32, 32]);
+    }
+
+    #[test]
+    fn inherits_parent_item_model_textures_and_elements() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let models = root.join("assets/demo/models/item");
+        let textures = root.join("assets/demo/textures/item");
+        fs::create_dir_all(&models).unwrap();
+        fs::create_dir_all(&textures).unwrap();
+        let texture_path = textures.join("shared.png");
+        RgbaImage::new(16, 16).save(&texture_path).unwrap();
+        let parent = models.join("base_tool.json");
+        fs::write(&parent, r##"{
+            "textures":{"layer0":"demo:item/shared"},
+            "elements":[{"from":[0,0,0],"to":[16,16,16],"faces":{
+                "north":{"texture":"#layer0"}
+            }}]
+        }"##).unwrap();
+        let child = models.join("custom_tool.json");
+        fs::write(&child, r#"{"parent":"demo:item/base_tool"}"#).unwrap();
+
+        let (scene, found_textures) = load_item_model(&child, &[root.to_path_buf()]).unwrap();
+        assert_eq!(scene.nodes.len(), 1);
+        assert_eq!(found_textures, vec![texture_path]);
+    }
+}
