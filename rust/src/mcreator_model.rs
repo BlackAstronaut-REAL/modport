@@ -287,7 +287,7 @@ pub fn generate_mojmap_model_java(model: &ParsedModel, class_name: &str, modid: 
         lines.push(format!("\t\tposeStack.mulPose(Axis.{enum_axis}.rotationDegrees(this.bridgeAgeInTicks * {angle}));"));
         for index in group {
             lines.push(format!(
-                "\t\t{}.render(poseStack, vertexConsumer, packedLight, packedOverlay, red, green, blue, alpha);",
+                "\t\tthis.{}.render(poseStack, vertexConsumer, packedLight, packedOverlay, red, green, blue, alpha);",
                 identifiers[index]
             ));
             handled.insert(index);
@@ -297,7 +297,7 @@ pub fn generate_mojmap_model_java(model: &ParsedModel, class_name: &str, modid: 
     for index in roots {
         if handled.contains(&index) { continue; }
         lines.push(format!(
-            "\t\t{}.render(poseStack, vertexConsumer, packedLight, packedOverlay, red, green, blue, alpha);",
+            "\t\tthis.{}.render(poseStack, vertexConsumer, packedLight, packedOverlay, red, green, blue, alpha);",
             identifiers[index]
         ));
     }
