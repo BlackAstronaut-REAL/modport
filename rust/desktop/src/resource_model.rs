@@ -200,7 +200,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
     let texture_size = [dimensions.0.max(1), dimensions.1.max(1)];
     let mut nodes = Vec::new();
     if elements.is_empty() {
-        let shape = builtin_block_shape(path);
+        let shape = builtin_block_shape(path, roots);
         nodes = builtin_block_nodes(&shape, texture_size);
         if nodes.is_empty() {
             bail!("Block model {} has no explicit elements and uses an unsupported built-in parent.", path.display());
@@ -278,30 +278,47 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
     Ok((scene, texture_paths))
 }
 
-fn builtin_block_shape(path: &Path) -> String {
-    let parent = read_json(path).ok()
-        .and_then(|payload| payload.get("parent").and_then(Value::as_str).map(str::to_owned))
-        .unwrap_or_default().to_ascii_lowercase();
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
+    let parent = parent.to_ascii_lowercase();
     if ["block/cross", "block/tinted_cross", "block/crop", "block/flower"]
         .iter().any(|value| parent.ends_with(value))
         || ["flower", "sapling", "crop", "fern", "tall_grass", "cross"]
             .iter().any(|value| stem.contains(value))
     {
-        "plant".to_owned()
+        Some("plant")
     } else if ["block/torch", "block/template_torch", "block/template_torch_wall"]
         .iter().any(|value| parent.ends_with(value))
         || ["redstone", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
             .iter().any(|value| stem.contains(value))
     {
-        "floor".to_owned()
+        Some("floor")
     } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
         .iter().any(|value| parent.ends_with(value))
     {
-        "cube".to_owned()
+        Some("cube")
     } else {
-        String::new()
+        None
     }
+}
+
+fn builtin_block_shape(path: &Path, roots: &[PathBuf]) -> String {
+    let index = model_file_index(roots);
+    let mut current = path.to_path_buf();
+    let mut visited = BTreeSet::<PathBuf>::new();
+    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+
+    for _ in 0..16 {
+        let canonical = fs::canonicalize(&current).unwrap_or_else(|_| current.clone());
+        if !visited.insert(canonical) { break; }
+        let Ok(payload) = read_json(&current) else { break; };
+        let Some(parent) = payload.get("parent").and_then(Value::as_str) else { break; };
+        if let Some(shape) = shape_for_builtin_parent(parent, &stem) {
+            return shape.to_owned();
+        }
+        let Some(next) = resolve_parent_path(&current, parent, &index) else { break; };
+        current = next;
+    }
+    String::new()
 }
 
 fn builtin_cube(
