@@ -493,6 +493,28 @@ mod tests {
     }
 
     #[test]
+    fn legacy_set_rotation_angles_uses_float_first_parameter_order() {
+        let source = r#"
+            public class ModelLegacy extends ModelBase {
+                public void func_78087_a(float p_78087_1_, float p_78087_2_,
+                    float p_78087_3_, float p_78087_4_, float p_78087_5_,
+                    float p_78087_6_, Entity p_78087_7_) {
+                    this.wing.rotateAngleX = MathHelper.sin(p_78087_1_) * p_78087_2_;
+                    this.wing.rotateAngleY = MathHelper.cos(p_78087_3_ * 0.1F);
+                }
+            }
+        "#;
+        let result = extract_java_animation(source, "ModelLegacy", &[sample_part()])
+            .unwrap().expect("legacy method should be parsed");
+        let formulas = result.analysis["formulas"].as_array().unwrap();
+        let x = formulas.iter().find(|formula| formula["axis"] == "x").unwrap();
+        let y = formulas.iter().find(|formula| formula["axis"] == "y").unwrap();
+        assert!(x["expression"].as_str().unwrap().contains("limbSwing"));
+        assert!(x["expression"].as_str().unwrap().contains("limbSwingAmount"));
+        assert!(y["expression"].as_str().unwrap().contains("ageInTicks"));
+    }
+
+    #[test]
     fn recovers_setup_anim_formula_and_bakes_walk_clip() {
         let source = r#"
             public class ModelWing {
