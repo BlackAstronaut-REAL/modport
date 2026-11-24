@@ -490,6 +490,9 @@ pub fn export_projectiles_to_workspace(
         }));
         class_to_element.insert(source.class_name.clone(),element_name.clone());
         let mut warnings=Vec::new();
+        if source.source_text.trim().is_empty() {
+            warnings.push("Projectile class and registry ID were recovered from compiled bytecode only; custom hit logic, pickup behavior, and renderer details may require manual reconstruction.".to_owned());
+        }
         if let Some(item)=bound_item.as_ref(){
             warnings.push(format!("Projectile pickup item was bound to '{item}' from source references; verify pickup behavior."));
         } else {
