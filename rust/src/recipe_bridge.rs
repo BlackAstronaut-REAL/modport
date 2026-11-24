@@ -497,6 +497,7 @@ pub fn emit_recipe_elements(
         }
     }
     let mut descriptors = Vec::new();
+    let mut emitted_registries = std::collections::BTreeSet::<String>::new();
     fs::create_dir_all(output_elements)?;
 
     for source in recipe_source_files(source_roots) {
@@ -529,11 +530,56 @@ pub fn emit_recipe_elements(
             "mojmodelbridge_source_modid":source_modid,
             "mojmodelbridge_source_registry":registry_name
         }));
+        emitted_registries.insert(registry_name.to_ascii_lowercase());
         report.exported.push(RecipeElementExport {
             element_name,
             registry_name,
             source_path:source.to_string_lossy().replace('\\', "/"),
             warnings,
+        });
+    }
+
+    let field_map = source_field_registered_names(source_roots, source_modid);
+    for recovered in java_recipe_payloads(source_roots, source_modid, &field_map, registry_to_element) {
+        let registry_name = snake_name(&recovered.name);
+        if emitted_registries.contains(&registry_name.to_ascii_lowercase()) {
+            continue;
+        }
+        let (definition, warnings) = recipe_mcreator_definition(
+            &recovered.payload,
+            &registry_name,
+            registry_to_element,
+            source_modid,
+        );
+        let Some(definition) = definition else {
+            report.warnings.extend(warnings);
+            continue;
+        };
+        let element_name = unique_element_name(
+            &format!("{}Recipe", pascal_name(&registry_name)),
+            &mut used_names,
+        );
+        let element = json!({"_fv":imported_fv.clamp(0, 89),"_type":"recipe","definition":definition});
+        let output = output_elements.join(format!("{element_name}.mod.json"));
+        fs::write(&output, format!("{}\\n", serde_json::to_string_pretty(&element)?))?;
+        descriptors.push(json!({
+            "name":element_name,
+            "type":"recipe",
+            "compiles":true,
+            "locked_code":false,
+            "registry_name":registry_name,
+            "metadata":{"files":[]},
+            "path":recipe_import_path(source_modid),
+            "mojmodelbridge_generated":true,
+            "mojmodelbridge_source_modid":source_modid,
+            "mojmodelbridge_source_registry":registry_name
+        }));
+        emitted_registries.insert(registry_name.to_ascii_lowercase());
+        report.exported.push(RecipeElementExport {
+            element_name,
+            registry_name,
+            source_path:"<Java recipe registration>".to_owned(),
+            warnings:recovered.warnings,
         });
     }
 
