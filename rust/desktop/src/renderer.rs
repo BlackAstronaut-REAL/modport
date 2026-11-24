@@ -136,7 +136,7 @@ pub fn render_scene(
 
     let aspect = width as f32 / height as f32;
     let focal = (width.min(height) as f32 * 1.45).max(100.0);
-    let light = normalize([-0.36, 0.72, 0.58]);
+    let light = normalize([-0.36, -0.72, 0.58]);
 
     for (index, node) in scene.nodes.iter().enumerate() {
         let Some(world) = worlds.get(index).copied() else { continue; };
@@ -236,44 +236,43 @@ fn draw_cube(
     let side_v1 = v + dz + dy;
     let mut faces = Vec::<([MeshVertex; 4], [f32; 3])>::with_capacity(6);
 
-    // Vanilla ModelBox UV net: left, front, right, back form the side
-    // strip; top and bottom occupy the two panels above it.
-    faces.push((quad(
-        [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],
-        [[u+2.0*dz+dx,side_v1],[u+2.0*dz+2.0*dx,side_v1],[u+2.0*dz+2.0*dx,side_v0],[u+2.0*dz+dx,side_v0]],
-        cube.mirror, tw, th
-    ), [0.0, 0.0, 1.0]));
-
-    faces.push((quad(
-        [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],
-        [[u+dz,side_v1],[u+dz+dx,side_v1],[u+dz+dx,side_v0],[u+dz,side_v0]],
-        cube.mirror, tw, th
-    ), [0.0, 0.0, -1.0]));
-
-    faces.push((quad(
+    // Face vertex order and UV corner order mirror the vanilla ModelBox /
+    // TexturedQuad layout, including its non-obvious top/bottom placement.
+    faces.push((quad_from_rect(
         [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]],
-        [[u+dz+dx,side_v1],[u+2.0*dz+dx,side_v1],[u+2.0*dz+dx,side_v0],[u+dz+dx,side_v0]],
+        [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy],
         cube.mirror, tw, th
     ), [1.0, 0.0, 0.0]));
 
-    faces.push((quad(
+    faces.push((quad_from_rect(
         [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],
-        [[u,side_v1],[u+dz,side_v1],[u+dz,side_v0],[u,side_v0]],
+        [u, v+dz, u+dz, v+dz+dy],
         cube.mirror, tw, th
     ), [-1.0, 0.0, 0.0]));
 
-    // In model coordinates Y grows down, so y0 is the top plane.
-    faces.push((quad(
-        [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]],
-        [[u+dz,v],[u+dz+dx,v],[u+dz+dx,v+dz],[u+dz,v+dz]],
+    faces.push((quad_from_rect(
+        [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]],
+        [u+dz, v, u+dz+dx, v+dz],
         cube.mirror, tw, th
     ), [0.0, -1.0, 0.0]));
 
-    faces.push((quad(
-        [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]],
-        [[u+dz+dx,v+dz],[u+dz+2.0*dx,v+dz],[u+dz+2.0*dx,v],[u+dz+dx,v]],
+    faces.push((quad_from_rect(
+        [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]],
+        [u+dz+dx, v+dz, u+dz+2.0*dx, v],
         cube.mirror, tw, th
     ), [0.0, 1.0, 0.0]));
+
+    faces.push((quad_from_rect(
+        [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],
+        [u+dz, v+dz, u+dz+dx, v+dz+dy],
+        cube.mirror, tw, th
+    ), [0.0, 0.0, -1.0]));
+
+    faces.push((quad_from_rect(
+        [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],
+        [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy],
+        cube.mirror, tw, th
+    ), [0.0, 0.0, 1.0]));
 
     for (vertices, normal) in faces {
         let world_normal = normalize(world.direction(normal));
@@ -293,6 +292,23 @@ fn draw_cube(
             width, height, pixels, depth_buffer,
         );
     }
+}
+
+fn quad_from_rect(
+    points: [[f32; 3]; 4],
+    rect: [f32; 4],
+    mirror: bool,
+    texture_width: f32,
+    texture_height: f32,
+) -> [MeshVertex; 4] {
+    let [u1, v1, u2, v2] = rect;
+    quad(
+        points,
+        [[u2, v1], [u1, v1], [u1, v2], [u2, v2]],
+        mirror,
+        texture_width,
+        texture_height,
+    )
 }
 
 fn quad(
