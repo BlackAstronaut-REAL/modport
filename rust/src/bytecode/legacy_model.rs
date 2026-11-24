@@ -327,6 +327,13 @@ fn run_constructor(
                                     stack.push(Value::Opaque(name));
                                 }
                             }
+                            Value::This if field_objects.contains_key(&name) => {
+                                if let Some(index) = field_objects.get(&name).copied() {
+                                    stack.push(Value::Object(index));
+                                } else {
+                                    stack.push(Value::Opaque(name));
+                                }
+                            }
                             Value::This if name == "field_78090_t" || name == "textureWidth" => {
                                 stack.push(Value::Opaque("__texture_width".into()));
                             }
