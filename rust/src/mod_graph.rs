@@ -127,17 +127,33 @@ fn canonical_path(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
+fn split_camel_case(value: &str, separator: char) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let mut output = String::with_capacity(value.len() + 8);
+    for (index, current) in chars.iter().copied().enumerate() {
+        if index > 0 && current.is_ascii_uppercase() {
+            let previous = chars[index - 1];
+            let next_is_lower = chars.get(index + 1).map(|value| value.is_ascii_lowercase()).unwrap_or(false);
+            let boundary = previous.is_ascii_lowercase()
+                || previous.is_ascii_digit()
+                || (previous.is_ascii_uppercase() && next_is_lower);
+            if boundary { output.push(separator); }
+        }
+        output.push(current);
+    }
+    output
+}
+
 fn class_display_name(class_name: &str) -> String {
     let name = class_name.strip_prefix("Entity").or_else(|| class_name.strip_prefix("Mob")).unwrap_or(class_name);
-    let camel = Regex::new(r"(?<=[a-z0-9])(?=[A-Z])").unwrap();
-    let spaced = camel.replace_all(name, " ");
+    let spaced = split_camel_case(name, ' ');
     let cleaned = Regex::new(r"[_$]+").unwrap().replace_all(&spaced, " ");
     cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn registry_slug(value: &str) -> String {
     let name = value.strip_prefix("Entity").or_else(|| value.strip_prefix("Mob")).unwrap_or(value);
-    let camel = Regex::new(r"(?<=[a-z0-9])(?=[A-Z])").unwrap().replace_all(name, "_");
+    let camel = split_camel_case(name, '_');
     let normalized = Regex::new(r"[^A-Za-z0-9]+").unwrap().replace_all(&camel, "_");
     let value = normalized.trim_matches('_').to_ascii_lowercase();
     if value.is_empty() { "converted_entity".to_owned() } else { value }
