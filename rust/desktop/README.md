@@ -6,15 +6,15 @@ This is the standalone Rust desktop application. It depends on the shared mojmod
 
 From the repository root:
 
-\`\`\`powershell
+~~~powershell
 cargo run --manifest-path rust/desktop/Cargo.toml
-\`\`\`
+~~~
 
 Build a release executable:
 
-\`\`\`powershell
+~~~powershell
 cargo build --release --manifest-path rust/desktop/Cargo.toml
-\`\`\`
+~~~
 
 The desktop executable is written to rust/desktop/target/release/mojmodelbridge-desktop.exe on Windows.
 
