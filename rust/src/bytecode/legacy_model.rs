@@ -317,9 +317,9 @@ fn run_constructor(
                                         "field_78795_f" | "rotateAngleX" => Value::Number(part.rotation[0]),
                                         "field_78796_g" | "rotateAngleY" => Value::Number(part.rotation[1]),
                                         "field_78808_h" | "rotateAngleZ" => Value::Number(part.rotation[2]),
-                                        "field_78798_e" | "rotationPointX" => Value::Number(part.offset[0]),
+                                        "field_78800_c" | "rotationPointX" => Value::Number(part.offset[0]),
                                         "field_78797_d" | "rotationPointY" => Value::Number(part.offset[1]),
-                                        "field_78800_c" | "rotationPointZ" => Value::Number(part.offset[2]),
+                                        "field_78798_e" | "rotationPointZ" => Value::Number(part.offset[2]),
                                         _ => Value::Opaque(name),
                                     };
                                     stack.push(value);
@@ -379,9 +379,9 @@ fn run_constructor(
                                             "field_78795_f" | "rotateAngleX" | "xRot" => part.rotation[0] = number,
                                             "field_78796_g" | "rotateAngleY" | "yRot" => part.rotation[1] = number,
                                             "field_78808_h" | "rotateAngleZ" | "zRot" => part.rotation[2] = number,
-                                            "field_78798_e" | "rotationPointX" => part.offset[0] = number,
+                                            "field_78800_c" | "rotationPointX" => part.offset[0] = number,
                                             "field_78797_d" | "rotationPointY" => part.offset[1] = number,
-                                            "field_78800_c" | "rotationPointZ" => part.offset[2] = number,
+                                            "field_78798_e" | "rotationPointZ" => part.offset[2] = number,
                                             _ => {}
                                         }
                                     }
