@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
 use crate::model::{ParsedModel, Part, Cube};
@@ -158,6 +158,341 @@ fn preserve_animation_methods(source: &str, class_name: &str) -> (Value, String,
     (analysis, logic, "setupAnim/renderToBuffer".to_owned(), warnings)
 }
 
+
+fn extract_method_body(source: &str, method_names: &[&str]) -> Option<(String, String)> {
+    for name in method_names {
+        let escaped = regex::escape(name);
+        let pattern = Regex::new(&format!(
+            r"(?m)^[ \t]*(?:(?:public|protected|private|static|final|synchronized)\s+)*[\w<>\[\],.? ]+\b{escaped}\s*\([^;{{}}]*\)\s*(?:throws\s+[^{{}}]+)?\{{"
+        )).ok()?;
+        let Some(found) = pattern.find(source) else { continue; };
+        let open = source[found.start()..found.end()].rfind('{')? + found.start();
+        let Ok((body, _)) = extract_balanced(source, open, '{', '}') else { continue; };
+        return Some((name.to_owned(), body));
+    }
+    None
+}
+
+fn canonical_part_name(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase).collect()
+}
+
+fn resolve_rendered_parts(
+    body: &str,
+    parts: &[Part],
+    aliases: &HashMap<String, String>,
+) -> BTreeSet<String> {
+    let call_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.\s*render\s*\(").unwrap();
+    call_pattern.captures_iter(body).filter_map(|capture| {
+        let raw = capture.get(1)?.as_str();
+        aliases.get(&canonical_part_name(raw)).cloned()
+    }).collect()
+}
+
+/// Port of Beta 12's conservative explicit render-loop detector. A loop is
+/// expanded only when it renders a known model part and changes the angle used
+/// by the render transform. Unrelated animation loops are left untouched.
+fn extract_modern_render_instances(
+    source: &str,
+    class_name: &str,
+    parts: &[Part],
+    constants: &BTreeMap<String, f64>,
+) -> (BTreeMap<String, Vec<Value>>, Vec<Value>, Vec<String>) {
+    let Some((method_name, body)) = extract_method_body(source, &["renderToBuffer", "render"]) else {
+        return (BTreeMap::new(), Vec::new(), Vec::new());
+    };
+
+    let mut aliases = HashMap::<String, String>::new();
+    for part in parts {
+        for alias in [&part.name, &part.variable] {
+            aliases.entry(canonical_part_name(alias)).or_insert_with(|| part.name.clone());
+        }
+    }
+
+    let loop_pattern = Regex::new(r"for\s*\(([^{}]*)\)\s*\{").unwrap();
+    let increment_pattern = Regex::new(r"\b([A-Za-z_$][\w$]*)\s*\+=\s*([^;]+);").unwrap();
+    let axis_pattern = Regex::new(r"Axis\.([XYZ])P\.rotation(Degrees)?\(\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)").unwrap();
+    let direct_rotation_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.(xRot|yRot|zRot)\s*=\s*([^;]+);").unwrap();
+    let position_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.(x|y|z)\s*=\s*([^;]+);").unwrap();
+
+    let mut render_instances = BTreeMap::<String, Vec<Value>>::new();
+    let mut warnings = Vec::<String>::new();
+    let mut cursor = 0usize;
+
+    while cursor < body.len() {
+        let Some(found) = loop_pattern.find(&body[cursor..]) else { break; };
+        let start = cursor + found.start();
+        let end_header = cursor + found.end();
+        let header = loop_pattern.captures(&body[start..end_header])
+            .and_then(|capture| capture.get(1).map(|value| value.as_str().to_owned()))
+            .unwrap_or_default();
+        let open = body[start..end_header].rfind('{').map(|value| start + value);
+        let Some(open) = open else { cursor = end_header; continue; };
+        let Ok((loop_body, loop_end)) = extract_balanced(&body, open, '{', '}') else {
+            cursor = end_header;
+            continue;
+        };
+        cursor = loop_end;
+
+        let header_parts = split_top_level(&header, ';');
+        if header_parts.len() < 2 { continue; }
+        let condition = header_parts[1].trim();
+        let inclusive = Regex::new(r"<=\s*([^;]+)$").unwrap();
+        let exclusive = Regex::new(r"<\s*([^;]+)$").unwrap();
+        let count = if let Some(capture) = inclusive.captures(condition) {
+            eval_int(&capture[1], constants).ok().map(|value| value + 1)
+        } else if let Some(capture) = exclusive.captures(condition) {
+            eval_int(&capture[1], constants).ok()
+        } else {
+            None
+        };
+        let Some(count) = count.filter(|value| *value >= 2 && *value <= 512) else { continue; };
+
+        let rendered = resolve_rendered_parts(&loop_body, parts, &aliases);
+        if rendered.is_empty() { continue; }
+
+        let increments: BTreeMap<String, String> = increment_pattern.captures_iter(&loop_body)
+            .map(|capture| (capture[1].to_owned(), capture[2].trim().to_owned()))
+            .collect();
+
+        let mut chosen_axis: Option<char> = None;
+        let mut chosen_variable = String::new();
+        let mut chosen_step = None::<f64>;
+
+        for capture in axis_pattern.captures_iter(&loop_body) {
+            let axis = capture[1].chars().next().unwrap_or('Z');
+            let degrees = capture.get(2).is_some();
+            let variable = capture[3].rsplit('.').next().unwrap_or(&capture[3]);
+            let Some(increment) = increments.get(variable) else { continue; };
+            let Ok(mut step) = eval_number(increment, constants) else { continue; };
+            if degrees { step = step.to_radians(); }
+            chosen_axis = Some(axis);
+            chosen_variable = variable.to_owned();
+            chosen_step = Some(step);
+            break;
+        }
+
+        if chosen_axis.is_none() {
+            for capture in direct_rotation_pattern.captures_iter(&loop_body) {
+                let raw_part = capture[1].as_str();
+                let field = capture[2].as_str();
+                let expression = capture[3].trim();
+                let resolved = aliases.get(&canonical_part_name(raw_part));
+                if resolved.is_none() { continue; }
+                for (variable, increment) in &increments {
+                    if expression.trim_start_matches("this.").trim() != variable { continue; }
+                    let Ok(step) = eval_number(increment, constants) else { continue; };
+                    chosen_axis = Some(match field { "xRot" => 'X', "yRot" => 'Y', _ => 'Z' });
+                    chosen_variable = variable.clone();
+                    chosen_step = Some(step);
+                    break;
+                }
+                if chosen_axis.is_some() { break; }
+            }
+        }
+
+        let axis_index = match chosen_axis.unwrap_or('Z') { 'X' => 0, 'Y' => 1, _ => 2 };
+        let step = chosen_step.unwrap_or(0.0);
+
+        let runtime_transforms: Vec<Value> = direct_rotation_pattern.captures_iter(&loop_body)
+            .filter_map(|capture| {
+                let part = aliases.get(&canonical_part_name(&capture[1]))?;
+                Some(json!({
+                    "part": part,
+                    "axis": capture[2],
+                    "expression": capture[3].trim()
+                }))
+            }).collect();
+        let position_assignments: Vec<Value> = position_pattern.captures_iter(&loop_body)
+            .filter_map(|capture| {
+                let part = aliases.get(&canonical_part_name(&capture[1]))?;
+                Some(json!({
+                    "part": part,
+                    "axis": capture[2],
+                    "expression": capture[3].trim()
+                }))
+            }).collect();
+
+        for part_name in rendered {
+            let instances = render_instances.entry(part_name.clone()).or_default();
+            if !instances.is_empty() && instances.len() != count as usize {
+                warnings.push(format!(
+                    "Render multiplicity for '{part_name}' in {class_name} was encountered more than once; instance copies were appended in source order."
+                ));
+            }
+            for instance_index in 0..count as usize {
+                let mut rotation = [0.0f64; 3];
+                if chosen_axis.is_some() {
+                    rotation[axis_index] = instance_index as f64 * step;
+                }
+                instances.push(json!({
+                    "rotation": rotation,
+                    "source_method": method_name,
+                    "instance_index": instance_index,
+                    "instance_count": count,
+                    "runtime_transforms": runtime_transforms,
+                    "part_assignments": runtime_transforms,
+                    "position_assignments": position_assignments
+                }));
+            }
+        }
+
+        let _ = chosen_variable;
+    }
+
+    // Persistent PoseStack counters (e.g. Rotator.rf1 += 2 after its render
+    // loop) remain a separate runtime transform, not baked into static copies.
+    let mut runtime_rotations = Vec::<Value>::new();
+    let global_increments: BTreeMap<String, String> = increment_pattern.captures_iter(&body)
+        .map(|capture| (capture[1].to_owned(), capture[2].trim().to_owned()))
+        .collect();
+    for capture in axis_pattern.captures_iter(&body) {
+        let axis = capture[1].to_owned();
+        let degrees = capture.get(2).is_some();
+        let variable = capture[3].rsplit('.').next().unwrap_or(&capture[3]).to_owned();
+        let Some(increment) = global_increments.get(&variable) else { continue; };
+        if increment_pattern.find_iter(&body).filter(|found| {
+            increment_pattern.captures(found.as_str()).map(|entry| entry[1] == variable).unwrap_or(false)
+        }).count() != 1 { continue; }
+        let after = &body[capture.get(0).unwrap().end()..];
+        let Some(loop_match) = loop_pattern.find(after) else { continue; };
+        let loop_open = after[loop_match.start()..loop_match.end()].rfind('{').map(|value| loop_match.start() + value);
+        let Some(loop_open) = loop_open else { continue; };
+        let Ok((loop_body, loop_end)) = extract_balanced(after, loop_open, '{', '}') else { continue; };
+        let post_loop = &after[loop_end..];
+        if !increment_pattern.captures_iter(post_loop).any(|entry| entry[1] == variable) { continue; }
+        let rendered = resolve_rendered_parts(&loop_body, parts, &aliases);
+        let selected: Vec<String> = rendered.into_iter().filter(|name| render_instances.contains_key(name)).collect();
+        if selected.is_empty() { continue; }
+        if let Ok(speed) = eval_number(increment, constants) {
+            runtime_rotations.push(json!({
+                "axis": axis,
+                "degrees": degrees,
+                "speed": speed,
+                "parts": selected,
+                "variable": variable
+            }));
+        }
+    }
+
+    (render_instances, runtime_rotations, warnings)
+}
+
+/// Port of Beta 12's repeated helper-call detector for groups such as eight
+/// crab legs, where a helper overwrites ModelPart.x/y/z before rendering it.
+fn extract_modern_helper_render_instances(
+    source: &str,
+    parts: &[Part],
+    constants: &BTreeMap<String, f64>,
+) -> BTreeMap<String, Vec<Value>> {
+    let method_pattern = Regex::new(
+        r"(?m)(?:public|protected|private)\s+(?:static\s+)?(?:final\s+)?[A-Za-z_$][\w.$<>,?\[\] ]*\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{"
+    ).unwrap();
+    let call_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\(([^;{}]*)\)\s*;").unwrap();
+    let render_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.\s*render\s*\(").unwrap();
+    let position_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.(x|y|z)\s*=\s*([^;]+);").unwrap();
+    let parameter_pattern = Regex::new(r"([A-Za-z_$][\w$]*)\s*$").unwrap();
+
+    let mut definitions = HashMap::<String, (Vec<String>, String)>::new();
+    let mut cursor = 0usize;
+    while cursor < source.len() {
+        let Some(found) = method_pattern.find(&source[cursor..]) else { break; };
+        let start = cursor + found.start();
+        let end_header = cursor + found.end();
+        let capture = method_pattern.captures(&source[start..end_header]).unwrap();
+        let name = capture[1].to_owned();
+        let raw_parameters = capture[2].to_owned();
+        let open = source[start..end_header].rfind('{').map(|value| start + value);
+        let Some(open) = open else { cursor = end_header; continue; };
+        let Ok((body, end)) = extract_balanced(source, open, '{', '}') else {
+            cursor = end_header;
+            continue;
+        };
+        let parameters = if raw_parameters.trim().is_empty() {
+            Vec::new()
+        } else {
+            split_top_level(&raw_parameters, ',').iter().map(|raw| {
+                parameter_pattern.captures(raw.trim()).map(|capture| capture[1].to_owned()).unwrap_or_default()
+            }).collect()
+        };
+        definitions.insert(name, (parameters, body));
+        cursor = end;
+    }
+    if definitions.is_empty() { return BTreeMap::new(); }
+
+    let known: HashMap<String, String> = parts.iter().flat_map(|part| {
+        [
+            (canonical_part_name(&part.name), part.name.clone()),
+            (canonical_part_name(&part.variable), part.name.clone())
+        ]
+    }).collect();
+    let mut output = BTreeMap::<String, Vec<Value>>::new();
+
+    for (outer_name, (_outer_parameters, outer_body)) in &definitions {
+        let calls: Vec<(String, String)> = call_pattern.captures_iter(outer_body)
+            .map(|capture| (capture[1].to_owned(), capture[2].to_owned()))
+            .collect();
+        let mut groups = BTreeMap::<String, Vec<String>>::new();
+        for (callee, arguments) in calls {
+            if callee == *outer_name { continue; }
+            if let Some((_parameters, nested_body)) = definitions.get(&callee) {
+                let has_known_render = render_pattern.captures_iter(nested_body).any(|capture| {
+                    known.contains_key(&canonical_part_name(&capture[1]))
+                });
+                if has_known_render {
+                    groups.entry(callee).or_default().push(arguments);
+                }
+            }
+        }
+
+        for (callee, group) in groups {
+            if group.len() < 2 { continue; }
+            let Some((parameters, nested_body)) = definitions.get(&callee) else { continue; };
+            let rendered: BTreeSet<String> = render_pattern.captures_iter(nested_body)
+                .filter_map(|capture| known.get(&canonical_part_name(&capture[1])).cloned())
+                .collect();
+            if rendered.is_empty() { continue; }
+
+            for (instance_index, raw_arguments) in group.iter().enumerate() {
+                let arguments = if raw_arguments.trim().is_empty() { Vec::new() } else { split_top_level(raw_arguments, ',') };
+                let mapping: HashMap<String, String> = parameters.iter().zip(arguments.iter())
+                    .map(|(parameter, argument)| (parameter.clone(), argument.trim().to_owned()))
+                    .collect();
+                let mut assignments = HashMap::<String, HashMap<String, f64>>::new();
+                for capture in position_pattern.captures_iter(nested_body) {
+                    let Some(part) = known.get(&canonical_part_name(&capture[1])).cloned() else { continue; };
+                    let mut expression = capture[3].trim().to_owned();
+                    for (parameter, argument) in &mapping {
+                        let token = Regex::new(&format!(r"\b{}\b", regex::escape(parameter))).unwrap();
+                        expression = token.replace_all(&expression, argument.as_str()).to_string();
+                    }
+                    let Ok(value) = eval_number(&expression, constants) else { continue; };
+                    assignments.entry(part).or_default().insert(capture[2].to_owned(), value);
+                }
+                if assignments.is_empty() { continue; }
+
+                for part in &rendered {
+                    let mut spec = json!({
+                        "instance_index": instance_index,
+                        "instance_count": group.len(),
+                        "source_method": outer_name,
+                        "helper_method": callee
+                    });
+                    if let Some(position) = assignments.get(part) {
+                        if let (Some(x), Some(y), Some(z)) = (position.get("x"), position.get("y"), position.get("z")) {
+                            spec["position"] = json!([x, y, z]);
+                        }
+                    }
+                    output.entry(part.clone()).or_default().push(spec);
+                }
+            }
+        }
+    }
+
+    output
+}
+
 /// Reconstruct modern Mojang-mapped PartDefinition / ModelPartData source.
 pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedModel> {
     let clean = strip_java_comments(text);
@@ -251,6 +586,14 @@ pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedMo
         }
     }
 
+    let (render_instances, render_runtime_rotations, render_warnings) =
+        extract_modern_render_instances(&clean, &class_name, &parts, &constants);
+    let helper_instances = extract_modern_helper_render_instances(&clean, &parts, &constants);
+    for (name, specs) in helper_instances {
+        render_instances.insert(name, specs);
+    }
+    warnings.extend(render_warnings);
+
     let (animation_analysis, animation_logic, animation_source, animation_warnings) = preserve_animation_methods(&clean, &class_name);
     warnings.extend(animation_warnings);
     if parts.iter().map(|part| part.cubes.len()).sum::<usize>() == 0 {
@@ -266,6 +609,8 @@ pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedMo
     model.animation_analysis = animation_analysis;
     model.animation_logic = animation_logic;
     model.animation_source = animation_source;
+    model.render_instances = render_instances;
+    model.render_runtime_rotations = render_runtime_rotations;
     Ok(model)
 }
 
@@ -283,6 +628,42 @@ pub fn parse_java_model(text: &str, source_name: &str, constructor_args: &[Value
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_repeated_render_loop_as_per_instance_rotations() {
+        let source = r#"
+        public class ModelRepeatedRender {
+            public static LayerDefinition createBodyLayer() {
+                MeshDefinition mesh = new MeshDefinition();
+                PartDefinition root = mesh.getRoot();
+                PartDefinition wing = root.addOrReplaceChild("wing",
+                    CubeListBuilder.create().addBox(-1, -1, -1, 2, 2, 2),
+                    PartPose.ZERO);
+                return LayerDefinition.create(mesh, 64, 32);
+            }
+            public void renderToBuffer(PoseStack poseStack, VertexConsumer vertex,
+                                       int light, int overlay, float red, float green,
+                                       float blue, float alpha) {
+                float angle = 0.0F;
+                for (int i = 0; i < 4; i++) {
+                    poseStack.mulPose(Axis.ZP.rotationDegrees(angle));
+                    this.wing.render(poseStack, vertex, light, overlay);
+                    angle += 90.0F;
+                }
+            }
+        }
+        "#;
+        let model = parse_java_model(source, "ModelRepeatedRender.java", &[]).unwrap();
+        let instances = model.render_instances.get("wing").expect("render loop should be detected");
+        assert_eq!(instances.len(), 4);
+        let rotations: Vec<f64> = instances.iter()
+            .map(|spec| spec["rotation"][2].as_f64().unwrap())
+            .collect();
+        assert!((rotations[0] - 0.0).abs() < 1e-8);
+        assert!((rotations[1] - std::f64::consts::FRAC_PI_2).abs() < 1e-8);
+        assert!((rotations[2] - std::f64::consts::PI).abs() < 1e-8);
+        assert!((rotations[3] - 3.0 * std::f64::consts::FRAC_PI_2).abs() < 1e-8);
+    }
 
     #[test]
     fn parses_modern_geometry_hierarchy_pose_and_uv() {

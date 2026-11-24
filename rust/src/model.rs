@@ -122,7 +122,11 @@ impl ParsedModel {
         if let Some(cached) = self.cached_cube_count {
             return cached;
         }
-        if !self.render_instances.is_empty() {
+        // Before expansion, the instance table carries multiplicity. After
+        // expansion, each copy is a real Part and must not be multiplied again.
+        if !self.render_instances.is_empty()
+            && !self.parts.iter().any(|part| part.render_instance_index > 0)
+        {
             return self.parts.iter().map(|part| {
                 let instances = self.render_instances.get(&part.name)
                     .map(|items| items.len()).unwrap_or(0).max(1);
@@ -133,9 +137,111 @@ impl ParsedModel {
     }
 }
 
+
+fn vec3_from_json(value: &Value) -> Option<[f64; 3]> {
+    let values = value.as_array()?;
+    if values.len() != 3 { return None; }
+    Some([values[0].as_f64()?, values[1].as_f64()?, values[2].as_f64()?])
+}
+
+/// Expand source-confirmed repeated render calls into real model parts. This
+/// mirrors Beta 12 behavior: the first render updates the original part and
+/// each subsequent render becomes a transformed clone.
+pub fn expand_render_instances(model: &mut ParsedModel) {
+    if model.render_instances.is_empty()
+        || model.parts.iter().any(|part| part.render_instance_index > 0)
+    {
+        return;
+    }
+
+    let source_parts = std::mem::take(&mut model.parts);
+    let mut expanded = Vec::with_capacity(source_parts.len());
+    for mut part in source_parts {
+        if part.source_name.is_empty() {
+            part.source_name = part.name.clone();
+        }
+        let specs = model.render_instances.get(&part.name).cloned().unwrap_or_default();
+        if specs.is_empty() {
+            expanded.push(part);
+            continue;
+        }
+
+        if let Some(first) = specs.first() {
+            if let Some(position) = first.get("position").and_then(vec3_from_json) {
+                part.offset = position;
+            }
+            if let Some(rotation) = first.get("rotation").and_then(vec3_from_json) {
+                for axis in 0..3 {
+                    part.rotation[axis] += rotation[axis];
+                }
+            }
+        }
+        expanded.push(part.clone());
+
+        for (instance_index, spec) in specs.iter().enumerate().skip(1) {
+            let rotation = spec.get("rotation").and_then(vec3_from_json).unwrap_or([0.0; 3]);
+            let position = spec.get("position").and_then(vec3_from_json).unwrap_or(part.offset);
+            let mut clone = part.clone();
+            clone.name = format!("{}_{}", part.name, instance_index + 1);
+            clone.variable = format!("{}_{}", part.variable, instance_index + 1);
+            clone.parent_variable = part.parent_variable.clone();
+            clone.offset = position;
+            clone.rotation = [
+                part.rotation[0] + rotation[0],
+                part.rotation[1] + rotation[1],
+                part.rotation[2] + rotation[2],
+            ];
+            clone.cubes = part.cubes.clone();
+            clone.parent = part.parent.clone();
+            clone.children = part.children.clone();
+            clone.source_index = part.source_index;
+            clone.source_name = part.source_name.clone();
+            clone.render_instance_index = instance_index;
+            clone.render_instance_spec = spec.clone();
+            expanded.push(clone);
+        }
+    }
+    model.parts = expanded;
+    model.cached_cube_count = None;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expands_render_instances_into_transformed_part_copies() {
+        let mut model = ParsedModel::new("ModelRotator".into(), 64, 32, vec![Part {
+            name: "wing".into(), variable: "wing".into(), parent_variable: "root".into(),
+            offset: [1.0, 2.0, 3.0], rotation: [0.0; 3],
+            cubes: vec![Cube {
+                x: 0.0, y: 0.0, z: 0.0, dx: 2.0, dy: 2.0, dz: 2.0,
+                uv_x: 0, uv_y: 0, mirror: false, inflate: 0.0, name: "wing_cube".into()
+            }],
+            parent: None, children: Vec::new(), source_index: 4, source_name: "wing".into(),
+            render_instance_index: 0, render_instance_spec: Value::Null,
+            origin: [0.0, 24.0, 0.0], group_uuid: String::new()
+        }], Vec::new());
+        model.render_instances.insert("wing".into(), vec![
+            serde_json::json!({"rotation":[0.0,0.0,0.0],"instance_index":0,"instance_count":3}),
+            serde_json::json!({"rotation":[0.0,0.0,1.0],"position":[4.0,5.0,6.0],"instance_index":1,"instance_count":3}),
+            serde_json::json!({"rotation":[0.0,0.0,2.0],"instance_index":2,"instance_count":3})
+        ]);
+
+        assert_eq!(model.cube_count(), 3);
+        expand_render_instances(&mut model);
+        assert_eq!(model.parts.len(), 3);
+        assert_eq!(model.parts[1].name, "wing_2");
+        assert_eq!(model.parts[2].name, "wing_3");
+        assert_eq!(model.parts[1].offset, [4.0, 5.0, 6.0]);
+        assert_eq!(model.parts[1].rotation, [0.0, 0.0, 1.0]);
+        assert_eq!(model.parts[2].rotation, [0.0, 0.0, 2.0]);
+        assert_eq!(model.parts[2].source_name, "wing");
+        assert_eq!(model.parts[2].render_instance_index, 2);
+        assert_eq!(model.cube_count(), 3);
+        expand_render_instances(&mut model);
+        assert_eq!(model.parts.len(), 3);
+    }
 
     #[test]
     fn cube_count_matches_legacy_render_instance_semantics() {

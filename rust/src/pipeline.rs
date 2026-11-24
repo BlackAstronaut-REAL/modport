@@ -7,6 +7,7 @@ use crate::blockbench::model_to_bbmodel;
 use crate::bytecode::parse_any_model_class;
 use crate::discovery::discover_mod_layout;
 use crate::source::parse_java_model;
+use crate::model::expand_render_instances;
 use crate::texture::TextureIndex;
 
 fn resolve_texture_set(source: &Path, model_name: &str, supplied_roots: &[PathBuf]) -> Result<crate::texture::TextureSetResolution> {
@@ -101,6 +102,7 @@ pub fn convert_model_source(
         model.warnings.push("No body PNG could be resolved from model/renderer references or conservative texture-family matching.".to_owned());
     }
 
+    expand_render_instances(&mut model);
     let part_count = model.parts.len();
     let cube_count = model.cube_count();
     if cube_count == 0 {

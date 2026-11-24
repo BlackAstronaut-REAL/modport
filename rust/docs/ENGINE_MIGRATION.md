@@ -11,8 +11,8 @@ The Rust implementation is independent under rust/ and must not invoke Python.
 | mod_metadata.py::infer_mod_metadata | metadata | Initial metadata discovery and source-priority port |
 | model_bridge.py Java lexical helpers | source/java | Balanced extraction, splitting, comments and numeric expressions |
 | model_bridge.py::parse_legacy_java_model | source/legacy_model | Initial ModelRenderer/ModelBox geometry parser |
-| model_bridge.py::parse_java_model | source/model | Modern Mojmap and legacy Java parser selection |
-| model_bridge.py::model_to_bbmodel | blockbench | Initial serializer with Beta 12 UUID namespace and coordinate conversion |
+| model_bridge.py::parse_java_model | source/model | Modern Mojmap and legacy Java parser selection; first-pass render-loop and repeated-helper instance detection |
+| model_bridge.py::model_to_bbmodel | blockbench | Initial serializer with Beta 12 UUID namespace, coordinate conversion and explicit repeated-render part expansion |
 | model_bridge.py::convert_file | pipeline | Java and supported legacy/modern class input → Blockbench; shared texture index and sidecars |
 | legacy_bridge.py::parse_legacy_class | bytecode/legacy_model | Initial direct ModelRenderer constructor interpreter with constructor selection and geometry |
 | modern_bytecode_bridge.py::parse_modern_bytecode_class | bytecode/modern_model | Initial MeshDefinition/PartDefinition/CubeListBuilder factory interpreter |

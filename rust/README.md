@@ -29,6 +29,8 @@ the engine into the native executable.
   model classes and constructor arguments, with source-derived entity metadata.
 - First-pass legacy JVM animation formula evaluation and additive walk/idle
   Blockbench preview clips, rebased to the converted bind pose.
+- Repeated-render source detection for modern Mojmap models, including rotation
+  loops and helper-call position variants, expanded into actual Blockbench parts.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
