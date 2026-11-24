@@ -122,10 +122,10 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 else { format!("{} · {}", entity.registry_name, registration.model_class) }
             } else { entity.registry_name.clone() },
             icon_kind: IconKind::MobEgg,
-            icon_path,
+            icon_path: icon_path.clone(),
             model_source,
             resource_model_source: None,
-            texture_paths: Vec::new(),
+            texture_paths: icon_path.into_iter().collect(),
             lore: Vec::new(),
             components_json: "{}".to_owned(),
         });
