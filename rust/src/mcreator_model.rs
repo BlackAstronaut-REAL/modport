@@ -590,7 +590,7 @@ mod tests {
         assert!(source.contains(".mirror()"));
         assert!(source.contains("PartPose.offsetAndRotation"));
         assert!(source.contains("Axis.YP.rotationDegrees(this.bridgeAgeInTicks * 2.0F)"));
-        assert!(source.contains("this.wing.render(poseStack"));
+        assert!(source.contains("this.body.render(poseStack"));
     }
 
     #[test]
@@ -603,7 +603,7 @@ mod tests {
         model.parts.push(clone);
 
         let generated = generate_animation_definition_java(&model, "ModelWing").unwrap().unwrap();
-        assert!(generated.source.contains("animation.model.walk"));
+        assert!(generated.source.contains("ModelWingWalk"));
         assert!(generated.source.contains("AnimationDefinition.Builder.withLength(1.0F).looping()"));
         assert!(generated.source.contains(".addAnimation(\"wing\""));
         assert!(generated.source.contains(".addAnimation(\"wing_2\""));
