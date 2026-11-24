@@ -741,10 +741,6 @@ fn item_source_properties(
         if let Some(level) = material.enchantability {
             properties.entry("enchantability".to_owned()).or_insert_with(|| serde_json::json!(level));
         }
-        if let Some(harvest) = material.harvest_level {
-            properties.insert("harvest_level".to_owned(), serde_json::json!(harvest));
-            lore.push(format!("Harvest level: {}", format_stat(harvest as f64)));
-        }
         if let Some(damage) = material.damage {
             let offset = match source.tool_type.as_deref() {
                 Some("Sword") => 4.0,
@@ -1591,6 +1587,19 @@ mod tests {
         assert_eq!(properties["attack_damage"], 13.5);
         assert!(lore.iter().any(|line| line == "Enchantability: 15"));
         assert!(lore.iter().any(|line| line == "Durability: 1800"));
+
+        let material = ToolMaterialStats {
+            uses: Some(2400),
+            efficiency: Some(9.0),
+            damage: Some(5.0),
+            enchantability: Some(18),
+        };
+        let (material_properties, material_lore) = item_source_properties(&source, Some(&material));
+        assert_eq!(material_properties["max_damage"], 1800.0, "explicit item class durability should outrank material uses");
+        assert_eq!(material_properties["efficiency"], 9.0);
+        assert_eq!(material_properties["enchantability"], 15.0, "class getter should outrank material enchantability");
+        assert_eq!(material_properties["attack_damage"], 13.5, "explicit class damage should outrank material damage");
+        assert!(material_lore.iter().any(|line| line == "Mining efficiency: 9"));
     }
 
     #[test]
