@@ -240,7 +240,21 @@ fn localization_entry(workspace: &mut Value, category: &str, modid: &str, regist
 }
 
 fn display_name(registry: &str) -> String {
-    pascal_name(registry)
+    registry.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut value = first.to_ascii_uppercase().to_string();
+                    value.extend(chars.map(|ch| ch.to_ascii_lowercase()));
+                    value
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn write_worldgen_element(
