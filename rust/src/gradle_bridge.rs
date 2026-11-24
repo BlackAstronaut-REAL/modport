@@ -55,10 +55,16 @@ fn parse_diagnostics(output: &str) -> Vec<CompileDiagnostic> {
     for line in output.lines() {
         let trimmed = line.trim();
         let lower = trimmed.to_ascii_lowercase();
-        let severity = if lower.contains(" error:") || lower.starts_with("error:") || lower.contains(" failed") {
+        // Keep the compiler's line-level diagnostics and one top-level
+        // Gradle failure summary. Task progress lines such as
+        // "> Task :compileJava FAILED" are useful context in the full log but
+        // duplicate the final BUILD FAILED result and are not diagnostics.
+        let severity = if lower.contains(" error:") || lower.starts_with("error:") {
             Some("error")
         } else if lower.contains(" warning:") || lower.starts_with("warning:") {
             Some("warning")
+        } else if lower == "build failed" || lower.starts_with("build failed with an exception") {
+            Some("error")
         } else {
             None
         };
