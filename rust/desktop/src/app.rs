@@ -619,15 +619,16 @@ impl MojModelBridgeApp {
                 tooltip::draw_formatted_text(
                     ui,
                     &self.draft_name,
-                    Color32::from_rgb(170, 0, 170),
+                    Color32::WHITE,
                     self.minecraftia_available,
                 );
                 for line in self.draft_lore.lines() {
                     if !line.is_empty() {
-                        tooltip::draw_formatted_text(
+                        tooltip::draw_formatted_text_with_italic(
                             ui,
                             line,
                             Color32::from_rgb(170, 170, 170),
+                            true,
                             self.minecraftia_available,
                         );
                     }
@@ -637,7 +638,7 @@ impl MojModelBridgeApp {
                         Ok(value) => tooltip::draw_component_json(
                             ui,
                             &value,
-                            Color32::from_rgb(170, 170, 170),
+                            Color32::WHITE,
                             self.minecraftia_available,
                         ),
                         Err(error) => {
