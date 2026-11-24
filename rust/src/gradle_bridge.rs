@@ -30,7 +30,7 @@ pub struct GradleCompileReport {
     pub stderr: String,
 }
 
-fn gradle_command(root: &Path) -> Result<(PathBuf, bool)> {
+fn gradle_command(root: &Path) -> Result<PathBuf> {
     #[cfg(windows)]
     let candidates = ["gradlew.bat", "gradlew"];
     #[cfg(not(windows))]
@@ -39,7 +39,7 @@ fn gradle_command(root: &Path) -> Result<(PathBuf, bool)> {
     for name in candidates {
         let candidate = root.join(name);
         if candidate.is_file() {
-            return Ok((candidate, true));
+            return Ok(candidate);
         }
     }
 
@@ -47,7 +47,7 @@ fn gradle_command(root: &Path) -> Result<(PathBuf, bool)> {
     let executable = PathBuf::from("gradle.bat");
     #[cfg(not(windows))]
     let executable = PathBuf::from("gradle");
-    Ok((executable, false))
+    Ok(executable)
 }
 
 fn parse_diagnostics(output: &str) -> Vec<CompileDiagnostic> {
@@ -108,7 +108,7 @@ pub fn compile_workspace(
     let validation_errors = validation.as_ref().map(|value| value.errors.len()).unwrap_or(0);
     let validation_warnings = validation.as_ref().map(|value| value.warnings.len()).unwrap_or(0);
 
-    let (executable, wrapper) = gradle_command(&root)?;
+    let executable = gradle_command(&root)?;
     let selected_tasks = if tasks.is_empty() {
         vec!["build".to_owned()]
     } else {
@@ -123,12 +123,22 @@ pub fn compile_workspace(
         args.push("--offline".to_owned());
     }
     args.extend(selected_tasks);
-    let mut command = Command::new(&executable);
-    command.current_dir(&root).args(&args);
-    if wrapper && !cfg!(windows) {
-        // Preserve the checked-in wrapper's executable bit; do not shell out or
-        // invoke a shell, which would make argument handling platform-dependent.
-    }
+    #[cfg(windows)]
+    let mut command = {
+        // Gradle wrappers on Windows are batch files and must be launched through
+        // cmd.exe. Keep every task/flag as a separate argument to avoid building
+        // a manually concatenated command string.
+        let mut command = Command::new("cmd.exe");
+        command.arg("/D").arg("/C").arg(&executable).args(&args);
+        command
+    };
+    #[cfg(not(windows))]
+    let mut command = {
+        let mut command = Command::new(&executable);
+        command.args(&args);
+        command
+    };
+    command.current_dir(&root);
 
     let started = Instant::now();
     let result = command.output()
