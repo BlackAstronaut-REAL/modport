@@ -284,7 +284,26 @@ impl MojModelBridgeApp {
         self.playing = false;
         self.selected_error.clear();
 
-        if let Some(source) = entry.resource_model_source.as_ref() {
+        if entry.category == "Armor" {
+            if let Some(source) = entry.model_source.as_ref() {
+                if let Err(error) = self.load_legacy_model_preview(&entry, source) {
+                    self.selected_error = format!("Armor model preview could not be loaded: {error:#}");
+                }
+            } else if let Some(source) = entry.resource_model_source.as_ref() {
+                match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
+                    Ok((scene, textures)) => {
+                        self.scene = Some(scene);
+                        self.texture_paths = if !entry.texture_paths.is_empty() { entry.texture_paths.clone() } else { textures };
+                        self.selected_texture = preferred_texture_index(&entry, &self.texture_paths);
+                        self.refresh_preview_image();
+                    }
+                    Err(error) => self.selected_error = format!("Armor model preview could not be loaded: {error:#}"),
+                }
+            } else if let Some(path) = entry.icon_path.as_ref() {
+                self.texture_paths.push(path.clone());
+                self.refresh_preview_image();
+            }
+        } else if let Some(source) = entry.resource_model_source.as_ref() {
             let loaded = if entry.category == "Blocks" {
                 crate::resource_model::load_block_model(source, &self.browser.texture_roots)
             } else {
