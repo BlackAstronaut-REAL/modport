@@ -159,9 +159,9 @@ fn field_axis(name: &str) -> Option<(&'static str, &'static str)> {
         "field_78795_f" | "rotateAngleX" | "xRot" => Some(("rotation", "x")),
         "field_78796_g" | "rotateAngleY" | "yRot" => Some(("rotation", "y")),
         "field_78808_h" | "rotateAngleZ" | "zRot" => Some(("rotation", "z")),
-        "field_78798_e" | "rotationPointX" | "x" => Some(("position", "x")),
+        "field_78800_c" | "rotationPointX" | "x" => Some(("position", "x")),
         "field_78797_d" | "rotationPointY" | "y" => Some(("position", "y")),
-        "field_78800_c" | "rotationPointZ" | "z" => Some(("position", "z")),
+        "field_78798_e" | "rotationPointZ" | "z" => Some(("position", "z")),
         _ => None,
     }
 }
