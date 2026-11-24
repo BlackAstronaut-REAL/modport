@@ -1,0 +1,696 @@
+use crate::browser::{self, BrowserEntry, BrowserIndex, IconKind};
+use crate::renderer::{self, Camera};
+use crate::tooltip;
+use eframe::egui::{self, Color32, FontFamily, FontId, RichText, TextureHandle, TextureOptions};
+use image::RgbaImage;
+use mojmodelbridge::pipeline::load_model_preview;
+use mojmodelbridge::viewer::ViewerScene;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+const BACKGROUND: Color32 = Color32::from_rgb(16, 20, 29);
+const SURFACE: Color32 = Color32::from_rgb(25, 32, 45);
+const SURFACE_LIGHT: Color32 = Color32::from_rgb(34, 44, 61);
+const TEXT: Color32 = Color32::from_rgb(232, 237, 245);
+const MUTED: Color32 = Color32::from_rgb(145, 158, 179);
+const ACCENT: Color32 = Color32::from_rgb(84, 151, 242);
+
+pub struct MojModelBridgeApp {
+    active_page: String,
+    sidebar_collapsed: bool,
+    root_path: String,
+    scan_status: String,
+    browser: BrowserIndex,
+    category: String,
+    item_search: String,
+    selected_entry: Option<usize>,
+    selected_error: String,
+
+    scene: Option<ViewerScene>,
+    texture_paths: Vec<PathBuf>,
+    selected_texture: usize,
+    preview_image: Option<RgbaImage>,
+    preview_texture: Option<TextureHandle>,
+    icon_textures: HashMap<PathBuf, TextureHandle>,
+    camera: Camera,
+    selected_animation: usize,
+    animation_time: f32,
+    playing: bool,
+    expanded_viewer: bool,
+    last_frame: Instant,
+
+    draft_name: String,
+    draft_lore: String,
+    components_json: String,
+    minecraftia_available: bool,
+}
+
+impl MojModelBridgeApp {
+    pub fn new(context: &eframe::CreationContext<'_>) -> Self {
+        let minecraftia_available = load_minecraftia_font(&context.egui_ctx);
+        let mut visuals = egui::Visuals::dark();
+        visuals.panel_fill = BACKGROUND;
+        visuals.window_fill = SURFACE;
+        visuals.extreme_bg_color = Color32::from_rgb(12, 15, 22);
+        visuals.faint_bg_color = Color32::from_rgb(22, 28, 39);
+        visuals.widgets.noninteractive.bg_fill = SURFACE;
+        visuals.widgets.inactive.bg_fill = SURFACE_LIGHT;
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 64, 88);
+        visuals.widgets.active.bg_fill = Color32::from_rgb(52, 111, 190);
+        visuals.selection.bg_fill = Color32::from_rgb(52, 111, 190);
+        visuals.override_text_color = Some(TEXT);
+        context.egui_ctx.set_visuals(visuals);
+        context.egui_ctx.style_mut(|style| {
+            style.spacing.item_spacing = egui::vec2(8.0, 7.0);
+            style.spacing.button_padding = egui::vec2(10.0, 7.0);
+            style.visuals.window_corner_radius = egui::CornerRadius::same(8);
+        });
+
+        Self {
+            active_page: "Dashboard".to_owned(),
+            sidebar_collapsed: false,
+            root_path: String::new(),
+            scan_status: "No mod loaded".to_owned(),
+            browser: BrowserIndex::default(),
+            category: "Mobs".to_owned(),
+            item_search: String::new(),
+            selected_entry: None,
+            selected_error: String::new(),
+            scene: None,
+            texture_paths: Vec::new(),
+            selected_texture: 0,
+            preview_image: None,
+            preview_texture: None,
+            icon_textures: HashMap::new(),
+            camera: Camera::default(),
+            selected_animation: 0,
+            animation_time: 0.0,
+            playing: false,
+            expanded_viewer: false,
+            last_frame: Instant::now(),
+            draft_name: String::new(),
+            draft_lore: String::new(),
+            components_json: "{}".to_owned(),
+            minecraftia_available,
+        }
+    }
+
+    fn scan(&mut self, context: &egui::Context) {
+        let root = PathBuf::from(self.root_path.trim());
+        match browser::scan_mod(&root) {
+            Ok(index) => {
+                let display = index.display_name.clone();
+                let count = index.entries.len();
+                self.browser = index;
+                self.scan_status = format!("Indexed {count} assets · {display}");
+                self.selected_entry = None;
+                self.scene = None;
+                self.texture_paths.clear();
+                self.preview_image = None;
+                self.preview_texture = None;
+                self.selected_error.clear();
+                self.category = browser::CATEGORIES.iter()
+                    .copied()
+                    .find(|category| !self.browser.in_category(category).is_empty())
+                    .unwrap_or("Mobs").to_owned();
+                if let Some(first) = self.browser.in_category(&self.category).first().copied() {
+                    self.activate_entry(context, first);
+                }
+            }
+            Err(error) => {
+                self.scan_status = "Scan failed".to_owned();
+                self.selected_error = format!("{error:#}");
+            }
+        }
+    }
+
+    fn activate_entry(&mut self, context: &egui::Context, index: usize) {
+        let Some(entry) = self.browser.entries.get(index).cloned() else { return; };
+        self.selected_entry = Some(index);
+        self.draft_name = entry.name.clone();
+        self.draft_lore.clear();
+        self.components_json = "{}".to_owned();
+        self.scene = None;
+        self.texture_paths.clear();
+        self.selected_texture = 0;
+        self.preview_image = None;
+        self.camera.reset();
+        self.selected_animation = 0;
+        self.animation_time = 0.0;
+        self.playing = false;
+        self.selected_error.clear();
+
+        if let Some(source) = entry.model_source.as_ref() {
+            match load_model_preview(source, &self.browser.texture_roots) {
+                Ok(asset) => match ViewerScene::from_parsed_model(&asset.model) {
+                    Ok(scene) => {
+                        self.texture_paths = asset.texture_paths;
+                        self.selected_texture = self.texture_paths.iter()
+                            .position(|path| path.to_string_lossy() == asset.model.primary_texture)
+                            .unwrap_or(0);
+                        self.scene = Some(scene);
+                        self.refresh_preview_image();
+                    }
+                    Err(error) => self.selected_error = format!("Could not create model scene: {error:#}"),
+                },
+                Err(error) => self.selected_error = format!("Model preview could not be loaded: {error:#}"),
+            }
+        } else if let Some(path) = entry.icon_path.as_ref() {
+            self.texture_paths.push(path.clone());
+            self.refresh_preview_image();
+        }
+        context.request_repaint();
+    }
+
+    fn refresh_preview_image(&mut self) {
+        self.preview_image = self.texture_paths.get(self.selected_texture)
+            .and_then(|path| image::open(path).ok())
+            .map(|image| image.to_rgba8());
+    }
+
+    fn image_texture(&mut self, context: &egui::Context, path: &Path) -> Option<TextureHandle> {
+        if let Some(texture) = self.icon_textures.get(path) {
+            return Some(texture.clone());
+        }
+        let image = image::open(path).ok()?.to_rgba8();
+        let dimensions = [image.width() as usize, image.height() as usize];
+        let color = egui::ColorImage::from_rgba_unmultiplied(dimensions, image.as_raw());
+        let handle = context.load_texture(
+            path.to_string_lossy().to_string(),
+            color,
+            TextureOptions::NEAREST,
+        );
+        self.icon_textures.insert(path.to_path_buf(), handle.clone());
+        Some(handle)
+    }
+
+    fn show_sidebar(&mut self, context: &egui::Context) {
+        let width = if self.sidebar_collapsed { 68.0 } else { 196.0 };
+        egui::SidePanel::left("main_navigation")
+            .exact_width(width)
+            .resizable(false)
+            .frame(egui::Frame::new().fill(Color32::from_rgb(14, 19, 28)).inner_margin(10.0))
+            .show(context, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.button(if self.sidebar_collapsed { "»" } else { "«" }).clicked() {
+                        self.sidebar_collapsed = !self.sidebar_collapsed;
+                    }
+                    if !self.sidebar_collapsed {
+                        ui.label(RichText::new("MOJMODEL").strong().size(15.0));
+                    }
+                });
+                if !self.sidebar_collapsed {
+                    ui.label(RichText::new("BRIDGE  ·  RUST").size(10.0).color(ACCENT));
+                    ui.add_space(18.0);
+                } else {
+                    ui.add_space(13.0);
+                }
+
+                let navigation = [
+                    ("Dashboard", "⌂"),
+                    ("Porter", "⇢"),
+                    ("Content Browser", "▦"),
+                    ("Mod Editor", "✎"),
+                    ("Code Studio", "</>"),
+                    ("Compatibility", "◇"),
+                    ("Build & Test", "⚒"),
+                    ("Projects", "▣"),
+                ];
+                for (name, glyph) in navigation {
+                    let label = if self.sidebar_collapsed {
+                        glyph.to_owned()
+                    } else {
+                        format!("{glyph}   {name}")
+                    };
+                    if ui.selectable_label(self.active_page == name, label).clicked() {
+                        self.active_page = name.to_owned();
+                    }
+                }
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                    if !self.sidebar_collapsed {
+                        ui.separator();
+                        ui.label(RichText::new("● Native Rust engine").size(10.0).color(Color32::from_rgb(105, 207, 151)));
+                        ui.label(RichText::new("oldVer retained as reference").size(9.0).color(MUTED));
+                    } else {
+                        ui.label(RichText::new("●").color(Color32::from_rgb(105, 207, 151)));
+                    }
+                });
+            });
+    }
+
+    fn show_header(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading(self.active_page.as_str());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Scan directory").clicked() {
+                    self.scan(context);
+                }
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.root_path)
+                        .desired_width(300.0)
+                        .hint_text("Extracted mod/project directory"),
+                );
+                ui.label(RichText::new("PROJECT").size(9.0).color(MUTED));
+            });
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(&self.scan_status).size(11.0).color(MUTED));
+            if !self.selected_error.is_empty() {
+                ui.label(RichText::new(&self.selected_error).size(10.0).color(Color32::from_rgb(243, 137, 127)));
+            }
+        });
+    }
+
+    fn show_dashboard(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(24.0);
+        ui.group(|ui| {
+            ui.heading("Native mod workspace");
+            ui.label("Open an extracted mod directory to browse recovered mobs, blocks, item textures, and model sources.");
+            ui.add_space(10.0);
+            ui.label(RichText::new("Rust engine · model and animation viewer · content browser").color(MUTED));
+            ui.add_space(8.0);
+            ui.label("The content browser is the first integrated editor surface. Porting and build workflows remain available from the navigation rail.");
+        });
+    }
+
+    fn show_browser(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        let available = ui.available_size();
+        let browser_width = (available.x * 0.34).clamp(340.0, 475.0);
+        let category_width = 134.0;
+        let item_width = (browser_width - category_width - 10.0).max(190.0);
+        let detail_width = (available.x - browser_width - 18.0).max(300.0);
+        let height = available.y;
+
+        ui.horizontal(|ui| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(category_width, height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| self.show_categories(ui),
+            );
+            ui.separator();
+            ui.allocate_ui_with_layout(
+                egui::vec2(item_width, height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| self.show_items(context, ui),
+            );
+            ui.separator();
+            ui.allocate_ui_with_layout(
+                egui::vec2(detail_width, height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| self.show_detail(context, ui),
+            );
+        });
+    }
+
+    fn show_categories(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Categories");
+        ui.label(RichText::new(format!("{} indexed", self.browser.entries.len())).size(10.0).color(MUTED));
+        ui.add_space(7.0);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for category in browser::CATEGORIES {
+                let count = self.browser.in_category(category).len();
+                let label = format!("{category}  ({count})");
+                if ui.selectable_label(self.category == *category, label).clicked() {
+                    self.category = (*category).to_owned();
+                    self.selected_entry = None;
+                    self.scene = None;
+                    self.texture_paths.clear();
+                    self.preview_image = None;
+                }
+            }
+        });
+    }
+
+    fn show_items(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        ui.heading(&self.category);
+        ui.add(
+            egui::TextEdit::singleline(&mut self.item_search)
+                .desired_width(f32::INFINITY)
+                .hint_text("Search items"),
+        );
+        let items = self.browser.in_category(&self.category);
+        ui.label(RichText::new(format!("{} entries", items.len())).size(10.0).color(MUTED));
+        ui.add_space(5.0);
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            for index in items {
+                let Some(entry) = self.browser.entries.get(index).cloned() else { continue; };
+                if !self.item_search.trim().is_empty()
+                    && !entry.name.to_ascii_lowercase().contains(&self.item_search.to_ascii_lowercase())
+                {
+                    continue;
+                }
+                let selected = self.selected_entry == Some(index);
+                let icon = entry.icon_path.as_ref().and_then(|path| self.image_texture(context, path));
+                let clicked = ui.horizontal(|ui| {
+                    if let Some(icon) = icon {
+                        ui.add(egui::Image::new((icon.id(), egui::vec2(30.0, 30.0))).fit_to_exact_size(egui::vec2(30.0, 30.0)));
+                    } else if entry.icon_kind == IconKind::MobEgg {
+                        renderer::draw_spawn_egg(ui, 30.0, selected);
+                    } else {
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(30.0, 30.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 4.0, Color32::from_rgb(52, 66, 87));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "◆", egui::FontId::proportional(13.0), ACCENT);
+                    }
+                    ui.selectable_label(selected, entry.name.as_str()).clicked()
+                }).inner;
+                if clicked {
+                    self.activate_entry(context, index);
+                }
+            }
+        });
+        if let Some(warning) = self.browser.warnings.first() {
+            ui.add_space(5.0);
+            ui.label(RichText::new(warning).size(9.0).color(MUTED));
+        }
+    }
+
+    fn show_detail(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        let Some(index) = self.selected_entry else {
+            ui.group(|ui| {
+                ui.heading("Preview and editor");
+                ui.label("Select a mob, block, item, or model from the browser.");
+            });
+            return;
+        };
+        let Some(entry) = self.browser.entries.get(index).cloned() else { return; };
+        let available = ui.available_size();
+        let preview_height = if self.expanded_viewer {
+            available.y - 12.0
+        } else {
+            (available.y * 0.55).clamp(270.0, 450.0)
+        };
+
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.heading(if self.scene.is_some() { "Model / animation viewer" } else { "Asset preview" });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(if self.expanded_viewer { "Collapse" } else { "Expand" }).clicked() {
+                        self.expanded_viewer = !self.expanded_viewer;
+                    }
+                    if ui.button("Reset camera").clicked() {
+                        self.camera.reset();
+                    }
+                });
+            });
+            self.show_viewer_controls(context, ui);
+            self.show_viewport(context, ui, &entry, preview_height);
+        });
+
+        if !self.expanded_viewer {
+            ui.add_space(8.0);
+            egui::ScrollArea::vertical().max_height((available.y - preview_height - 20.0).max(180.0)).show(ui, |ui| {
+                ui.group(|ui| self.show_editor(ui));
+            });
+        }
+    }
+
+    fn show_viewer_controls(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if let Some(scene) = self.scene.as_ref() {
+                if scene.animations.is_empty() {
+                    ui.add_enabled(false, egui::Button::new("No baked animations"));
+                } else {
+                    let selected_name = scene.animations.get(self.selected_animation)
+                        .map(|animation| animation.name.as_str()).unwrap_or("Select animation");
+                    egui::ComboBox::from_id_salt("animation_selector")
+                        .selected_text(selected_name)
+                        .width(210.0)
+                        .show_ui(ui, |ui| {
+                            for (index, animation) in scene.animations.iter().enumerate() {
+                                if ui.selectable_value(&mut self.selected_animation, index, &animation.name).clicked() {
+                                    self.animation_time = 0.0;
+                                }
+                            }
+                        });
+                    let label = if self.playing { "Ⅱ Pause" } else { "▶ Play" };
+                    if ui.button(label).clicked() {
+                        self.playing = !self.playing;
+                        self.last_frame = Instant::now();
+                    }
+                }
+                if self.texture_paths.len() > 1 {
+                    let selected = self.texture_paths.get(self.selected_texture)
+                        .and_then(|path| path.file_name()).map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Texture".to_owned());
+                    egui::ComboBox::from_id_salt("texture_selector")
+                        .selected_text(selected)
+                        .width(180.0)
+                        .show_ui(ui, |ui| {
+                            for (index, path) in self.texture_paths.iter().enumerate() {
+                                let label = path.file_name().map(|name| name.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| path.to_string_lossy().to_string());
+                                ui.selectable_value(&mut self.selected_texture, index, label);
+                            }
+                        });
+                }
+            } else {
+                ui.label(RichText::new("No model source is linked to this asset yet.").size(10.0).color(MUTED));
+            }
+        });
+
+        if let Some(scene) = self.scene.as_ref() {
+            if let Some(animation) = scene.animations.get(self.selected_animation) {
+                let length = animation.length.max(0.01);
+                let was_playing = self.playing;
+                ui.add(egui::Slider::new(&mut self.animation_time, 0.0..=length).show_value(true).text("Time"));
+                if was_playing && !self.playing {
+                    context.request_repaint();
+                }
+            }
+        }
+        if self.texture_paths.len() > 1 {
+            self.refresh_preview_image();
+        }
+    }
+
+    fn show_viewport(
+        &mut self,
+        context: &egui::Context,
+        ui: &mut egui::Ui,
+        entry: &BrowserEntry,
+        requested_height: f32,
+    ) {
+        let width = ui.available_width().max(180.0);
+        let height = requested_height.max(190.0);
+        let (rect, response) = ui.allocate_exact_size(
+            egui::vec2(width, height),
+            egui::Sense::click_and_drag(),
+        );
+        ui.painter().rect_filled(rect, 5.0, Color32::from_rgb(18, 23, 33));
+        if response.dragged() {
+            let delta = context.input(|input| input.pointer.delta());
+            if context.input(|input| input.pointer.button_down(egui::PointerButton::Secondary)) {
+                self.camera.pan(delta.x, delta.y);
+            } else {
+                self.camera.orbit(delta.x, delta.y);
+            }
+        }
+        if response.hovered() {
+            let wheel = context.input(|input| input.smooth_scroll_delta.y);
+            if wheel.abs() > f32::EPSILON { self.camera.zoom(wheel); }
+        }
+
+        if let Some(scene) = self.scene.as_ref() {
+            let pose = scene.sample_pose(self.selected_animation, self.animation_time);
+            let image_size = [
+                (rect.width() as usize).clamp(120, 960),
+                (rect.height() as usize).clamp(120, 720),
+            ];
+            let rendered = renderer::render_scene(
+                scene,
+                &pose,
+                self.preview_image.as_ref(),
+                image_size,
+                &mut self.camera,
+            );
+            if let Some(handle) = self.preview_texture.as_mut() {
+                handle.set(rendered, TextureOptions::NEAREST);
+            } else {
+                self.preview_texture = Some(context.load_texture(
+                    "model_viewport",
+                    rendered,
+                    TextureOptions::NEAREST,
+                ));
+            }
+            if let Some(handle) = self.preview_texture.as_ref() {
+                ui.painter().image(
+                    handle.id(),
+                    rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            }
+            if !scene.warnings.is_empty() {
+                ui.painter().text(
+                    rect.left_bottom() + egui::vec2(8.0, -8.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    scene.warnings.len().to_string() + " model warning(s)",
+                    egui::FontId::proportional(10.0),
+                    Color32::from_rgb(236, 184, 109),
+                );
+            }
+        } else if let Some(image) = self.preview_image.as_ref() {
+            let dimensions = [image.width() as usize, image.height() as usize];
+            let color = egui::ColorImage::from_rgba_unmultiplied(dimensions, image.as_raw());
+            if let Some(handle) = self.preview_texture.as_mut() {
+                handle.set(color, TextureOptions::NEAREST);
+            } else {
+                self.preview_texture = Some(context.load_texture("asset_preview", color, TextureOptions::NEAREST));
+            }
+            if let Some(handle) = self.preview_texture.as_ref() {
+                let desired = egui::vec2((height * 0.75).min(width * 0.7), (height * 0.75).min(width * 0.7));
+                let image_rect = egui::Rect::from_center_size(rect.center(), desired);
+                ui.painter().image(
+                    handle.id(),
+                    image_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            }
+        } else if entry.icon_kind == IconKind::MobEgg {
+            let center = rect.center();
+            ui.painter().ellipse_filled(center, egui::vec2(54.0, 70.0), Color32::from_rgb(230, 230, 218));
+            ui.painter().circle_filled(center + egui::vec2(2.0, 8.0), 24.0, Color32::from_rgb(93, 153, 71));
+        } else {
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "MODEL SOURCE NOT AVAILABLE",
+                egui::FontId::proportional(13.0),
+                MUTED,
+            );
+        }
+        ui.label(RichText::new("Drag to orbit · right-drag to pan · scroll to zoom").size(9.0).color(MUTED));
+    }
+
+    fn show_editor(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Basic item editor");
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            ui.add(egui::TextEdit::singleline(&mut self.draft_name).desired_width(f32::INFINITY));
+        });
+        ui.label("Lore");
+        ui.add(
+            egui::TextEdit::multiline(&mut self.draft_lore)
+                .desired_rows(3)
+                .desired_width(f32::INFINITY)
+                .hint_text("One lore line per row. Use § color/style codes."),
+        );
+        ui.label("Components (Minecraft component JSON)");
+        ui.add(
+            egui::TextEdit::multiline(&mut self.components_json)
+                .desired_rows(3)
+                .desired_width(f32::INFINITY)
+                .hint_text(r#"{"custom_model_data":123,"rarity":"rare"}"#),
+        );
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.heading("In-game tooltip preview");
+            ui.label(RichText::new(if self.minecraftia_available { "Minecraftia font" } else { "Fallback font" }).size(9.0).color(MUTED));
+        });
+        egui::Frame::new()
+            .fill(Color32::from_rgb(14, 15, 22))
+            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(75, 82, 103)))
+            .inner_margin(12.0)
+            .corner_radius(4.0)
+            .show(ui, |ui| {
+                tooltip::draw_formatted_text(
+                    ui,
+                    &self.draft_name,
+                    Color32::from_rgb(170, 0, 170),
+                    self.minecraftia_available,
+                );
+                for line in self.draft_lore.lines() {
+                    if !line.is_empty() {
+                        tooltip::draw_formatted_text(
+                            ui,
+                            line,
+                            Color32::from_rgb(170, 170, 170),
+                            self.minecraftia_available,
+                        );
+                    }
+                }
+                if self.components_json.trim() != "{}" && !self.components_json.trim().is_empty() {
+                    match serde_json::from_str::<serde_json::Value>(&self.components_json) {
+                        Ok(value) => {
+                            if let Some(text) = value.get("custom_name").or_else(|| value.get("text")) {
+                                if let Some(text) = text.as_str() {
+                                    tooltip::draw_formatted_text(
+                                        ui, text, Color32::from_rgb(170, 170, 170), self.minecraftia_available,
+                                    );
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            ui.label(RichText::new(format!("Component JSON error: {error}")).size(9.0).color(Color32::from_rgb(240, 130, 120)));
+                        }
+                    }
+                }
+            });
+        ui.label(RichText::new("Draft fields are local to this editor preview; workspace write-back is a separate editing stage.").size(9.0).color(MUTED));
+    }
+}
+
+impl eframe::App for MojModelBridgeApp {
+    fn logic(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        let now = Instant::now();
+        let delta = now.duration_since(self.last_frame).as_secs_f32().clamp(0.0, 0.1);
+        self.last_frame = now;
+        if self.playing {
+            if let Some(animation) = self.scene.as_ref().and_then(|scene| scene.animations.get(self.selected_animation)) {
+                self.animation_time += delta;
+                if !animation.looping && self.animation_time >= animation.length {
+                    self.animation_time = animation.length;
+                    self.playing = false;
+                }
+                context.request_repaint_after(Duration::from_millis(16));
+            } else {
+                self.playing = false;
+            }
+        }
+    }
+
+    fn ui(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.show_sidebar(context);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(BACKGROUND).inner_margin(14.0))
+            .show(context, |ui| {
+                self.show_header(context, ui);
+                ui.separator();
+                match self.active_page.as_str() {
+                    "Content Browser" => self.show_browser(context, ui),
+                    "Dashboard" => self.show_dashboard(ui),
+                    _ => {
+                        ui.add_space(18.0);
+                        ui.group(|ui| {
+                            ui.heading(&self.active_page);
+                            ui.label("This native Rust workspace panel is being brought online after the content browser and model viewer.");
+                            ui.label(RichText::new("The navigation layout is in place and can be collapsed from the left rail.").color(MUTED));
+                        });
+                    }
+                }
+            });
+    }
+}
+
+fn load_minecraftia_font(context: &egui::Context) -> bool {
+    let paths = [
+        PathBuf::from("assets/fonts/Minecraftia-Regular.ttf"),
+        PathBuf::from("Minecraftia-Regular.ttf"),
+    ];
+    let Some(bytes) = paths.iter().find_map(|path| std::fs::read(path).ok()) else {
+        return false;
+    };
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "minecraftia".to_owned(),
+        Arc::new(egui::FontData::from_owned(bytes)),
+    );
+    fonts.families.entry(FontFamily::Name("minecraftia".into()))
+        .or_default().push("minecraftia".to_owned());
+    context.set_fonts(fonts);
+    true
+}
