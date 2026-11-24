@@ -978,6 +978,19 @@ pub fn source_field_registered_names(
             field_map.entry(field).or_default().insert(registry);
         }
     }
+
+    // NeoForge DeferredRegister fields are commonly declared as:
+    // RegistryObject<Item> RUBY = ITEMS.register("ruby", () -> new RubyItem()).
+    let modern = Regex::new(
+        r#"(?s)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:ITEMS|BLOCKS|ITEM_REGISTRY|BLOCK_REGISTRY)\s*\.\s*register\s*\(\s*"([^"]+)"\s*,\s*[^;]{0,1800}\)\s*;"#
+    ).expect("modern deferred registration expression");
+    for capture in modern.captures_iter(&combined) {
+        let field = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+        let registry = snake_name(capture.get(2).map(|value| value.as_str()).unwrap_or(""));
+        if !field.is_empty() && !registry.is_empty() {
+            field_map.entry(field.to_owned()).or_default().insert(registry);
+        }
+    }
     field_map
 }
 
@@ -1222,6 +1235,23 @@ mod java_recipe_tests {
         assert_eq!(recovered[1].payload["type"], "minecraft:crafting_shaped");
         assert_eq!(recovered[1].payload["pattern"][0], " D ");
         assert_eq!(recovered[1].payload["key"]["D"]["item"], "Items.DIAMOND");
+    }
+
+    #[test]
+    fn derives_registry_names_from_modern_deferred_register_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final RegistryObject<Item> RUBY = ITEMS.register("ruby", () -> new RubyItem());
+                public static final RegistryObject<Block> RUBY_ORE = BLOCKS.register("ruby_ore", () -> new RubyOreBlock());
+            }
+            class RubyItem extends Item { }
+            class RubyOreBlock extends Block { }
+        "#).unwrap();
+        let fields = source_field_registered_names(&[root.to_path_buf()], "demo");
+        assert_eq!(fields["RUBY"].iter().next().unwrap(), "ruby");
+        assert_eq!(fields["RUBY_ORE"].iter().next().unwrap(), "ruby_ore");
     }
 
     #[test]
