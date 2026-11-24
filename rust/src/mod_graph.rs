@@ -391,6 +391,24 @@ fn parse_registration_call(
     })
 }
 
+fn source_attribute_number(source: &str, attribute_names: &[&str]) -> Option<f64> {
+    let names = attribute_names.iter()
+        .map(|name| regex::escape(name))
+        .collect::<Vec<_>>()
+        .join("|");
+    let pattern = Regex::new(&format!(
+        r"(?is)(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b.{{0,320}}?(?:setBaseValue|add|set)\s*\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?"
+    )).ok()?;
+    pattern.captures(source).and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<f64>().ok())
+}
+
+fn source_numeric_value(source: &str, pattern: &str) -> Option<f64> {
+    Regex::new(pattern).ok()?.captures(source)
+        .and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().trim_end_matches(|ch: char| matches!(ch, 'f'|'F'|'d'|'D')).parse::<f64>().ok())
+}
+
 fn parse_entity_source_metadata(path: &Path, registry: Option<&str>) -> Result<EntityMetadata> {
     let text = read_java(path)?;
     let class_re = Regex::new(r"\bclass\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([A-Za-z_$][\w$.]*))?").unwrap();
@@ -442,6 +460,33 @@ fn parse_entity_source_metadata(path: &Path, registry: Option<&str>) -> Result<E
                 _ => {}
             }
         }
+    }
+    // Modern and legacy attribute builders use a common attribute token
+    // followed by add()/setBaseValue(), rather than assigning the numeric
+    // property directly. Preserve explicit values when these patterns exist.
+    if let Some(value) = source_attribute_number(&text, &["MAX_HEALTH", "maxHealth", "MAX_HEALTH"]) {
+        metadata.health = value;
+    }
+    if let Some(value) = source_attribute_number(&text, &["MOVEMENT_SPEED", "movementSpeed", "MOVEMENT_SPEED"]) {
+        metadata.movement_speed = value;
+    }
+    if let Some(value) = source_attribute_number(&text, &["ATTACK_DAMAGE", "attackDamage", "ATTACK_DAMAGE"]) {
+        metadata.attack_damage = value;
+    }
+    if let Some(value) = source_attribute_number(&text, &["FOLLOW_RANGE", "followRange", "FOLLOW_RANGE"]) {
+        metadata.follow_range = value;
+    }
+    if let Some(value) = source_attribute_number(&text, &["ARMOR", "armor"]) {
+        metadata.armor = value;
+    }
+    if let Some(value) = source_attribute_number(&text, &["ARMOR_TOUGHNESS", "armorToughness"]) {
+        metadata.armor = metadata.armor.max(value);
+    }
+    if let Some(value) = source_numeric_value(
+        &text,
+        r"(?is)\b(?:experienceValue|xpValue|setExperiencePoints)\s*(?:=|\()\s*(-?\d+)",
+    ) {
+        metadata.xp = value.round() as i32;
     }
     let ai = Regex::new(r"new\s+(EntityAI[A-Za-z0-9_$]+|[A-Za-z0-9_$]*Goal)\s*\(").unwrap();
     metadata.ai_classes = ai.captures_iter(&text).map(|v| v[1].to_owned()).collect::<HashSet<_>>().into_iter().collect();
@@ -1348,6 +1393,55 @@ mod tests {
         assert!(metadata.fire_immune);
         assert!(metadata.flying_mob);
         assert!(metadata.ai_classes.contains(&"EntityAIAttackMelee".to_owned()));
+    }
+
+    #[test]
+    fn parses_modern_and_legacy_entity_attribute_builder_values() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("EntityAttributeFixture.java");
+        fs::write(&path, r#"
+            public class EntityAttributeFixture extends EntityMob {
+                public void applyAttributes() {
+                    getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(120.0D);
+                    getEntityAttribute(SharedMonsterAttributes.movementSpeed).setBaseValue(0.34D);
+                    getEntityAttribute(SharedMonsterAttributes.attackDamage).setBaseValue(16.0D);
+                    getEntityAttribute(SharedMonsterAttributes.followRange).setBaseValue(48.0D);
+                    getEntityAttribute(SharedMonsterAttributes.armor).setBaseValue(10.0D);
+                    this.experienceValue = 32;
+                }
+            }
+        "#).unwrap();
+        let metadata = parse_entity_source_metadata(&path, Some("attribute_fixture")).unwrap();
+        assert_eq!(metadata.health, 120.0);
+        assert_eq!(metadata.movement_speed, 0.34);
+        assert_eq!(metadata.attack_damage, 16.0);
+        assert_eq!(metadata.follow_range, 48.0);
+        assert_eq!(metadata.armor, 10.0);
+        assert_eq!(metadata.xp, 32);
+    }
+
+    #[test]
+    fn parses_mojang_attribute_builder_values() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("EntityModernAttributes.java");
+        fs::write(&path, r#"
+            public class EntityModernAttributes extends Monster {
+                AttributeSupplier.Builder createAttributes() {
+                    return Mob.createMobAttributes()
+                        .add(Attributes.MAX_HEALTH, 80.0D)
+                        .add(Attributes.MOVEMENT_SPEED, 0.28D)
+                        .add(Attributes.ATTACK_DAMAGE, 12.0D)
+                        .add(Attributes.FOLLOW_RANGE, 32.0D)
+                        .add(Attributes.ARMOR, 6.0D);
+                }
+            }
+        "#).unwrap();
+        let metadata = parse_entity_source_metadata(&path, Some("modern_attributes")).unwrap();
+        assert_eq!(metadata.health, 80.0);
+        assert_eq!(metadata.movement_speed, 0.28);
+        assert_eq!(metadata.attack_damage, 12.0);
+        assert_eq!(metadata.follow_range, 32.0);
+        assert_eq!(metadata.armor, 6.0);
     }
 
     #[test]
