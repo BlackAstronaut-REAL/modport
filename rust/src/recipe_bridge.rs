@@ -1018,7 +1018,7 @@ mod java_recipe_tests {
         assert_eq!(java_recipe_item_ref("Items.ITEMS.STICK", &field_map, &registry, "demo"), "Items.STICK");
         assert_eq!(java_recipe_item_ref("new ItemStack(Blocks.BLOCKS.STONE, 1)", &field_map, &registry, "demo"), "Blocks.STONE#0");
         assert_eq!(java_recipe_item_ref("Ingredient.of(Items.IRON_INGOT)", &field_map, &registry, "demo"), "CUSTOM:IronIngot");
-        assert_eq!(java_recipe_item_ref("Items.createVanillaSpawnEgg(\\"minecraft:zombie\\")", &field_map, &registry, "demo"), "Items.ZOMBIE_SPAWN_EGG");
+        assert_eq!(java_recipe_item_ref(r#"Items.createVanillaSpawnEgg("minecraft:zombie")"#, &field_map, &registry, "demo"), "Items.ZOMBIE_SPAWN_EGG");
     }
 
     #[test]
