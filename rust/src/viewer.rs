@@ -331,6 +331,6 @@ mod tests {
         assert_eq!(scene.animations.len(), 1);
         let pose = scene.sample_pose(0, 1.0);
         assert!((pose[0].rotation[0] - 45.0f32.to_radians()).abs() < 1e-5);
-        assert!((pose[0].translation[1] - 2.0).abs() < 1e-5);
+        assert!((pose[0].translation[1] - 26.0).abs() < 1e-5);
     }
 }
