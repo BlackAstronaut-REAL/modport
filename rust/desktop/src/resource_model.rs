@@ -139,27 +139,63 @@ fn resolve_texture_file(roots: &[PathBuf], namespace: &str, reference: &str) -> 
     None
 }
 
+fn resolved_face_texture_path(
+    face: Option<&Value>,
+    textures: &Map<String, Value>,
+    roots: &[PathBuf],
+    namespace: &str,
+) -> Option<PathBuf> {
+    let reference = face?.get("texture")?.as_str()?;
+    let resolved = resolve_texture_alias(reference, textures, 0);
+    resolve_texture_file(roots, namespace, &resolved)
+}
+
+fn face_texture_indices(
+    element: &Value,
+    textures: &Map<String, Value>,
+    roots: &[PathBuf],
+    namespace: &str,
+    texture_paths: &[PathBuf],
+) -> [usize; 6] {
+    let faces = element.get("faces").and_then(Value::as_object);
+    let names = ["east", "west", "up", "down", "north", "south"];
+    std::array::from_fn(|index| {
+        let Some(face) = faces.and_then(|faces| faces.get(names[index])) else { return 0; };
+        resolved_face_texture_path(Some(face), textures, roots, namespace)
+            .and_then(|path| texture_paths.iter().position(|candidate| candidate == &path))
+            .unwrap_or(0)
+    })
+}
+
 fn face_uvs(
     element: &Value,
     textures: &Map<String, Value>,
-    texture_size: [u32; 2],
+    roots: &[PathBuf],
+    namespace: &str,
+    texture_paths: &[PathBuf],
+    default_texture_size: [u32; 2],
 ) -> [[f32; 4]; 6] {
-    let default = [0.0, 0.0, texture_size[0] as f32, texture_size[1] as f32];
+    let default = [
+        0.0, 0.0,
+        default_texture_size[0] as f32,
+        default_texture_size[1] as f32,
+    ];
     let faces = element.get("faces").and_then(Value::as_object);
     let names = ["east", "west", "up", "down", "north", "south"];
     std::array::from_fn(|index| {
         let Some(face) = faces.and_then(|faces| faces.get(names[index])) else { return default; };
-        let uv = face.get("uv").and_then(Value::as_array);
-        if let Some(uv) = uv.filter(|uv| uv.len() == 4) {
-            let values = uv.iter().filter_map(Value::as_f64).map(|value| value as f32).collect::<Vec<_>>();
-            if values.len() == 4 {
-                let sx = texture_size[0] as f32 / 16.0;
-                let sy = texture_size[1] as f32 / 16.0;
-                return [values[0] * sx, values[1] * sy, values[2] * sx, values[3] * sy];
-            }
-        }
-        let _ = textures;
-        default
+        let Some(uv) = face.get("uv").and_then(Value::as_array).filter(|uv| uv.len() == 4) else {
+            return default;
+        };
+        let values = uv.iter().filter_map(Value::as_f64).map(|value| value as f32).collect::<Vec<_>>();
+        if values.len() != 4 { return default; }
+        let size = resolved_face_texture_path(Some(face), textures, roots, namespace)
+            .and_then(|path| texture_paths.iter().find(|candidate| **candidate == path))
+            .and_then(|path| image::image_dimensions(path).ok())
+            .unwrap_or((default_texture_size[0], default_texture_size[1]));
+        let sx = size.0 as f32 / 16.0;
+        let sy = size.1 as f32 / 16.0;
+        [values[0] * sx, values[1] * sy, values[2] * sx, values[3] * sy]
     })
 }
 
@@ -183,12 +219,23 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
     let namespace = asset_namespace(path);
     let mut texture_paths = Vec::new();
     let mut referenced = BTreeSet::<String>::new();
-    for value in textures.values().filter_map(Value::as_str) {
-        let resolved = resolve_texture_alias(value, &textures, 0);
+    let mut texture_references = textures.values()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    for element in &elements {
+        if let Some(faces) = element.get("faces").and_then(Value::as_object) {
+            texture_references.extend(faces.values()
+                .filter_map(|face| face.get("texture").and_then(Value::as_str))
+                .map(str::to_owned));
+        }
+    }
+    for value in texture_references {
+        let resolved = resolve_texture_alias(&value, &textures, 0);
         if resolved.is_empty() || !referenced.insert(resolved.clone()) { continue; }
         if let Some(texture_path) = resolve_texture_file(roots, &namespace, &resolved) {
             if !texture_paths.contains(&texture_path) {
-                texture_paths.push(texture_path.clone());
+                texture_paths.push(texture_path);
             }
         }
     }
@@ -240,7 +287,12 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
             }
         }
         let texture_size = texture_size;
-        let face_uvs = face_uvs(element, &textures, texture_size);
+        let face_uvs = face_uvs(
+            element, &textures, roots, &namespace, &texture_paths, texture_size,
+        );
+        let face_texture_indices = face_texture_indices(
+            element, &textures, roots, &namespace, &texture_paths,
+        );
 
         nodes.push(ViewerNode {
             name: element.get("name").and_then(Value::as_str)
@@ -253,6 +305,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
                 max,
                 uv_origin: [0.0; 2],
                 face_uvs: Some(face_uvs),
+                face_texture_indices: Some(face_texture_indices),
                 mirror: false,
                 name: format!("element_{element_index}"),
             }],
@@ -345,6 +398,7 @@ fn builtin_cube(
             max,
             uv_origin: [0.0; 2],
             face_uvs: Some([[0.0, 0.0, width, height]; 6]),
+            face_texture_indices: None,
             mirror: false,
             name: format!("{name}_cube"),
         }],
