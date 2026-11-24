@@ -189,13 +189,26 @@ impl MojModelBridgeApp {
             match load_model_preview(source, &self.browser.texture_roots) {
                 Ok(asset) => match ViewerScene::from_parsed_model(&asset.model) {
                     Ok(scene) => {
-                        self.texture_paths = asset.texture_paths;
-                        if self.texture_paths.is_empty() {
+                        if entry.category == "Armor" && !entry.texture_paths.is_empty() {
                             self.texture_paths = entry.texture_paths.clone();
+                            for path in &asset.texture_paths {
+                                if !self.texture_paths.contains(path) {
+                                    self.texture_paths.push(path.clone());
+                                }
+                            }
+                        } else {
+                            self.texture_paths = asset.texture_paths;
+                            if self.texture_paths.is_empty() {
+                                self.texture_paths = entry.texture_paths.clone();
+                            }
                         }
-                        self.selected_texture = self.texture_paths.iter()
-                            .position(|path| path.to_string_lossy() == asset.model.primary_texture)
-                            .unwrap_or(0);
+                        self.selected_texture = if entry.category == "Armor" {
+                            0
+                        } else {
+                            self.texture_paths.iter()
+                                .position(|path| path.to_string_lossy() == asset.model.primary_texture)
+                                .unwrap_or(0)
+                        };
                         self.scene = Some(scene);
                         self.refresh_preview_image();
                     }
