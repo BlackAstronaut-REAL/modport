@@ -220,6 +220,12 @@ fn scene_bounds(nodes: &[ViewerNode], worlds: &[Transform]) -> ([f32; 3], f32) {
     (center, radius)
 }
 
+fn texture_index_for_face(cube: &ViewerCube, face_index: usize, default_index: usize) -> usize {
+    cube.face_texture_indices
+        .and_then(|indices| indices.get(face_index).copied())
+        .unwrap_or(default_index)
+}
+
 fn draw_cube(
     cube: &ViewerCube,
     world: Transform,
@@ -255,9 +261,7 @@ fn draw_cube(
     ];
 
     for (face_index, points, default_rect, normal) in faces {
-        let texture_index = cube.face_texture_indices
-            .and_then(|indices| indices.get(face_index).copied())
-            .unwrap_or(default_texture_index);
+        let texture_index = texture_index_for_face(cube, face_index, default_texture_index);
         let texture = textures.get(texture_index).or_else(|| textures.first());
         let (texture_width, texture_height) = texture
             .map(|image| (image.width().max(1) as f32, image.height().max(1) as f32))
@@ -522,6 +526,26 @@ mod tests {
         let y = project(y_unit);
         assert!(((x.x - origin.x).abs() - (y.y - origin.y).abs()).abs() < 1e-5);
         let _ = texture_size;
+    }
+
+    #[test]
+    fn resource_model_faces_select_independent_texture_slots() {
+        let cube = ViewerCube {
+            min: [-1.0; 3],
+            max: [1.0; 3],
+            uv_origin: [0.0; 2],
+            face_uvs: None,
+            face_texture_indices: Some([2, 2, 1, 0, 2, 2]),
+            mirror: false,
+            name: "test".to_owned(),
+        };
+        assert_eq!(texture_index_for_face(&cube, 2, 0), 1);
+        assert_eq!(texture_index_for_face(&cube, 3, 0), 0);
+        assert_eq!(texture_index_for_face(&cube, 4, 0), 2);
+
+        let mut legacy = cube;
+        legacy.face_texture_indices = None;
+        assert_eq!(texture_index_for_face(&legacy, 2, 1), 1);
     }
 
     #[test]
