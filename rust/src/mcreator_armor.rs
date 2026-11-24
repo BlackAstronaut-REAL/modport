@@ -303,10 +303,12 @@ fn armor_group_registry(prefix: &str, fields: &BTreeMap<String, String>, ids: &B
 fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource>> {
     let files = java_files(source_roots);
     let mut groups = BTreeMap::<String, ArmorGroup>::new();
+    let mut all_texts = Vec::<String>::new();
 
     for path in files {
         let Ok(bytes) = fs::read(&path) else { continue };
         let source_text = strip_comments(&String::from_utf8_lossy(&bytes));
+        all_texts.push(source_text.clone());
         let found = group_armor_fields(&source_text);
         if found.is_empty() { continue; }
 
@@ -322,7 +324,9 @@ fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource
 
     let mut results = Vec::new();
     let combined_registry_source = all_texts.join("\n");
+    let combined_registry_source = all_texts.join("\n");
     for (prefix, group) in groups {
+        let combined = group.texts.join("\n");
         let ids = field_registry_map(&combined_registry_source);
         let registry_name = armor_group_registry(&prefix, &group.fields, &ids);
         results.push(ArmorSetSource {
