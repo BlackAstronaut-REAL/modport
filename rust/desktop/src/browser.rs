@@ -190,7 +190,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 .unwrap_or_default();
             let texture_stems = [registry.as_str(), field.as_str(), set.prefix.as_str()];
             let icon_path = find_texture_by_stems(&all_files, &texture_stems);
-            let mut lore = extract_tooltip_lines(&source_text);
+            let mut lore = extract_tooltip_lines(&set.source_text);
+            append_unique(&mut lore, &extract_tooltip_lines(&source_text));
             append_unique(&mut lore, &languages.descriptions_for(&registry));
             let resource_model_source = find_item_model_json(&all_files, &registry);
             let model_source = armor_model.clone()
@@ -343,7 +344,23 @@ impl LanguageData {
     }
 
     fn descriptions_for(&self, registry: &str) -> Vec<String> {
-        self.descriptions.get(&compact(registry)).cloned().unwrap_or_default()
+        let compact_registry = compact(registry);
+        let mut variants = vec![compact_registry.clone()];
+        for suffix in [
+            "ingot", "ore", "block", "item", "tool", "sword", "staff", "bow",
+            "helmet", "chestplate", "leggings", "boots",
+        ] {
+            if compact_registry.ends_with(suffix) && compact_registry.len() > suffix.len() {
+                variants.push(compact_registry[..compact_registry.len() - suffix.len()].to_owned());
+            }
+        }
+        let mut result = Vec::new();
+        for variant in variants {
+            if let Some(values) = self.descriptions.get(&variant) {
+                append_unique(&mut result, values);
+            }
+        }
+        result
     }
 }
 
