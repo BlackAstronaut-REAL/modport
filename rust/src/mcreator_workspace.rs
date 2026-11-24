@@ -166,9 +166,11 @@ fn resolve_explicit_texture(reference_values: &[String], roots: &[PathBuf], sour
         if let Some(path) = Path::new(&raw).is_file().then(|| PathBuf::from(&raw)) {
             return Some(path);
         }
-        if let Some((namespace, rest)) = raw.split_once(':') {
-            if !rest.is_empty() { raw = rest.to_owned(); }
-            let _ = namespace;
+        if let Some((_, rest)) = raw.split_once(':') {
+            if !rest.is_empty() {
+                let rest = rest.to_owned();
+                raw = rest;
+            }
         }
         while raw.starts_with("./") { raw = raw[2..].to_owned(); }
         if let Some(rest) = raw.strip_prefix("assets/") {
