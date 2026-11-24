@@ -1097,8 +1097,16 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
         }
         result
     };
-    let class_paths = list_source_files(&roots, "class");
+    let mut class_paths = list_source_files(&roots, "class");
     let java_paths = list_source_files(&roots, "java");
+    let compiled_content = crate::compiled_registry::scan_compiled_registrations(&roots)?;
+    for info in compiled_content.classes.values() {
+        if !class_paths.contains(&info.path) {
+            class_paths.push(info.path.clone());
+        }
+    }
+    class_paths.sort();
+    class_paths.dedup();
     let mut class_files = BTreeMap::<String, PathBuf>::new();
     for path in &class_paths {
         let class_name = simple_name(path.file_stem().and_then(|v| v.to_str()).unwrap_or("")).to_owned();
@@ -1116,7 +1124,6 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 
     let index = source_index(&java_paths);
     let mut registry = compiled_registry_names(&class_paths);
-    let compiled_content = crate::compiled_registry::scan_compiled_registrations(&roots)?;
     for (class, names) in &compiled_content.registries {
         if let Some(name) = names.iter().next() {
             registry.entry(class.clone()).or_insert_with(|| name.clone());
