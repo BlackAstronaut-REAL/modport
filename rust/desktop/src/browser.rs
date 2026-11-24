@@ -135,14 +135,12 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     // evidence, never from texture filename substrings.
     for source in &equipment {
         let registry = normalize_registry(&source.registry_name);
-        let category = if source.element_type == "tool" {
-            if matches!(source.tool_type.as_deref(), Some("Sword" | "Bow" | "Crossbow" | "Trident" | "Staff" | "Dagger" | "Spear")) {
-                "Weapons"
-            } else {
-                "Tools"
-            }
+        let category = if is_weapon_source(source) {
+            "Weapons"
         } else if is_food_source(&source.source_text, &source.superclass) {
             "Food"
+        } else if source.element_type == "tool" {
+            "Tools"
         } else {
             "Items"
         };
@@ -516,6 +514,23 @@ fn decode_java_string(value: &str) -> String {
         }
     }
     result
+}
+
+fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
+    if matches!(source.tool_type.as_deref(), Some("Sword" | "Bow" | "Crossbow" | "Trident" | "Staff" | "Dagger" | "Spear" | "Mace")) {
+        return true;
+    }
+    let evidence = format!(
+        "{} {} {}",
+        source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(),
+        source.registry_name.to_ascii_lowercase(),
+    );
+    [
+        "itemsword", "itembow", "itemcrossbow", "itemtrident",
+        "sword", "bow", "crossbow", "trident", "dagger", "spear",
+        "weapon", "battleaxe", "waraxe", "mace",
+    ].iter().any(|token| evidence.contains(token))
 }
 
 fn is_food_source(source: &str, superclass: &str) -> bool {
@@ -981,6 +996,26 @@ mod tests {
         let components = find_item_components(&[path], "ancient_sword").unwrap();
         assert_eq!(components["minecraft:custom_name"]["text"], "Ancient Sword");
         assert_eq!(components["minecraft:lore"][0]["text"], "Old magic");
+    }
+
+    #[test]
+    fn classifies_weapons_from_registered_type_and_superclass_evidence() {
+        let mut source = mojmodelbridge::mcreator_equipment::EquipmentSource::default();
+        source.class_name = "CustomBlade".to_owned();
+        source.registry_name = "ancient_blade".to_owned();
+        source.superclass = "net.minecraft.item.ItemSword".to_owned();
+        source.element_type = "item".to_owned();
+        assert!(is_weapon_source(&source));
+
+        source.superclass = "net.minecraft.item.ItemAxe".to_owned();
+        source.class_name = "CustomAxe".to_owned();
+        source.registry_name = "iron_axe".to_owned();
+        source.element_type = "tool".to_owned();
+        assert!(!is_weapon_source(&source));
+
+        source.class_name = "ItemBattleAxe".to_owned();
+        source.registry_name = "battle_axe".to_owned();
+        assert!(is_weapon_source(&source));
     }
 
     #[test]
