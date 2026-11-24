@@ -602,7 +602,7 @@ impl MojModelBridgeApp {
             egui::TextEdit::multiline(&mut self.components_json)
                 .desired_rows(3)
                 .desired_width(f32::INFINITY)
-                .hint_text(r#"{"custom_model_data":123,"rarity":"rare"}"#),
+                .hint_text(r#"{"minecraft:custom_name":{"text":"Legendary Sword","color":"gold","bold":true},"minecraft:lore":[{"text":"Forged in the deep","color":"gray","italic":true}]}"#),
         );
 
         ui.add_space(5.0);
@@ -697,10 +697,17 @@ impl eframe::App for MojModelBridgeApp {
 }
 
 fn load_minecraftia_font(context: &egui::Context) -> bool {
-    let paths = [
+    let executable_directory = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf));
+    let mut paths = vec![
         PathBuf::from("assets/fonts/Minecraftia-Regular.ttf"),
         PathBuf::from("Minecraftia-Regular.ttf"),
     ];
+    if let Some(directory) = executable_directory {
+        paths.insert(0, directory.join("assets/fonts/Minecraftia-Regular.ttf"));
+        paths.insert(1, directory.join("Minecraftia-Regular.ttf"));
+    }
     let Some(bytes) = paths.iter().find_map(|path| std::fs::read(path).ok()) else {
         return false;
     };
