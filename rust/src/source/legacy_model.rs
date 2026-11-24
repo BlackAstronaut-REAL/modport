@@ -391,7 +391,7 @@ pub fn parse_legacy_java_model(
                     let mut values = args.clone();
                     let mut cube_name = format!("{}_cube{}", builder.parts[index].name, builder.parts[index].cubes.len()+1);
                     if values.first().map(|v| v.trim().starts_with('"')).unwrap_or(false) {
-                        cube_name = unquote_java_string(values.remove(0));
+                        cube_name = unquote_java_string(&values.remove(0));
                     }
                     if values.len() >= 6 {
                         let x = eval_number(&values[0], &constants)?;
