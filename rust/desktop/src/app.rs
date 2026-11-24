@@ -343,7 +343,11 @@ impl MojModelBridgeApp {
                     continue;
                 }
                 let selected = self.selected_entry == Some(index);
-                let icon = entry.icon_path.as_ref().and_then(|path| self.image_texture(context, path));
+                let icon = if entry.icon_kind == IconKind::MobEgg {
+                    None
+                } else {
+                    entry.icon_path.as_ref().and_then(|path| self.image_texture(context, path))
+                };
                 let clicked = ui.horizontal(|ui| {
                     if let Some(icon) = icon {
                         ui.add(egui::Image::new((icon.id(), egui::vec2(30.0, 30.0))).fit_to_exact_size(egui::vec2(30.0, 30.0)));
