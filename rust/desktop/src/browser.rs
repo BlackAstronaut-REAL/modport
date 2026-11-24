@@ -1076,10 +1076,17 @@ fn block_render_shape_from_model(path: &Path) -> String {
     {
         return "plant".to_owned();
     }
-    if ["block/torch", "block/template_torch", "block/template_torch_wall"]
+    if parent.ends_with("block/template_torch_wall") {
+        return "wall_torch".to_owned();
+    }
+    if ["block/torch", "block/template_torch"]
         .iter().any(|candidate| parent.ends_with(candidate))
-        || ["redstone_dust", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
-            .iter().any(|candidate| stem.contains(candidate))
+        || stem.ends_with("torch")
+    {
+        return "torch".to_owned();
+    }
+    if ["redstone_dust", "redstone_wire", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
+        .iter().any(|candidate| stem.contains(candidate))
     {
         return "floor".to_owned();
     }
@@ -1123,6 +1130,12 @@ fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource
         source.superclass.to_ascii_lowercase(),
         source.source_text.to_ascii_lowercase(),
     );
+    if evidence.contains("blockwalltorch") || evidence.contains("wall_torch") {
+        return "wall_torch".to_owned();
+    }
+    if evidence.contains("blocktorch") || evidence.contains("redstone_torch") {
+        return "torch".to_owned();
+    }
     if [
         "blockredstonewire", "blockcarpet", "blockpressureplate", "blockrail",
         "blockrepeater", "blockredstonecomparator", "redstone_dust", "redstonewire",
