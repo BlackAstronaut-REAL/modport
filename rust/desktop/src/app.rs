@@ -237,7 +237,27 @@ impl MojModelBridgeApp {
         self.playing = false;
         self.selected_error.clear();
 
-        if let Some(source) = entry.model_source.as_ref() {
+        if let Some(source) = entry.resource_model_source.as_ref() {
+            match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
+                Ok((scene, textures)) => {
+                    self.scene = Some(scene);
+                    self.texture_paths = if !entry.texture_paths.is_empty() {
+                        entry.texture_paths.clone()
+                    } else {
+                        textures
+                    };
+                    self.selected_texture = 0;
+                    self.refresh_preview_image();
+                }
+                Err(error) => {
+                    self.selected_error = format!("Resource model preview could not be loaded: {error:#}");
+                    if let Some(path) = entry.icon_path.as_ref() {
+                        self.texture_paths.push(path.clone());
+                        self.refresh_preview_image();
+                    }
+                }
+            }
+        } else if let Some(source) = entry.model_source.as_ref() {
             match load_model_preview(source, &self.browser.texture_roots) {
                 Ok(asset) => match ViewerScene::from_parsed_model(&asset.model) {
                     Ok(scene) => {
@@ -263,26 +283,6 @@ impl MojModelBridgeApp {
                     Err(error) => self.selected_error = format!("Could not create model scene: {error:#}"),
                 },
                 Err(error) => self.selected_error = format!("Model preview could not be loaded: {error:#}"),
-            }
-        } else if let Some(source) = entry.resource_model_source.as_ref() {
-            match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
-                Ok((scene, textures)) => {
-                    self.scene = Some(scene);
-                    self.texture_paths = if textures.is_empty() {
-                        entry.texture_paths.clone()
-                    } else {
-                        textures
-                    };
-                    self.selected_texture = 0;
-                    self.refresh_preview_image();
-                }
-                Err(error) => {
-                    self.selected_error = format!("Resource model preview could not be loaded: {error:#}");
-                    if let Some(path) = entry.icon_path.as_ref() {
-                        self.texture_paths.push(path.clone());
-                        self.refresh_preview_image();
-                    }
-                }
             }
         } else if let Some(path) = entry.icon_path.as_ref().or_else(|| entry.texture_paths.first()) {
             self.texture_paths = if entry.texture_paths.is_empty() {
