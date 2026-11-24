@@ -399,7 +399,12 @@ pub fn export_projectiles_to_workspace(
     let workspace_file=workspace_descriptor(&workspace_root)?;
     let bytes=fs::read(&workspace_file).with_context(||format!("Reading {}",workspace_file.display()))?;
     let mut workspace:Value=serde_json::from_slice(&bytes).context("Parsing MCreator workspace descriptor")?;
-    let import_modid=source_modid.trim().to_owned();
+    let import_modid=if !source_modid.trim().is_empty() {
+        source_modid.trim().to_owned()
+    } else {
+        source_roots.first().and_then(|root|root.file_name()).and_then(|value|value.to_str())
+            .unwrap_or("converted_mod").to_owned()
+    };
     let target_modid=workspace.get("workspaceSettings").and_then(|v|v.get("modid")).and_then(Value::as_str)
         .filter(|v|!v.trim().is_empty()).unwrap_or("converted_mod").to_owned();
     let projectiles=discover_projectile_sources(source_roots)?;
@@ -412,17 +417,22 @@ pub fn export_projectiles_to_workspace(
     };
     let mut used=HashSet::<String>::new();
     let mut existing=BTreeSet::<String>::new();
+    let mut class_to_element=BTreeMap::<String,String>::new();
     for item in workspace.get("mod_elements").and_then(Value::as_array).into_iter().flatten(){
         if item.get("type").and_then(Value::as_str)==Some("projectile"){
             existing.insert(item.get("registry_name").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase());
+            if let (Some(source_class),Some(name))=(
+                item.get("mojmodelbridge_source_class").and_then(Value::as_str),
+                item.get("name").and_then(Value::as_str)
+            ) {
+                class_to_element.insert(simple_name(source_class),name.to_owned());
+            }
         }
         if let Some(name)=item.get("name").and_then(Value::as_str){used.insert(name.to_ascii_lowercase());}
     }
 
     let output_elements=workspace_root.join("elements");
     fs::create_dir_all(&output_elements)?;
-    let mut class_to_element=BTreeMap::<String,String>::new();
-
     for source in &projectiles {
         let registry=source.registry_name.to_ascii_lowercase();
         if existing.contains(&registry){report.skipped+=1;continue;}
