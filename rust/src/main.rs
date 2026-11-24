@@ -17,6 +17,7 @@ use mojmodelbridge::mcreator_block::export_blocks_to_workspace;
 use mojmodelbridge::mcreator_plant::export_plants_to_workspace;
 use mojmodelbridge::mcreator_worldgen::export_worldgen_to_workspace;
 use mojmodelbridge::mcreator_projectile::export_projectiles_to_workspace;
+use mojmodelbridge::mcreator_pipeline::export_all_to_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -121,6 +122,16 @@ enum Command {
     },
     /// Export Java arrow/throwable/projectile subclasses and bind pickup/ranged items.
     ExportProjectiles {
+        workspace_root: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long, default_value = "")]
+        source_modid: String,
+        #[arg(long, default_value_t = 89)]
+        imported_fv: i64,
+    },
+    /// Run the complete native content-export pipeline against an existing workspace.
+    ExportAll {
         workspace_root: PathBuf,
         #[arg(required = true)]
         source_roots: Vec<PathBuf>,
@@ -442,6 +453,29 @@ fn main() -> Result<()> {
                 for warning in item.warnings {
                     eprintln!("[WARN] {}: {warning}", item.class_name);
                 }
+            }
+            for warning in report.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportAll { workspace_root, source_roots, source_modid, imported_fv } => {
+            let report = export_all_to_workspace(
+                &source_roots,
+                &workspace_root,
+                &source_modid,
+                imported_fv,
+            )?;
+            let total: usize = report.stages.iter().map(|stage| stage.exported).sum();
+            let skipped: usize = report.stages.iter().map(|stage| stage.skipped).sum();
+            println!(
+                "Native export pipeline complete: {} element(s) exported, {} skipped across {} stages.",
+                total,
+                skipped,
+                report.stages.len()
+            );
+            println!("Updated workspace: {}", report.workspace_file.display());
+            for stage in report.stages {
+                println!("{}: {} exported, {} skipped", stage.name, stage.exported, stage.skipped);
             }
             for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
