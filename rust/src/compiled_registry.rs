@@ -52,6 +52,10 @@ fn normalize_registry(value: &str) -> Option<String> {
         value = path.to_owned();
     }
     value = value.trim_matches('/').replace('-', "_").to_ascii_lowercase();
+    if value.ends_with(".png") || value.ends_with(".jpg") || value.ends_with(".json")
+        || value.starts_with("assets/") || value.starts_with("textures/") {
+        return None;
+    }
     if value.is_empty() || value.len() > 128
         || !value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '-' | '/'))
         || value.replace('_', "").chars().all(|ch| ch.is_ascii_digit())
