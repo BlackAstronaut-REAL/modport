@@ -68,7 +68,7 @@ fn pascal_case(value: &str) -> String {
 }
 
 fn display_name(value: &str) -> String {
-    let chars: Vec<char> = value.replace(['-', '.'], "_").chars().collect();
+    let chars: Vec<char> = value.replace('-', "_").replace('.', "_").chars().collect();
     let mut separated = String::new();
     for (index, ch) in chars.iter().copied().enumerate() {
         if ch.is_ascii_uppercase() && index > 0 {
@@ -275,7 +275,7 @@ pub fn resource_dimension_updates(
     let max_monster_light = monster_light.and_then(Value::as_i64).unwrap_or(7);
     let fixed_time_present = dtype.is_some_and(|value| value.contains_key("fixed_time"));
     let fixed_time = integer(dtype.and_then(|value| value.get("fixed_time")), 0);
-    let can_respawn = natural && dtype.and_then(|value| value.get("bed_works")).is_some_and(|value| value == false);
+    let can_respawn = natural && dtype.and_then(|value| value.get("bed_works")).is_some_and(|value| value.as_bool() == Some(false));
     let name_seed = biome_registry.split_whitespace().next().unwrap_or("dimension");
 
     json!({
