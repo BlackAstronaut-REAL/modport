@@ -333,20 +333,14 @@ pub fn resource_biome_updates(payload: &Value) -> Value {
             for entry in entries {
                 let Some(entry) = entry.as_object() else { continue };
                 let Some(entity) = entry.get("type").and_then(Value::as_str) else { continue };
+                let min_group = integer(entry.get("minCount"), 1);
+                let max_group = integer(entry.get("maxCount"), 1);
+                let weight = integer(entry.get("weight"), 1);
                 spawn_entries.push(json!({
                     "entity": entity,
-                    "minGroup": {
-                        let value = integer(entry.get("minCount"), 1);
-                        if value == 0 { 1 } else { value }
-                    },
-                    "maxGroup": {
-                        let value = integer(entry.get("maxCount"), 1);
-                        if value == 0 { 1 } else { value }
-                    },
-                    "weight": {
-                        let value = integer(entry.get("weight"), 1);
-                        if value == 0 { 1 } else { value }
-                    },
+                    "minGroup": if min_group == 0 { 1 } else { min_group },
+                    "maxGroup": if max_group == 0 { 1 } else { max_group },
+                    "weight": if weight == 0 { 1 } else { weight },
                     "spawnType": if spawn_type == "monster" { "monster" } else { "creature" }
                 }));
             }
