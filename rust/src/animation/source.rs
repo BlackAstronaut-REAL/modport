@@ -392,7 +392,10 @@ pub fn extract_java_animation(
             for value in semantic { substitutions.insert(value.to_owned(), value.to_owned()); }
 
             if matches!(name, "setupAnim" | "setAngles" | "setRotationAngles" | "func_78087_a") {
-                for (index, parameter) in method.params.iter().skip(1).enumerate() {
+                // 1.7.10 ModelBase.setRotationAngles(float, float, ..., Entity)
+                // is float-first; modern setupAnim(Entity, float, ...) is entity-first.
+                let first_semantic_parameter = if matches!(name, "setRotationAngles" | "func_78087_a") { 0 } else { 1 };
+                for (index, parameter) in method.params.iter().skip(first_semantic_parameter).enumerate() {
                     if let Some(value) = semantic.get(index) {
                         substitutions.insert(parameter.clone(), (*value).to_owned());
                     }
