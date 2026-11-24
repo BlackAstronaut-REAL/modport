@@ -21,7 +21,8 @@ The Rust implementation is independent under rust/ and must not invoke Python.
 | legacy_mod_graph.py::scan_legacy_mod | mod_graph | Initial Java-source registrations, entity→renderer→model links, constructor args, registry names and source-based entity metadata; compiled registration bytecode and richer stat inference pending |
 | mcreator_export.py::export_mcreator_workspace | export/mcreator | Not ported |
 | mcreator_content_export.py | export/mcreator/content | Not ported |
-| mcreator_source_bridge.py | export/mcreator/source_bridge | Not ported |
+| mcreator_source_bridge.py::_copy_source_resources | resource_bridge | Native asset/data resource-copy slice ported with namespace remapping, generated-data filtering, sound canonicalization and Forge biome-modifier migration; Java source generation/registry patching remain unported |
+| mcreator_source_bridge.py (remaining functions) | export/mcreator/source_bridge | Not ported: generated Java scaffolds, model/source integration and registry patching |
 | workspace_validator.py::validate_workspace | workspace_validation | Initial native parity port with report output and focused regression tests; corpus parity review remains |
 | model_bridge.py::batch_convert | pipeline | Not ported: mixed roots, resume/cache, reports and MCreator handoff |
 
