@@ -371,7 +371,8 @@ fn update_ranged_items(
         let Ok(mut element)=serde_json::from_slice::<Value>(&bytes) else {continue};
         let Some(definition)=element.get_mut("definition").and_then(Value::as_object_mut) else {continue};
         if definition.get("enableRanged").and_then(Value::as_bool)!=Some(true){continue;}
-        let Some((_,source_text))=java.iter().find(|(name,_)|name==simple_name(source_class)) else {continue};
+        let source_simple=simple_name(source_class);
+        let Some((_,source_text))=java.iter().find(|(name,_)|name==&source_simple) else {continue};
         for projectile in projectiles {
             let regex=Regex::new(&format!(r"\bnew\s+{}\s*\(",regex::escape(&projectile.class_name))).unwrap();
             if regex.is_match(source_text) {
