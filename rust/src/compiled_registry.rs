@@ -113,9 +113,15 @@ fn lambda_class(
     let (bootstrap_index, _, _) = class.invoke_dynamic(cp_index)?;
     let bootstrap = class.bootstrap_methods.get(bootstrap_index as usize)?;
     for argument in &bootstrap.arguments {
-        let ConstantPoolEntry::MethodHandle { reference_index, .. } =
+        let ConstantPoolEntry::MethodHandle { reference_kind, reference_index } =
             class.constant_pool.get(*argument as usize)?.as_ref()? else { continue };
         let (owner, method_name, _) = class.member_reference(*reference_index)?;
+        // Constructor method references (MyItem::new) are represented directly
+        // as REF_newInvokeSpecial handles. They have no synthetic lambda body or
+        // NEW opcode to inspect; the owner is the instantiated content class.
+        if *reference_kind == 8 || method_name == "<init>" {
+            return Some(simple(&owner));
+        }
         let target = parsed_classes.get(&owner)?;
         let method = target.methods.iter().find(|method| method.name == method_name)?;
         let instructions = decode_instructions(&method.code.as_ref()?.code).ok()?;
