@@ -212,6 +212,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn invokes_workspace_wrapper_and_persists_compile_report() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("MCreator Workspace");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("build.gradle"), "plugins { }\n").unwrap();
+        fs::write(
+            root.join("test.mcreator"),
+            serde_json::to_vec(&serde_json::json!({
+                "mcreatorVersion": 202600,
+                "workspaceSettings": {
+                    "modid": "converted",
+                    "modElementsPackage": "net.converted",
+                    "currentGenerator": "neoforge-1.21.1"
+                },
+                "mod_elements": [],
+                "language_map": {"en_us": {}}
+            })).unwrap(),
+        ).unwrap();
+
+        #[cfg(windows)]
+        fs::write(
+            root.join("gradlew.bat"),
+            "@echo off\r\necho Gradle wrapper test output\r\nexit /b 0\r\n",
+        ).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let wrapper = root.join("gradlew");
+            fs::write(&wrapper, "#!/bin/sh\necho 'Gradle wrapper test output'\nexit 0\n").unwrap();
+            let mut permissions = fs::metadata(&wrapper).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&wrapper, permissions).unwrap();
+        }
+
+        let report = compile_workspace(
+            &root,
+            &["testTask".to_owned()],
+            false,
+            false,
+            false,
+        ).unwrap();
+        assert!(report.success, "wrapper failed: {}", report.stderr);
+        assert_eq!(report.exit_code, Some(0));
+        assert!(report.validation_ok.unwrap());
+        assert!(report.log_file.is_file());
+        assert!(report.report_file.is_file());
+        assert!(fs::read_to_string(&report.log_file).unwrap().contains("Gradle wrapper test output"));
+        assert!(report.command.first().unwrap().to_ascii_lowercase().contains("gradlew"));
+    }
+
+    #[test]
     fn quotes_windows_wrapper_paths_and_gradle_arguments_for_cmd() {
         let executable = Path::new(r"C:\Users\Dev User\MCreator Workspace\gradlew.bat");
         let args = vec!["--no-daemon".to_owned(), "compileJava".to_owned()];
