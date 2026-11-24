@@ -322,12 +322,52 @@ fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource
         }
     }
 
+    // Compiled-only mods often expose no Java declarations for their static
+    // armor pieces. Reconstruct a set from registered ItemArmor subclasses and
+    // their concrete registry IDs, grouping the conventional piece suffixes.
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    for (class_name, registries) in &compiled.registries {
+        let Some(info) = compiled.classes.get(class_name) else { continue };
+        let mut parent = info.superclass.clone();
+        let mut armor_class = false;
+        for _ in 0..12 {
+            if parent.to_ascii_lowercase().contains("armor") {
+                armor_class = true;
+                break;
+            }
+            let Some(next) = compiled.classes.get(&parent) else { break };
+            parent = next.superclass.clone();
+        }
+        if !armor_class { continue; }
+        let class_suffix = class_name.strip_prefix("Item").unwrap_or(class_name);
+        let Some((part, raw_prefix)) = field_part(class_suffix) else { continue };
+        let prefix = raw_prefix.strip_prefix("Item").unwrap_or(&raw_prefix).to_owned();
+        let group = groups.entry(prefix).or_default();
+        group.fields.insert(part.to_owned(), class_name.clone());
+        group.paths.insert(info.path.clone());
+        for registry in registries {
+            // The field key is the concrete class name for class-file-derived sets.
+            // This preserves the exact per-piece registry path for icon lookup.
+            let key = format!("__compiled_piece__{class_name}");
+            let _ = key;
+            group.texts.shrink_to_fit();
+        }
+    }
+
+    // Keep per-piece registry IDs separate from the source field-name map.
+    let mut compiled_piece_ids = BTreeMap::<String, String>::new();
+    for (class_name, registries) in &compiled.registries {
+        if let Some(registry) = registries.iter().next() {
+            compiled_piece_ids.insert(class_name.clone(), registry.clone());
+        }
+    }
+
     let mut results = Vec::new();
-    let combined_registry_source = all_texts.join("\n");
     let combined_registry_source = all_texts.join("\n");
     for (prefix, group) in groups {
         let combined = group.texts.join("\n");
-        let ids = field_registry_map(&combined_registry_source);
+        let mut ids = field_registry_map(&combined_registry_source);
+        ids.extend(compiled_piece_ids.iter().map(|(field, registry)| (field.clone(), registry.clone())));
         let registry_name = armor_group_registry(&prefix, &group.fields, &ids);
         results.push(ArmorSetSource {
             prefix,
@@ -717,6 +757,9 @@ pub fn export_armor_to_workspace(
         let mut piece_textures = BTreeMap::<String,String>::new();
         let mut metadata_files = BTreeSet::<String>::new();
         let mut warnings = Vec::new();
+        if set.source_text.trim().is_empty() {
+            warnings.push("Armor pieces and registry IDs were recovered from compiled bytecode only; material stats and custom armor behavior may require manual reconstruction.".to_owned());
+        }
 
         for (part, _aliases) in ARMOR_PARTS {
             let Some(field) = set.fields.get(part) else { continue };
