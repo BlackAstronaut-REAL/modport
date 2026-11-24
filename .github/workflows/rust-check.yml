@@ -23,15 +23,23 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust -> target
-      - name: Format
-        run: cargo fmt --manifest-path rust/Cargo.toml --all
-      - name: Test
+      - name: Format engine and desktop
+        run: |
+          cargo fmt --manifest-path rust/Cargo.toml --all
+          cargo fmt --manifest-path rust/desktop/Cargo.toml --all
+      - name: Test engine
         run: cargo test --manifest-path rust/Cargo.toml --all-targets
-      - name: Build native executable
+      - name: Test desktop
+        run: cargo test --manifest-path rust/desktop/Cargo.toml
+      - name: Build CLI
         run: cargo build --release --manifest-path rust/Cargo.toml
-      - name: Upload executable
+      - name: Build desktop executable
+        run: cargo build --release --manifest-path rust/desktop/Cargo.toml
+      - name: Upload executables
         uses: actions/upload-artifact@v4
         with:
           name: MojModelBridge-Rust-Windows-x64
-          path: rust/target/release/mojmodelbridge.exe
+          path: |
+            rust/target/release/mojmodelbridge.exe
+            rust/desktop/target/release/mojmodelbridge-desktop.exe
           if-no-files-found: error
