@@ -496,7 +496,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     for registration in &registrations {
         if entities.contains_key(&registration.entity_class) { continue; }
         let source = java_files.get(&registration.entity_class)
-            .or_else(|| java_files.get(&simple_name(&registration.entity_class)));
+            .or_else(|| java_files.get(simple_name(&registration.entity_class)));
         let metadata = if let Some(path) = source {
             parse_entity_source_metadata(path, registry.get(&registration.entity_class).map(String::as_str))
                 .unwrap_or_else(|_| EntityMetadata {
