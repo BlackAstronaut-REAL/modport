@@ -1,10 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs;
+use std::fs::{self, File};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use tempfile::Builder;
 use walkdir::WalkDir;
+use zip::ZipArchive;
 
 static REGISTRY_CACHE: OnceLock<Mutex<HashMap<String, (u64, CompiledRegistryIndex)>>> = OnceLock::new();
 
@@ -29,6 +32,9 @@ pub struct CompiledRegistryIndex {
     /// JVM owner#field -> concrete class assigned to that static field.
     pub field_classes: BTreeMap<String, String>,
     pub warnings: Vec<String>,
+    /// Keeps archive-extracted class files alive while downstream exporters
+    /// consume the paths recorded in `classes`.
+    pub archive_extractions: Vec<Arc<tempfile::TempDir>>,
 }
 
 #[derive(Debug, Clone)]
@@ -357,35 +363,97 @@ fn scan_registrations(
     }
 }
 
+const MAX_ARCHIVE_CLASS_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+fn extract_archive_classes(
+    archive_path: &Path,
+    destination: &Path,
+    output: &mut Vec<PathBuf>,
+) -> Result<()> {
+    let file = File::open(archive_path)
+        .with_context(|| format!("Opening compiled mod archive {}", archive_path.display()))?;
+    let mut archive = ZipArchive::new(file)
+        .with_context(|| format!("Reading compiled mod archive {}", archive_path.display()))?;
+    if archive.len() > crate::archive::MAX_ARCHIVE_ENTRIES {
+        anyhow::bail!(
+            "Archive has {} entries; limit is {}",
+            archive.len(),
+            crate::archive::MAX_ARCHIVE_ENTRIES
+        );
+    }
+
+    let mut expanded = 0u64;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let name = entry.name().replace('\\', "/");
+        let lower = name.to_ascii_lowercase();
+        if !lower.ends_with(".class") || lower.starts_with("meta-inf/versions/") {
+            continue;
+        }
+        let relative = entry.enclosed_name().context("Unsafe class path in archive")?.to_path_buf();
+        let declared = entry.size();
+        if declared > MAX_ARCHIVE_CLASS_BYTES.saturating_sub(expanded) {
+            anyhow::bail!("Compiled class content exceeds the {} byte limit", MAX_ARCHIVE_CLASS_BYTES);
+        }
+        let target = destination.join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::create(&target)?;
+        let written = std::io::copy(&mut entry, &mut file)?;
+        if written != declared {
+            anyhow::bail!(
+                "Truncated class entry in {} (expected {}, wrote {})",
+                archive_path.display(),
+                declared,
+                written
+            );
+        }
+        expanded = expanded.saturating_add(written);
+        output.push(target);
+    }
+    Ok(())
+}
+
 /// Build a native class/registry index from .class files alone. It handles
 /// legacy GameRegistry calls, static content-holder fields, modern DeferredRegister
 /// Supplier lambdas, and old entity registration APIs. Decompiled sources are
 /// merged by each exporter and retain precedence over inferred names.
 pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistryIndex> {
     let mut paths = Vec::<PathBuf>::new();
+    let mut archives = Vec::<PathBuf>::new();
     for root in roots {
-        if !root.is_dir() { continue; }
-        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|value| value.ok()) {
-            if entry.file_type().is_file()
-                && entry.path().extension().and_then(|value| value.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("class"))
-            {
-                paths.push(entry.into_path());
+        if root.is_dir() {
+            for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|value| value.ok()) {
+                if !entry.file_type().is_file() { continue; }
+                match entry.path().extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+                    "class" => paths.push(entry.into_path()),
+                    "jar" | "zip" => archives.push(entry.into_path()),
+                    _ => {}
+                }
+            }
+        } else if root.is_file() {
+            match root.extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+                "class" => paths.push(root.clone()),
+                "jar" | "zip" => archives.push(root.clone()),
+                _ => {}
             }
         }
     }
     paths.sort();
     paths.dedup();
+    archives.sort();
+    archives.dedup();
 
     // Several MCreator exporters consume the same compiled index in one
-    // export-all run. Cache by canonical roots plus each class file's size and
-    // modification timestamp so bytecode is parsed once without going stale
-    // when callers replace an input archive between runs.
+    // export-all run. Cache by canonical roots plus each class/archive file's
+    // size and modification timestamp so scans are reused without going stale.
     let mut hasher = DefaultHasher::new();
     let cache_key = roots.iter().map(|root| {
         fs::canonicalize(root).unwrap_or_else(|_| root.clone()).to_string_lossy().into_owned()
     }).collect::<Vec<_>>().join("|");
     cache_key.hash(&mut hasher);
-    for path in &paths {
+    for path in paths.iter().chain(archives.iter()) {
         path.hash(&mut hasher);
         if let Ok(metadata) = fs::metadata(path) {
             metadata.len().hash(&mut hasher);
@@ -406,8 +474,34 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
         }
     }
 
-    let mut parsed = HashMap::<String, ClassFile>::new();
     let mut index = CompiledRegistryIndex::default();
+    for archive_path in archives {
+        let extraction = match Builder::new().prefix("mojmodelbridge-classes-").tempdir() {
+            Ok(value) => Arc::new(value),
+            Err(error) => {
+                index.warnings.push(format!(
+                    "Could not create temporary class extraction for {}: {error}",
+                    archive_path.display()
+                ));
+                continue;
+            }
+        };
+        match extract_archive_classes(&archive_path, extraction.path(), &mut paths) {
+            Ok(()) => {
+                index.archive_extractions.push(extraction);
+            }
+            Err(error) => {
+                index.warnings.push(format!(
+                    "Could not index compiled classes from {}: {error}",
+                    archive_path.display()
+                ));
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+
+    let mut parsed = HashMap::<String, ClassFile>::new();
     for path in &paths {
         let bytes = match fs::read(path) { Ok(value) => value, Err(_) => continue };
         let class = match ClassFile::parse(&bytes) {
