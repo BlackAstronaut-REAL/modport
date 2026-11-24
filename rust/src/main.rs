@@ -8,7 +8,7 @@ use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
-use mojmodelbridge::source_bridge::{copy_model_sources, ensure_workspace_metadata, copy_animation_metadata};
+use mojmodelbridge::source_bridge::copy_model_sources;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
