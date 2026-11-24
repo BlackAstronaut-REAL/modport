@@ -79,3 +79,13 @@ Generate the Mojmap model and sampled AnimationDefinition Java sources from eith
 mojmodelbridge export-model-sources .\ModelDragon.class .\MCreatorWorkspace --modid examplemod
 mojmodelbridge export-model-sources .\ModelDragon.java .\MCreatorWorkspace --modid examplemod --overwrite
 ```
+
+
+### Renderer-linked MCreator entity export
+
+Export renderer-linked entities from a mixed source/class mod directory into an existing MCreator workspace. The command creates model and AnimationDefinition Java sources, copies them into the workspace package, resolves body textures or writes placeholders, generates living-entity element JSON, and updates the workspace manifest and English language map. It does not yet port item/block/biome/projectile exports or the full Gradle compile bridge.
+
+```powershell
+mojmodelbridge export-mcreator-entities .\ExtractedMod .\MCreatorWorkspace --source-root .\DecompiledSources
+mojmodelbridge export-mcreator-entities .\ExtractedMod .\MCreatorWorkspace --overwrite
+```

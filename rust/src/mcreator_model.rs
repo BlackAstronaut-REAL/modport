@@ -456,6 +456,19 @@ pub fn export_model_sources(
     target_generator: &str,
     overwrite: bool,
 ) -> Result<ModelSourceExport> {
+    export_model_sources_with_args(source, output_root, modid, requested_class_name,
+        target_generator, overwrite, &[])
+}
+
+pub fn export_model_sources_with_args(
+    source: &Path,
+    output_root: &Path,
+    modid: &str,
+    requested_class_name: Option<&str>,
+    target_generator: &str,
+    overwrite: bool,
+    constructor_args: &[Value],
+) -> Result<ModelSourceExport> {
     if !source.is_file() {
         bail!("Model source does not exist or is not a file: {}", source.display());
     }
@@ -463,9 +476,9 @@ pub fn export_model_sources(
     let mut model = match extension.as_str() {
         "java" => {
             let text = fs::read_to_string(source).with_context(|| format!("Reading {}", source.display()))?;
-            parse_java_model(&text, &source.to_string_lossy(), &[])?
+            parse_java_model(&text, &source.to_string_lossy(), constructor_args)?
         }
-        "class" => parse_any_model_class(source, &[])?,
+        "class" => parse_any_model_class(source, constructor_args)?,
         _ => bail!("MCreator model export accepts .java or .class input."),
     };
     expand_render_instances(&mut model);

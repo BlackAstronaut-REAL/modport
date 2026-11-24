@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::mcreator_model::export_model_sources;
+use mojmodelbridge::mcreator_workspace::scan_and_export_living_entities;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
@@ -65,6 +66,17 @@ enum Command {
         modid: String,
         #[arg(long)]
         class_name: Option<String>,
+        #[arg(long, default_value = "neoforge-1.21.1")]
+        generator: String,
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Export renderer-linked entities and their MCreator model/animation sources into an existing workspace.
+    ExportMcreatorEntities {
+        mod_root: PathBuf,
+        workspace_root: PathBuf,
+        #[arg(long = "source-root")]
+        source_roots: Vec<PathBuf>,
         #[arg(long, default_value = "neoforge-1.21.1")]
         generator: String,
         #[arg(long)]
@@ -183,6 +195,29 @@ fn main() -> Result<()> {
                     animation.source_name, animation.field, animation.channel_count, animation.length);
             }
             for warning in result.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportMcreatorEntities { mod_root, workspace_root, source_roots, generator, overwrite } => {
+            let report = scan_and_export_living_entities(
+                &mod_root, &source_roots, &workspace_root, &generator, overwrite
+            )?;
+            println!(
+                "MCreator entity export: {} entity element(s) written, {} skipped.",
+                report.exported_entities, report.skipped_entities
+            );
+            println!("Updated workspace: {}", report.workspace_file.display());
+            for entity in report.records {
+                println!(
+                    "{} [{}] -> {} ({} texture, {} animation(s))",
+                    entity.entity_class, entity.registry_name, entity.model_class,
+                    entity.texture, entity.animations.len()
+                );
+                for warning in entity.warnings {
+                    eprintln!("[WARN] {}: {warning}", entity.entity_class);
+                }
+            }
+            for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
             }
         }
