@@ -119,6 +119,8 @@ This phase is intentionally scoped as a renderer, not a new parser.
 - [ ] Add a model tree with part selection, visibility toggles, and pivot display.
 - [x] Add clip selection, play/pause, looping and timeline scrubbing. Playback speed and a dedicated bind-pose reset remain open.
 - [x] Sample the selected clip and apply animated node transforms to the scene hierarchy each frame; static GPU mesh caching remains open.
+- [x] Add animated PNG .mcmeta preview (frame dimensions/order/durations and sheet cropping) to the desktop asset preview.
+- [x] Close recovered periodic source clips with an eased return to the initial pose; correct legacy 1.7.10 float-first animation parameter mapping and ModelRenderer X/Y/Z pivot fields.
 - [ ] Verify the same model's proportions, UVs, hierarchy, and animation poses against its Blockbench export and reference screenshots.
 
 **Viewer MVP acceptance:** load a model from the existing Rust conversion pipeline, render it with its correct texture, select/hide parts, and play/scrub at least one parsed animation clip. This must work without launching Blockbench or requiring a separate model conversion step.
@@ -143,10 +145,12 @@ This phase is intentionally scoped as a renderer, not a new parser.
 
 **Goal:** make the viewer useful on whole mods, not only on a manually selected model file.
 
-- [ ] Browse discovered entities, renderers, models, textures, animations, items, blocks, and other ported content from a project.
-- [ ] Follow the recovered entity → renderer → model links from the mod graph.
+- [x] Add an initial extracted-project browser for registered mobs, equipment, armor sets, blocks, fallback textures, and standalone model sources.
+- [x] Follow recovered entity → renderer → model links for mobs and legacy held-item/armor renderers where source evidence is available.
+- [ ] Expand to all loader/registry patterns, raw JAR/ZIP inputs, animation assets, and complete item/block registry coverage.
 - [ ] Show model and animation provenance: source class/file, compiled class/JAR, texture candidates, selected texture, warnings, and parser confidence.
-- [ ] Provide quick preview thumbnails and a searchable model/animation list.
+- [x] Provide a searchable categorized asset list with texture/spawn-egg icons and an integrated preview panel.
+- [ ] Provide quick generated preview thumbnails and a dedicated model/animation outliner.
 - [ ] Compare bind pose and animation clips; support side-by-side or overlay comparison when useful.
 - [ ] Allow opening the original source, generated Blockbench file, generated Java, and relevant MCreator element from the selected asset.
 - [ ] Keep inspection read-only initially; previewing must never modify source files or generated workspace elements.
