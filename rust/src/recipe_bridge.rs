@@ -358,3 +358,211 @@ mod tests {
         assert!(paths.iter().any(|path| path.ends_with("legacy.json")));
     }
 }
+
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RecipeElementExport {
+    pub element_name: String,
+    pub registry_name: String,
+    pub source_path: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RecipeExportReport {
+    pub exported: Vec<RecipeElementExport>,
+    pub warnings: Vec<String>,
+    pub copied_recipe_resources: Vec<String>,
+}
+
+fn snake_name(value: &str) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let mut result = String::new();
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if ch.is_ascii_uppercase() && index > 0 {
+            let previous = chars[index - 1];
+            if previous.is_ascii_lowercase() || previous.is_ascii_digit() { result.push('_'); }
+        }
+        if ch.is_ascii_alphanumeric() {
+            result.push(ch.to_ascii_lowercase());
+        } else if !result.is_empty() && !result.ends_with('_') {
+            result.push('_');
+        }
+    }
+    let result = result.trim_matches('_').to_owned();
+    if result.is_empty() { "converted_content".to_owned() } else { result }
+}
+
+fn pascal_name(value: &str) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let mut words = Vec::<String>::new();
+    let mut current = String::new();
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if !ch.is_ascii_alphanumeric() {
+            if !current.is_empty() { words.push(std::mem::take(&mut current)); }
+            continue;
+        }
+        if ch.is_ascii_uppercase() && !current.is_empty() {
+            let previous = chars[index - 1];
+            let next_lower = chars.get(index + 1).is_some_and(|next| next.is_ascii_lowercase());
+            if previous.is_ascii_lowercase() || previous.is_ascii_digit()
+                || (previous.is_ascii_uppercase() && next_lower) {
+                words.push(std::mem::take(&mut current));
+            }
+        }
+        current.push(ch);
+    }
+    if !current.is_empty() { words.push(current); }
+    let mut result = String::new();
+    for word in words {
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            result.push(first.to_ascii_uppercase());
+            result.extend(chars);
+        }
+    }
+    if result.is_empty() { result = "ConvertedContent".to_owned(); }
+    if result.chars().next().is_some_and(|ch| ch.is_ascii_digit()) {
+        result.insert_str(0, "Content");
+    }
+    result
+}
+
+fn unique_element_name(base: &str, used: &mut std::collections::BTreeSet<String>) -> String {
+    let candidate = if base.is_empty() { "ConvertedContent" } else { base };
+    let mut name = candidate.to_owned();
+    let mut suffix = 2usize;
+    while !used.insert(name.to_ascii_lowercase()) {
+        name = format!("{candidate}{suffix}");
+        suffix += 1;
+    }
+    name
+}
+
+fn import_root_name(modid: &str) -> String {
+    let name = modid.trim().replace('-', "_");
+    if name.eq_ignore_ascii_case("lostinfinity") || name.eq_ignore_ascii_case("lost_infinity") {
+        "LostInfinity".to_owned()
+    } else if name.is_empty() {
+        "converted_mod".to_owned()
+    } else {
+        name
+    }
+}
+
+fn recipe_import_path(modid: &str) -> String {
+    format!("~/{}/Recipes", import_root_name(modid))
+}
+
+fn recipe_relative_path(path: &Path) -> Option<PathBuf> {
+    let components: Vec<_> = path.components().collect();
+    let index = components.iter().position(|part| {
+        part.as_os_str().to_string_lossy().eq_ignore_ascii_case("recipes")
+    })?;
+    let relative: PathBuf = components.iter().skip(index + 1).collect();
+    if relative.as_os_str().is_empty() { None } else { Some(relative) }
+}
+
+fn read_recipe_object(path: &Path) -> Option<Value> {
+    let bytes = fs::read(path).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    value.as_object()?;
+    Some(value)
+}
+
+/// Emit supported recipe JSON resources as native MCreator recipe elements and
+/// append generated descriptors to the loaded workspace definition.
+pub fn emit_recipe_elements(
+    source_roots: &[PathBuf],
+    output_elements: &Path,
+    workspace: &mut Value,
+    source_modid: &str,
+    registry_to_element: &BTreeMap<String, String>,
+    imported_fv: i64,
+) -> anyhow::Result<RecipeExportReport> {
+    let mut report = RecipeExportReport {
+        exported: Vec::new(),
+        warnings: Vec::new(),
+        copied_recipe_resources: Vec::new(),
+    };
+    let mut used_names = std::collections::BTreeSet::<String>::new();
+    let mut existing = workspace.get("mod_elements").and_then(Value::as_array)
+        .cloned().unwrap_or_default();
+    for item in &existing {
+        if let Some(name) = item.get("name").and_then(Value::as_str) {
+            used_names.insert(name.to_ascii_lowercase());
+        }
+    }
+    let mut descriptors = Vec::new();
+    fs::create_dir_all(output_elements)?;
+
+    for source in recipe_source_files(source_roots) {
+        let Some(payload) = read_recipe_object(&source) else { continue };
+        let Some(relative) = recipe_relative_path(&source) else { continue };
+        let Some(stem) = relative.file_stem().and_then(|value| value.to_str()) else { continue };
+        let registry_name = snake_name(stem);
+        let element_name = unique_element_name(&format!("{}Recipe", pascal_name(stem)), &mut used_names);
+        let (definition, warnings) = recipe_mcreator_definition(
+            &payload, &registry_name, registry_to_element, source_modid
+        );
+        let Some(definition) = definition else {
+            report.warnings.extend(warnings);
+            continue;
+        };
+
+        let version = imported_fv.clamp(0, 89);
+        let element = json!({"_fv":version,"_type":"recipe","definition":definition});
+        let output = output_elements.join(format!("{element_name}.mod.json"));
+        fs::write(&output, format!("{}\n", serde_json::to_string_pretty(&element)?))?;
+        descriptors.push(json!({
+            "name":element_name,
+            "type":"recipe",
+            "compiles":true,
+            "locked_code":false,
+            "registry_name":registry_name,
+            "metadata":{"files":[]},
+            "path":recipe_import_path(source_modid),
+            "mojmodelbridge_generated":true,
+            "mojmodelbridge_source_modid":source_modid,
+            "mojmodelbridge_source_registry":registry_name
+        }));
+        report.exported.push(RecipeElementExport {
+            element_name,
+            registry_name,
+            source_path:source.to_string_lossy().replace('\\', "/"),
+            warnings,
+        });
+    }
+
+    if !workspace.is_object() {
+        *workspace = Value::Object(serde_json::Map::new());
+    }
+    if !workspace.get("mod_elements").is_some_and(Value::is_array) {
+        workspace["mod_elements"] = Value::Array(std::mem::take(&mut existing));
+    }
+    if let Some(elements) = workspace.get_mut("mod_elements").and_then(Value::as_array_mut) {
+        elements.extend(descriptors);
+    }
+    Ok(report)
+}
+
+/// Copy recipe JSON into the target data pack while retaining its path below recipes.
+pub fn copy_recipe_resources(
+    source_roots: &[PathBuf],
+    workspace_root: &Path,
+    target_modid: &str,
+) -> anyhow::Result<Vec<String>> {
+    let target_root = workspace_root.join("src/main/resources/data")
+        .join(target_modid).join("recipes");
+    let mut outputs = Vec::new();
+    for source in recipe_source_files(source_roots) {
+        let Some(relative) = recipe_relative_path(&source) else { continue };
+        let Some(payload) = read_recipe_object(&source) else { continue };
+        let target = target_root.join(relative);
+        if let Some(parent) = target.parent() { fs::create_dir_all(parent)?; }
+        fs::write(&target, format!("{}\n", serde_json::to_string_pretty(&payload)?))?;
+        outputs.push(target.to_string_lossy().replace('\\', "/"));
+    }
+    Ok(outputs)
+}
