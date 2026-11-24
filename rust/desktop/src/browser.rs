@@ -258,8 +258,11 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let render_shape = resource_model_source.as_ref()
             .map(|path| block_render_shape(path, source))
             .or(blockstate_shape)
-            .or_else(|| is_plant_source(source).then(|| "plant".to_owned()))
-            .unwrap_or_else(|| if legacy_model_source.is_some() { "custom".to_owned() } else { "cube".to_owned() });
+            .unwrap_or_else(|| if legacy_model_source.is_some() {
+                "custom".to_owned()
+            } else {
+                infer_legacy_block_shape(source)
+            });
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
         let components_json = find_item_components(&all_files, &registry)
@@ -1102,6 +1105,26 @@ fn block_render_shape_from_model(path: &Path) -> String {
     "custom".to_owned()
 }
 
+fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
+    if is_plant_source(source) {
+        return "plant".to_owned();
+    }
+    let evidence = format!(
+        "{} {} {}",
+        source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(),
+        source.source_text.to_ascii_lowercase(),
+    );
+    if [
+        "blockredstonewire", "blockcarpet", "blockpressureplate", "blockrail",
+        "blockrepeater", "blockredstonecomparator", "redstone_dust", "redstonewire",
+        "pressure_plate", "repeater", "comparator", "carpet", "rail",
+    ].iter().any(|token| evidence.contains(token)) {
+        return "floor".to_owned();
+    }
+    "cube".to_owned()
+}
+
 fn block_render_shape(path: &Path, source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
     let shape = block_render_shape_from_model(path);
     if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
@@ -1648,6 +1671,36 @@ mod tests {
         source.class_name = "ItemBattleAxe".to_owned();
         source.registry_name = "battle_axe".to_owned();
         assert!(is_weapon_source(&source));
+    }
+
+    #[test]
+    fn infers_legacy_plant_and_flat_block_render_shapes_from_class_hierarchy() {
+        let plant = mojmodelbridge::mcreator_block::BlockSource {
+            class_name: "BlockBlueFlower".to_owned(),
+            superclass: "net.minecraft.block.BlockBush".to_owned(),
+            registry_name: "blue_flower".to_owned(),
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert_eq!(infer_legacy_block_shape(&plant), "plant");
+
+        let wire = mojmodelbridge::mcreator_block::BlockSource {
+            class_name: "BlockRedstoneWire".to_owned(),
+            superclass: "net.minecraft.block.Block".to_owned(),
+            registry_name: "redstone_wire".to_owned(),
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert_eq!(infer_legacy_block_shape(&wire), "floor");
+
+        let stone = mojmodelbridge::mcreator_block::BlockSource {
+            class_name: "BlockAncientStone".to_owned(),
+            superclass: "net.minecraft.block.Block".to_owned(),
+            registry_name: "ancient_stone".to_owned(),
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert_eq!(infer_legacy_block_shape(&stone), "cube");
     }
 
     #[test]
