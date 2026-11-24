@@ -70,7 +70,7 @@ pub fn discover_mod_layout(mod_root: &Path) -> Result<ModLayout> {
                 let mut parent = path.parent();
                 while let Some(dir) = parent {
                     has_code_below.insert(dir.to_path_buf());
-                    if dir == root { break; }
+                    if dir == root.as_path() { break; }
                     parent = dir.parent();
                 }
             } else if extension == "json" {
