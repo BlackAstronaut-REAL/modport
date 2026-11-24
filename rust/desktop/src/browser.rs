@@ -199,7 +199,7 @@ fn category_order(category: &str) -> usize {
 }
 
 fn humanize(value: &str) -> String {
-    let chars: Vec<char> = value.replace(['_', '-'], " ").chars().collect();
+    let chars: Vec<char> = value.replace('_', " ").replace('-', " ").chars().collect();
     let mut output = String::with_capacity(chars.len() + 8);
     for (index, ch) in chars.iter().copied().enumerate() {
         if index > 0 && ch.is_ascii_uppercase() && chars[index - 1].is_ascii_lowercase() {
