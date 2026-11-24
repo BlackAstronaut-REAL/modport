@@ -299,6 +299,42 @@ mod tests {
     }
 
     #[test]
+    fn export_all_runs_all_stages_on_an_empty_source_workspace() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source_mod");
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&workspace).unwrap();
+        let descriptor = workspace.join("converted.mcreator");
+        fs::write(&descriptor, serde_json::to_vec(&json!({
+            "mcreatorVersion": 202600,
+            "workspaceSettings": {
+                "modid": "converted",
+                "modElementsPackage": "net.converted",
+                "currentGenerator": "neoforge-1.21.1"
+            },
+            "mod_elements": [],
+            "language_map": {"en_us": {}}
+        })).unwrap()).unwrap();
+
+        let report = export_all_to_workspace(
+            &[source],
+            &workspace,
+            "examplemod",
+            89
+        ).unwrap();
+
+        let names: Vec<&str> = report.stages.iter().map(|stage| stage.name.as_str()).collect();
+        assert_eq!(names, vec![
+            "equipment", "armor", "blocks", "plants",
+            "worldgen", "living_entities", "projectiles", "recipes"
+        ]);
+        assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
+        assert_eq!(report.source_modid, "examplemod");
+        assert_eq!(report.workspace_file, descriptor);
+    }
+
+    #[test]
     fn stage_serialization_keeps_skipped_and_exported_counts() {
         let value = json!({"exported":3,"skipped":2});
         let result = stage("blocks", count_field(&value,"exported"), count_field(&value,"skipped"), value);
