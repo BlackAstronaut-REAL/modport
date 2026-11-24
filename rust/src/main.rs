@@ -13,6 +13,7 @@ use mojmodelbridge::source_bridge::copy_model_sources;
 use mojmodelbridge::recipe_bridge::export_recipes_to_workspace;
 use mojmodelbridge::mcreator_equipment::export_equipment_to_workspace;
 use mojmodelbridge::mcreator_armor::export_armor_to_workspace;
+use mojmodelbridge::mcreator_block::export_blocks_to_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -77,6 +78,16 @@ enum Command {
     },
     /// Export registered four-piece armor sets into native MCreator armor elements.
     ExportArmor {
+        workspace_root: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long, default_value = "")]
+        source_modid: String,
+        #[arg(long, default_value_t = 89)]
+        imported_fv: i64,
+    },
+    /// Export registered Java Block subclasses with blockstate/model/texture resources.
+    ExportBlocks {
         workspace_root: PathBuf,
         #[arg(required = true)]
         source_roots: Vec<PathBuf>,
@@ -273,6 +284,37 @@ fn main() -> Result<()> {
                 );
                 for warning in item.warnings {
                     eprintln!("[WARN] {}: {warning}", item.prefix);
+                }
+            }
+            for warning in report.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportBlocks { workspace_root, source_roots, source_modid, imported_fv } => {
+            let report = export_blocks_to_workspace(
+                &source_roots,
+                &workspace_root,
+                &source_modid,
+                imported_fv,
+            )?;
+            println!(
+                "MCreator block export: {} discovered, {} exported, {} skipped.",
+                report.discovered,
+                report.exported,
+                report.skipped
+            );
+            println!("Updated workspace: {}", report.workspace_file.display());
+            for item in report.records {
+                println!(
+                    "{} [{}] -> {} (render type={}, textures={})",
+                    item.class_name,
+                    item.registry_name,
+                    item.element_name,
+                    item.render_type,
+                    item.textures.len()
+                );
+                for warning in item.warnings {
+                    eprintln!("[WARN] {}: {warning}", item.class_name);
                 }
             }
             for warning in report.warnings {
