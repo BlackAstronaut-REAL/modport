@@ -396,10 +396,23 @@ fn source_attribute_number(source: &str, attribute_names: &[&str]) -> Option<f64
         .map(|name| regex::escape(name))
         .collect::<Vec<_>>()
         .join("|");
-    let pattern = Regex::new(&format!(
-        r"(?is)(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b.{{0,320}}?(?:setBaseValue|add|set)\s*\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?"
+    let number = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?";
+
+    // AttributeSupplier.Builder.add(Attributes.MAX_HEALTH, 80.0D)
+    let builder = Regex::new(&format!(
+        r"(?is)\b(?:add|put)\s*\(\s*(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b\s*,\s*{number}"
     )).ok()?;
-    pattern.captures(source).and_then(|capture| capture.get(1))
+    if let Some(value) = builder.captures(source).and_then(|capture| capture.get(1)) {
+        if let Ok(value) = value.as_str().parse::<f64>() {
+            return Some(value);
+        }
+    }
+
+    // getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(120.0D)
+    let setter = Regex::new(&format!(
+        r"(?is)(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b.{{0,240}}?(?:setBaseValue|setValue|set)\s*\(\s*{number}"
+    )).ok()?;
+    setter.captures(source).and_then(|capture| capture.get(1))
         .and_then(|value| value.as_str().parse::<f64>().ok())
 }
 
