@@ -962,20 +962,28 @@ fn asset_namespace(path: &Path) -> String {
         .unwrap_or_else(|| "minecraft".to_owned())
 }
 
+fn collect_blockstate_models(value: &Value, references: &mut Vec<String>) {
+    if let Some(reference) = value.get("model").and_then(Value::as_str) {
+        references.push(reference.to_owned());
+    } else if let Some(array) = value.as_array() {
+        for choice in array {
+            collect_blockstate_models(choice, references);
+        }
+    }
+}
+
 fn resolve_blockstate_model(files: &[PathBuf], state_path: &Path) -> Option<PathBuf> {
     let payload = fs::read(state_path).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())?;
     let mut references = Vec::<String>::new();
     if let Some(variants) = payload.get("variants").and_then(Value::as_object) {
-        for variant in variants.values() {
-            if let Some(reference) = variant.get("model").and_then(Value::as_str) {
-                references.push(reference.to_owned());
-            } else if let Some(array) = variant.as_array() {
-                for choice in array {
-                    if let Some(reference) = choice.get("model").and_then(Value::as_str) {
-                        references.push(reference.to_owned());
-                    }
-                }
-            }
+        // Prefer the no-state/default variant. Other keyed variants are
+        // fallback previews because the browser currently opens one static pose.
+        if let Some(default_variant) = variants.get("") {
+            collect_blockstate_models(default_variant, &mut references);
+        }
+        for (key, variant) in variants {
+            if key.is_empty() { continue; }
+            collect_blockstate_models(variant, &mut references);
         }
     }
     if let Some(parts) = payload.get("multipart").and_then(Value::as_array) {
@@ -992,8 +1000,8 @@ fn resolve_blockstate_model(files: &[PathBuf], state_path: &Path) -> Option<Path
             }
         }
     }
-    references.sort();
-    references.dedup();
+    let mut seen_references = HashSet::new();
+    references.retain(|reference| seen_references.insert(reference.clone()));
     let namespace = asset_namespace(state_path);
     for reference in references {
         let (model_namespace, model) = reference.split_once(':')
@@ -1645,9 +1653,12 @@ mod tests {
         let model = root.join("assets/demo/models/block/flower_cross.json");
         fs::create_dir_all(state.parent().unwrap()).unwrap();
         fs::create_dir_all(model.parent().unwrap()).unwrap();
-        fs::write(&state, r#"{"variants":{"":{"model":"demo:block/flower_cross"}}}"#).unwrap();
+        let non_default = root.join("assets/demo/models/block/aaa_side_cube.json");
+        fs::create_dir_all(non_default.parent().unwrap()).unwrap();
+        fs::write(&state, r#"{"variants":{"facing=east":{"model":"demo:block/aaa_side_cube"},"":{"model":"demo:block/flower_cross"}}}"#).unwrap();
         fs::write(&model, r#"{"parent":"minecraft:block/cross","textures":{"cross":"demo:block/flower"}}"#).unwrap();
-        let files = vec![state, model.clone()];
+        fs::write(&non_default, r#"{"parent":"minecraft:block/cube_all","textures":{"all":"demo:block/stone"}}"#).unwrap();
+        let files = vec![state, model.clone(), non_default];
 
         let (resolved, shape) = find_block_model_json(&files, "living_flower");
         assert_eq!(resolved, Some(model.clone()));
