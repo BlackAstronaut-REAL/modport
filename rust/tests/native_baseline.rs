@@ -115,3 +115,34 @@ fn converts_compiled_legacy_model_class_without_javap() {
     assert_eq!(project["elements"].as_array().unwrap().len(), converted.cube_count);
     assert!(!project["groups"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn diagnostic_compiled_class_instruction_trace() {
+    let bytes = include_bytes!("../../oldVer/tests/fixtures/ModelDeviantPiglin.class");
+    let class = mojmodelbridge::bytecode::ClassFile::parse(bytes).unwrap();
+    let mut output = format!(
+        "CLASS {:?} SUPER {:?} VERSION {}\\nFIELDS:\\n",
+        class.this_name(), class.super_name(), class.major_version
+    );
+    for field in &class.fields {
+        output.push_str(&format!("  {} {}\\n", field.name, field.descriptor));
+    }
+    for method in class.methods.iter().filter(|method| method.name == "<init>") {
+        output.push_str(&format!("\\nMETHOD {} {}\\n", method.name, method.descriptor));
+        if let Some(code) = &method.code {
+            for ins in mojmodelbridge::bytecode::decode_instructions(&code.code).unwrap() {
+                let cp = if matches!(ins.opcode, 0xb2..=0xb9) && ins.operands.len() >= 2 {
+                    let index = u16::from_be_bytes([ins.operands[0], ins.operands[1]]);
+                    class.member_reference(index).map(|(o,n,d)|format!("{o}.{n}:{d}")).unwrap_or_default()
+                } else if ins.opcode == 0xbb && ins.operands.len() >= 2 {
+                    let index = u16::from_be_bytes([ins.operands[0], ins.operands[1]]);
+                    class.class_name(index).unwrap_or("").to_owned()
+                } else {
+                    String::new()
+                };
+                output.push_str(&format!("  {:04} {:02x} {:?} {}\\n", ins.offset, ins.opcode, ins.operands, cp));
+            }
+        }
+    }
+    panic!("{output}");
+}
