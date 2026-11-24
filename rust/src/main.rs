@@ -11,6 +11,7 @@ use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
 use mojmodelbridge::source_bridge::copy_model_sources;
 use mojmodelbridge::recipe_bridge::export_recipes_to_workspace;
+use mojmodelbridge::mcreator_equipment::export_equipment_to_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -60,6 +61,16 @@ enum Command {
         source_modid: String,
         #[arg(long)]
         registry_map: Option<PathBuf>,
+        #[arg(long, default_value_t = 89)]
+        imported_fv: i64,
+    },
+    /// Export Java-registered item and tool subclasses into an existing MCreator workspace.
+    ExportEquipment {
+        workspace_root: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long, default_value = "")]
+        source_modid: String,
         #[arg(long, default_value_t = 89)]
         imported_fv: i64,
     },
@@ -192,6 +203,37 @@ fn main() -> Result<()> {
                 report.copied_recipe_resources.len()
             );
             for warning in report.warnings.iter().chain(report.exported.iter().flat_map(|item| item.warnings.iter())) {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportEquipment { workspace_root, source_roots, source_modid, imported_fv } => {
+            let report = export_equipment_to_workspace(
+                &source_roots,
+                &workspace_root,
+                &source_modid,
+                imported_fv,
+            )?;
+            println!(
+                "MCreator equipment export: {} discovered, {} exported, {} skipped.",
+                report.discovered,
+                report.exported,
+                report.skipped
+            );
+            println!("Updated workspace: {}", report.workspace_file.display());
+            for item in report.records {
+                println!(
+                    "{} [{}] -> {} ({}, texture={})",
+                    item.class_name,
+                    item.registry_name,
+                    item.element_name,
+                    item.element_type,
+                    item.texture
+                );
+                for warning in item.warnings {
+                    eprintln!("[WARN] {}: {warning}", item.class_name);
+                }
+            }
+            for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
             }
         }
