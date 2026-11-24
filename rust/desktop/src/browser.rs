@@ -172,6 +172,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         });
     }
 
+    drop(add);
     entries.sort_by(|a, b| {
         category_order(&a.category).cmp(&category_order(&b.category))
             .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
