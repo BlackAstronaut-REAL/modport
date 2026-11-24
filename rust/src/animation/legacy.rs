@@ -515,7 +515,7 @@ pub fn extract_legacy_animation(
         names.into_iter().map(|(slot, name)| (name, json!({"slot":slot}))).collect::<Map<String, JsonValue>>()
     } else { Map::new() };
     let warnings = context.warnings.clone();
-    let analysis = json!({
+    let mut analysis = json!({
         "source_method":method_name,
         "source_format":"legacy_modelbase_bytecode",
         "parameter_mapping":parameter_mapping,

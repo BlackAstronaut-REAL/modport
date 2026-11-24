@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -118,7 +117,7 @@ fn sample_clip(parts: &[Part], formulas: &[Formula], kind: &str, length: f64) ->
         // recovered symbolic expression.
         for formula in formulas.iter().filter(|formula| formula_applies(formula, kind)) {
             let key = (formula.bone.clone(), formula.channel.clone(), formula.axis.clone());
-            if let Ok(value) = evaluate(&formula.expression, variables) {
+            if let Ok(value) = evaluate(&formula.expression, &variables) {
                 state.insert(key, value);
             }
         }
