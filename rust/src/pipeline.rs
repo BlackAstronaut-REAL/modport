@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::blockbench::model_to_bbmodel;
+use crate::bytecode::parse_legacy_class_file;
 use crate::discovery::discover_mod_layout;
 use crate::source::parse_java_model;
 
@@ -71,8 +72,8 @@ pub struct ModelConversion {
     pub warnings: Vec<String>,
 }
 
-/// Native Java source → Blockbench conversion. Selects the modern Mojmap or
-/// legacy ModelRenderer parser from source evidence; no Python or javap process.
+/// Native Java source or legacy JVM class → Blockbench conversion. Uses the
+/// modern/legacy source parser or direct class-file interpreter; no Python, javap, or JDK.
 pub fn convert_model_source(
     source: &Path,
     output: &Path,
@@ -85,12 +86,16 @@ pub fn convert_model_source(
     if !source.is_file() {
         bail!("Model source does not exist or is not a file: {}", source.display());
     }
-    if !source.extension().and_then(|v| v.to_str()).map(|v| v.eq_ignore_ascii_case("java")).unwrap_or(false) {
-        bail!("This stage accepts Java source. Direct .class model interpretation is the next bytecode migration stage.");
-    }
-
-    let source_text = fs::read_to_string(source).with_context(|| format!("Reading model source {}", source.display()))?;
-    let mut model = parse_java_model(&source_text, &source.to_string_lossy(), &[])?;
+    let extension = source.extension().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mut model = match extension.as_str() {
+        "java" => {
+            let source_text = fs::read_to_string(source)
+                .with_context(|| format!("Reading model source {}", source.display()))?;
+            parse_java_model(&source_text, &source.to_string_lossy(), &[])?
+        }
+        "class" => parse_legacy_class_file(source, &[])?,
+        _ => bail!("This stage accepts decompiled .java or compiled legacy .class model files."),
+    };
     let resolved_textures = discover_textures(source, &model.class_name, texture_roots);
     if let Some(primary) = resolved_textures.first() {
         model.primary_texture = primary.to_string_lossy().to_string();
