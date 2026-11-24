@@ -1045,7 +1045,7 @@ fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>,
     state_files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     for state_path in state_files {
         if let Some(model_path) = resolve_blockstate_model(files, &state_path) {
-            let shape = block_render_shape_from_model(&model_path);
+            let shape = block_render_shape_from_model(&model_path, files);
             return (Some(model_path), Some(shape));
         }
     }
@@ -1058,96 +1058,88 @@ fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>,
     }).cloned().collect::<Vec<_>>();
     candidates.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     let model = candidates.into_iter().next();
-    let shape = model.as_deref().map(block_render_shape_from_model);
+    let shape = model.as_deref().map(|path| block_render_shape_from_model(path, files));
     (model, shape)
 }
 
-fn block_render_shape_from_model(path: &Path) -> String {
-    let payload = fs::read(path).ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .unwrap_or(Value::Null);
-    let parent = payload.get("parent").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
-
+fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
+    let parent = parent.to_ascii_lowercase();
     if ["block/cross", "block/tinted_cross", "block/crop", "block/flower"]
         .iter().any(|candidate| parent.ends_with(candidate))
         || ["flower", "sapling", "crop", "tall_grass", "fern", "cross"]
             .iter().any(|candidate| stem.contains(candidate))
     {
-        return "plant".to_owned();
-    }
-    if parent.ends_with("block/template_torch_wall") {
-        return "wall_torch".to_owned();
-    }
-    if ["block/torch", "block/template_torch"]
+        Some("plant")
+    } else if parent.ends_with("block/template_torch_wall") {
+        Some("wall_torch")
+    } else if ["block/torch", "block/template_torch"]
         .iter().any(|candidate| parent.ends_with(candidate))
         || stem.ends_with("torch")
     {
-        return "torch".to_owned();
-    }
-    if ["redstone_dust", "redstone_wire", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
+        Some("torch")
+    } else if ["redstone_dust", "redstone_wire", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
         .iter().any(|candidate| stem.contains(candidate))
     {
-        return "floor".to_owned();
-    }
-    if parent.ends_with("block/cube") || parent.ends_with("block/cube_all")
-        || parent.ends_with("block/cube_column") || parent.ends_with("block/orientable")
+        Some("floor")
+    } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
+        .iter().any(|candidate| parent.ends_with(candidate))
     {
-        return "cube".to_owned();
+        Some("cube")
+    } else {
+        None
     }
-    let elements = payload.get("elements").and_then(Value::as_array);
-    if let Some(elements) = elements.filter(|elements| !elements.is_empty()) {
-        let mut low = f64::INFINITY;
-        let mut high = f64::NEG_INFINITY;
-        for element in elements {
-            if let Some(from) = element.get("from").and_then(Value::as_array) {
-                if let Some(value) = from.get(1).and_then(Value::as_f64) { low = low.min(value); }
+}
+
+fn resolve_block_parent_model(files: &[PathBuf], path: &Path, parent: &str) -> Option<PathBuf> {
+    let (namespace, model) = parent.split_once(':')
+        .map(|(namespace, model)| (namespace.to_owned(), model.to_owned()))
+        .unwrap_or_else(|| (asset_namespace(path), parent.to_owned()));
+    let model = model.trim_start_matches('/').trim_start_matches("block/").trim_end_matches(".json");
+    if model.contains("..") { return None; }
+    let suffix = format!("/assets/{namespace}/models/block/{model}.json").to_ascii_lowercase();
+    files.iter().find(|candidate| {
+        candidate.to_string_lossy().replace('\\', "/").to_ascii_lowercase().ends_with(&suffix)
+    }).cloned()
+}
+
+fn block_render_shape_from_model(path: &Path, files: &[PathBuf]) -> String {
+    let mut current = path.to_path_buf();
+    let mut visited = HashSet::<PathBuf>::new();
+    for _ in 0..16 {
+        let canonical = fs::canonicalize(&current).unwrap_or_else(|_| current.clone());
+        if !visited.insert(canonical) { break; }
+        let payload = fs::read(&current).ok()
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .unwrap_or(Value::Null);
+        let stem = current.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+        if let Some(elements) = payload.get("elements").and_then(Value::as_array).filter(|elements| !elements.is_empty()) {
+            let mut low = f64::INFINITY;
+            let mut high = f64::NEG_INFINITY;
+            for element in elements {
+                if let Some(from) = element.get("from").and_then(Value::as_array) {
+                    if let Some(value) = from.get(1).and_then(Value::as_f64) { low = low.min(value); }
+                }
+                if let Some(to) = element.get("to").and_then(Value::as_array) {
+                    if let Some(value) = to.get(1).and_then(Value::as_f64) { high = high.max(value); }
+                }
             }
-            if let Some(to) = element.get("to").and_then(Value::as_array) {
-                if let Some(value) = to.get(1).and_then(Value::as_f64) { high = high.max(value); }
+            if low.is_finite() && high.is_finite() && high - low <= 1.25 {
+                return "floor".to_owned();
             }
+            return "custom".to_owned();
         }
-        if low.is_finite() && high.is_finite() && high - low <= 1.25 {
-            return "floor".to_owned();
+        let parent = payload.get("parent").and_then(Value::as_str).unwrap_or("");
+        if let Some(shape) = block_shape_for_parent(parent, &stem) {
+            return shape.to_owned();
         }
-        return "custom".to_owned();
-    }
-    if parent.ends_with("block/cube") || parent.ends_with("block/cube_all")
-        || parent.ends_with("block/cube_column") || parent.ends_with("block/orientable")
-    {
-        return "cube".to_owned();
+        let Some(next) = resolve_block_parent_model(files, &current, parent) else { break; };
+        current = next;
     }
     "custom".to_owned()
 }
 
-fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
-    if is_plant_source(source) {
-        return "plant".to_owned();
-    }
-    let evidence = format!(
-        "{} {} {}",
-        source.class_name.to_ascii_lowercase(),
-        source.superclass.to_ascii_lowercase(),
-        source.source_text.to_ascii_lowercase(),
-    );
-    if evidence.contains("blockwalltorch") || evidence.contains("wall_torch") {
-        return "wall_torch".to_owned();
-    }
-    if evidence.contains("blocktorch") || evidence.contains("redstone_torch") {
-        return "torch".to_owned();
-    }
-    if [
-        "blockredstonewire", "blockcarpet", "blockpressureplate", "blockrail",
-        "blockrepeater", "blockredstonecomparator", "redstone_dust", "redstonewire",
-        "pressure_plate", "repeater", "comparator", "carpet", "rail",
-    ].iter().any(|token| evidence.contains(token)) {
-        return "floor".to_owned();
-    }
-    "cube".to_owned()
-}
-
 fn block_render_shape(path: &Path, source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
-    let shape = block_render_shape_from_model(path);
+    let shape = block_render_shape_from_model(path, &[]);
     if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
 }
 
@@ -1743,6 +1735,28 @@ mod tests {
         assert_eq!(resolved, Some(model.clone()));
         assert_eq!(shape.as_deref(), Some("plant"));
         assert_eq!(block_render_shape_from_model(&model), "plant");
+    }
+
+    #[test]
+    fn block_shape_follows_custom_parent_chain_and_prefers_explicit_geometry() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let dir = root.join("assets/demo/models/block");
+        fs::create_dir_all(&dir).unwrap();
+        let base_plant = dir.join("base_cross.json");
+        let child_plant = dir.join("custom_plant.json");
+        fs::write(&base_plant, r#"{"parent":"minecraft:block/cross"}"#).unwrap();
+        fs::write(&child_plant, r#"{"parent":"demo:block/base_cross"}"#).unwrap();
+        let files = vec![base_plant.clone(), child_plant.clone()];
+        assert_eq!(block_render_shape_from_model(&child_plant, &files), "plant");
+
+        let thin = dir.join("thin_custom.json");
+        fs::write(&thin, r#"{"elements":[{"from":[0,0,0],"to":[16,0.5,16]}],"parent":"minecraft:block/cube_all"}"#).unwrap();
+        assert_eq!(block_render_shape_from_model(&thin, &files), "floor");
+
+        let tall = dir.join("custom_cube.json");
+        fs::write(&tall, r#"{"elements":[{"from":[0,0,0],"to":[16,16,16]}],"parent":"minecraft:block/cube_all"}"#).unwrap();
+        assert_eq!(block_render_shape_from_model(&tall, &files), "custom");
     }
 
     #[test]
