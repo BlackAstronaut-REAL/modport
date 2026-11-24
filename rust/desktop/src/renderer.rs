@@ -236,40 +236,40 @@ fn draw_cube(
 
     // Face vertex order and UV corner order mirror the vanilla ModelBox /
     // TexturedQuad layout, including its non-obvious top/bottom placement.
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 0,
         [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]],
-        [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy],
-        cube.mirror, tw, th
+        [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy], tw, th
     ), [1.0, 0.0, 0.0]));
 
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 1,
         [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],
-        [u, v+dz, u+dz, v+dz+dy],
-        cube.mirror, tw, th
+        [u, v+dz, u+dz, v+dz+dy], tw, th
     ), [-1.0, 0.0, 0.0]));
 
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 2,
         [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]],
-        [u+dz, v, u+dz+dx, v+dz],
-        cube.mirror, tw, th
+        [u+dz, v, u+dz+dx, v+dz], tw, th
     ), [0.0, -1.0, 0.0]));
 
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 3,
         [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]],
-        [u+dz+dx, v+dz, u+dz+2.0*dx, v],
-        cube.mirror, tw, th
+        [u+dz+dx, v+dz, u+dz+2.0*dx, v], tw, th
     ), [0.0, 1.0, 0.0]));
 
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 4,
         [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],
-        [u+dz, v+dz, u+dz+dx, v+dz+dy],
-        cube.mirror, tw, th
+        [u+dz, v+dz, u+dz+dx, v+dz+dy], tw, th
     ), [0.0, 0.0, -1.0]));
 
-    faces.push((quad_from_rect(
+    faces.push((cube_face_quad(
+        cube, 5,
         [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],
-        [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy],
-        cube.mirror, tw, th
+        [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy], tw, th
     ), [0.0, 0.0, 1.0]));
 
     for (vertices, normal) in faces {
@@ -290,6 +290,20 @@ fn draw_cube(
             width, height, pixels, depth_buffer,
         );
     }
+}
+
+fn cube_face_quad(
+    cube: &ViewerCube,
+    face_index: usize,
+    points: [[f32; 3]; 4],
+    default_rect: [f32; 4],
+    texture_width: f32,
+    texture_height: f32,
+) -> [MeshVertex; 4] {
+    let rect = cube.face_uvs
+        .and_then(|faces| faces.get(face_index).copied())
+        .unwrap_or(default_rect);
+    quad_from_rect(points, rect, cube.mirror, texture_width, texture_height)
 }
 
 fn quad_from_rect(
@@ -510,6 +524,7 @@ mod tests {
                     min: [-4.0, -8.0, -4.0],
                     max: [4.0, 0.0, 4.0],
                     uv_origin: [0.0, 0.0],
+                    face_uvs: None,
                     mirror: false,
                     name: "body_cube".to_owned(),
                 }],
