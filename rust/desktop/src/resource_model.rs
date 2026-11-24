@@ -379,6 +379,49 @@ mod tests {
     use image::RgbaImage;
 
     #[test]
+    fn renders_vanilla_cube_all_and_cross_plant_block_models() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model_dir = root.join("assets/demo/models/block");
+        let texture_dir = root.join("assets/demo/textures/block");
+        fs::create_dir_all(&model_dir).unwrap();
+        fs::create_dir_all(&texture_dir).unwrap();
+        let texture_path = texture_dir.join("flower.png");
+        RgbaImage::new(16, 16).save(&texture_path).unwrap();
+
+        let cube_path = model_dir.join("stone_like.json");
+        fs::write(&cube_path, r#"{"parent":"minecraft:block/cube_all","textures":{"all":"demo:block/flower"}}"#).unwrap();
+        let (cube_scene, cube_textures) = load_block_model(&cube_path, &[root.to_path_buf()]).unwrap();
+        assert_eq!(cube_scene.nodes.len(), 1);
+        assert_eq!(cube_scene.nodes[0].cubes[0].min, [-8.0, -8.0, -8.0]);
+        assert_eq!(cube_textures, vec![texture_path.clone()]);
+
+        let plant_path = model_dir.join("flower_cross.json");
+        fs::write(&plant_path, r#"{"parent":"minecraft:block/cross","textures":{"cross":"demo:block/flower"}}"#).unwrap();
+        let (plant_scene, plant_textures) = load_block_model(&plant_path, &[root.to_path_buf()]).unwrap();
+        assert_eq!(plant_scene.nodes.len(), 2);
+        assert_eq!(plant_scene.nodes[0].name, "plant_front");
+        assert_eq!(plant_scene.nodes[1].name, "plant_back");
+        assert_eq!(plant_scene.nodes[0].base_rotation[1], 45.0_f32.to_radians());
+        assert_eq!(plant_textures, vec![texture_path]);
+    }
+
+    #[test]
+    fn renders_flat_floor_block_models_as_thin_cuboids() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model_dir = root.join("assets/demo/models/block");
+        fs::create_dir_all(&model_dir).unwrap();
+        let model_path = model_dir.join("redstone_dust.json");
+        fs::write(&model_path, r#"{"parent":"minecraft:block/cube_all","textures":{"all":"minecraft:block/redstone_dust_line"}}"#).unwrap();
+
+        let (scene, _) = load_block_model(&model_path, &[root.to_path_buf()]).unwrap();
+        let cube = &scene.nodes[0].cubes[0];
+        assert_eq!(cube.min[1], -8.0);
+        assert_eq!(cube.max[1], -7.65);
+    }
+
+    #[test]
     fn parses_item_model_geometry_and_resolves_texture_face_uvs() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
