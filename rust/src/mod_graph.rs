@@ -838,6 +838,17 @@ fn compiled_registry_names(class_paths: &[PathBuf]) -> BTreeMap<String, String> 
     result
 }
 
+fn entity_attribute_name(field: &str) -> Option<&'static str> {
+    match field {
+        "field_111267_a" | "maxHealth" | "MAX_HEALTH" | "GENERIC_MAX_HEALTH" => Some("health"),
+        "field_111263_d" | "movementSpeed" | "MOVEMENT_SPEED" | "GENERIC_MOVEMENT_SPEED" => Some("movement_speed"),
+        "field_111264_e" | "attackDamage" | "ATTACK_DAMAGE" | "GENERIC_ATTACK_DAMAGE" => Some("attack_damage"),
+        "field_111265_b" | "followRange" | "FOLLOW_RANGE" | "GENERIC_FOLLOW_RANGE" => Some("follow_range"),
+        "armor" | "ARMOR" | "ARMOR_VALUE" => Some("armor"),
+        _ => None,
+    }
+}
+
 fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
     let mut metadata = EntityMetadata {
         class_name: class_name.to_owned(),
@@ -859,23 +870,220 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
         warnings: Vec::new(),
     };
     let parsed = fs::read(path).ok().and_then(|bytes| ClassFile::parse(&bytes).ok());
-    if let Some(class) = parsed {
-        metadata.superclass = class.super_name().map(simple_name).unwrap_or("").to_owned();
-        let superclass = metadata.superclass.to_ascii_lowercase();
-        metadata.water_mob = ["watermob", "squid", "fish"].iter().any(|token| superclass.contains(token));
-        metadata.flying_mob = ["flying", "ambient", "bat"].iter().any(|token| superclass.contains(token));
-        metadata.fire_immune = class.constant_pool.iter().filter_map(|entry| match entry.as_ref() {
-            Some(crate::bytecode::ConstantPoolEntry::Utf8(value)) => Some(value.as_str()),
-            _ => None,
-        }).any(|value| value.contains("fireImmune") || value.contains("field_70178_ae"));
-        metadata.warnings.push(
-            "Entity source was unavailable; only compiled class identity and superclass traits were recovered. Numeric attributes remain defaults.".to_owned()
-        );
-    } else {
+    let Some(class) = parsed else {
         metadata.warnings.push(
             "Compiled entity class could not be parsed; numeric attributes and superclass traits remain defaults.".to_owned()
         );
+        return metadata;
+    };
+
+    metadata.superclass = class.super_name().map(simple_name).unwrap_or("").to_owned();
+    let superclass = metadata.superclass.to_ascii_lowercase();
+    metadata.water_mob = ["watermob", "squid", "fish"].iter().any(|token| superclass.contains(token));
+    metadata.flying_mob = ["flying", "ambient", "bat"].iter().any(|token| superclass.contains(token));
+    metadata.fire_immune = class.constant_pool.iter().filter_map(|entry| match entry.as_ref() {
+        Some(crate::bytecode::ConstantPoolEntry::Utf8(value)) => Some(value.as_str()),
+        _ => None,
+    }).any(|value| value.contains("fireImmune") || value.contains("field_70178_ae"));
+
+    let mut found_attributes = HashSet::<&'static str>::new();
+    let mut size_values = Vec::<(f64, f64)>::new();
+    let mut ai_classes = HashSet::<String>::new();
+
+    for method in &class.methods {
+        let Some(code) = method.code.as_ref() else { continue; };
+        let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+        let mut stack = Vec::<CompiledValue>::new();
+        let mut objects = Vec::<CompiledObject>::new();
+        let mut current_attribute: Option<&'static str> = None;
+        let mut recent_numeric: Option<f64> = None;
+
+        for instruction in &instructions {
+            let op = instruction.opcode;
+            if op == 0x00 { continue; }
+
+            if let Some((index, load)) = compiled_local(instruction) {
+                if load {
+                    stack.push(CompiledValue::Null);
+                } else {
+                    let _ = compiled_pop(&mut stack);
+                }
+                let _ = index;
+                continue;
+            }
+            if matches!(op, 0x15..=0x18 | 0x1a..=0x29) {
+                stack.push(CompiledValue::Null);
+                continue;
+            }
+            if matches!(op, 0x36..=0x39 | 0x3b..=0x4a) {
+                let _ = compiled_pop(&mut stack);
+                continue;
+            }
+
+            if (0x02..=0x14).contains(&op) {
+                if let Some(value) = compiled_constant(&class, instruction) {
+                    if let CompiledValue::Number(number) = value {
+                        recent_numeric = Some(number);
+                        stack.push(CompiledValue::Number(number));
+                    } else {
+                        stack.push(value);
+                    }
+                }
+                continue;
+            }
+
+            match op {
+                0x01 => stack.push(CompiledValue::Null),
+                0xbb => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let name = class.class_name(index).unwrap_or("java/lang/Object").to_owned();
+                    let simple = simple_name(&name);
+                    if simple.starts_with("EntityAI") || simple.ends_with("Goal") {
+                        ai_classes.insert(simple.to_owned());
+                    }
+                    let object_index = objects.len();
+                    objects.push(CompiledObject { class_name: name, arguments: Vec::new() });
+                    stack.push(CompiledValue::Object(object_index));
+                }
+                0x57 => { let _ = compiled_pop(&mut stack); }
+                0x58 => { let _ = compiled_pop(&mut stack); let _ = compiled_pop(&mut stack); }
+                0x59 => {
+                    if let Some(value) = stack.last().cloned() { stack.push(value); }
+                }
+                0x5a => {
+                    if stack.len() >= 2 {
+                        let first = compiled_pop(&mut stack);
+                        let second = compiled_pop(&mut stack);
+                        stack.push(first.clone());
+                        stack.push(second);
+                        stack.push(first);
+                    }
+                }
+                0x5c => {
+                    if stack.len() >= 2 {
+                        let first = stack[stack.len() - 2].clone();
+                        let second = stack[stack.len() - 1].clone();
+                        stack.push(first);
+                        stack.push(second);
+                    } else if let Some(value) = stack.last().cloned() {
+                        stack.push(value);
+                    }
+                }
+                0xb2 => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    if let Some((_, name, _)) = class.member_reference(index) {
+                        current_attribute = entity_attribute_name(&name).or(current_attribute);
+                        stack.push(CompiledValue::Field(name));
+                    } else {
+                        stack.push(CompiledValue::Null);
+                    }
+                }
+                0xb4 => {
+                    let _ = compiled_pop(&mut stack);
+                    stack.push(CompiledValue::Null);
+                }
+                0xb3 => { let _ = compiled_pop(&mut stack); }
+                0xb5 => {
+                    let value = compiled_pop(&mut stack);
+                    let _owner = compiled_pop(&mut stack);
+                    if let Some((_, field, _)) = class.member_reference(compiled_u16(&instruction.operands, 0).unwrap_or(0)) {
+                        if matches!(field.as_str(), "field_70728_aV" | "xpReward" | "experienceReward") {
+                            if let CompiledValue::Number(number) = value {
+                                metadata.xp = number as i32;
+                                recent_numeric = Some(number);
+                            } else if let Some(number) = recent_numeric {
+                                metadata.xp = number as i32;
+                            }
+                        }
+                    }
+                }
+                0xb6..=0xb9 => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let Some((owner, name, descriptor)) = class.member_reference(index) else { continue; };
+                    let Ok(parsed) = parse_method_descriptor(&descriptor) else { continue; };
+                    let arguments = compiled_pop_n(&mut stack, parsed.parameters.len());
+                    let receiver = if op == 0xb8 { CompiledValue::Null } else { compiled_pop(&mut stack) };
+
+                    if name == "<init>" {
+                        if let CompiledValue::Object(object_index) = receiver {
+                            if let Some(object) = objects.get_mut(object_index) {
+                                object.class_name = owner;
+                                object.arguments = arguments;
+                            }
+                        }
+                    } else if matches!(name.as_str(), "setSize" | "func_70105_a") && arguments.len() >= 2 {
+                        let numbers: Vec<f64> = arguments.iter().filter_map(|value| {
+                            if let CompiledValue::Number(number) = value { Some(*number) } else { None }
+                        }).collect();
+                        if numbers.len() >= 2 {
+                            size_values.push((numbers[numbers.len() - 2], numbers[numbers.len() - 1]));
+                        }
+                    } else if matches!(name.as_str(), "setBaseValue" | "func_111128_a" | "add")
+                        && current_attribute.is_some()
+                    {
+                        let value = arguments.last().and_then(|argument| {
+                            if let CompiledValue::Number(number) = argument { Some(*number) } else { None }
+                        });
+                        if let (Some(attribute), Some(number)) = (current_attribute, value) {
+                            match attribute {
+                                "health" => metadata.health = number,
+                                "movement_speed" => metadata.movement_speed = number,
+                                "attack_damage" => metadata.attack_damage = number,
+                                "follow_range" => metadata.follow_range = number,
+                                "armor" => metadata.armor = number,
+                                _ => {}
+                            }
+                            found_attributes.insert(attribute);
+                        }
+                        current_attribute = None;
+                    } else if !matches!(parsed.return_type, crate::bytecode::JvmType::Void) {
+                        stack.push(CompiledValue::Null);
+                    }
+                }
+                0xba => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let count = class.invoke_dynamic(index)
+                        .and_then(|(_, _, descriptor)| parse_method_descriptor(&descriptor).ok())
+                        .map(|descriptor| descriptor.parameters.len())
+                        .unwrap_or(0);
+                    let _ = compiled_pop_n(&mut stack, count);
+                    stack.push(CompiledValue::Null);
+                }
+                0xc0 | 0xc1 => {}
+                0xac..=0xb1 | 0xbf => break,
+                _ => {}
+            }
+        }
     }
+
+    let has_size_assignment = !size_values.is_empty();
+    if let Some((width, height)) = size_values.iter().copied()
+        .max_by(|a, b| (a.0 * a.1).total_cmp(&(b.0 * b.1)))
+    {
+        metadata.width = width;
+        metadata.height = height;
+    }
+    metadata.ai_classes = ai_classes.into_iter().collect();
+    metadata.ai_classes.sort();
+
+    for (attribute, label) in [
+        ("health", "maximum health"),
+        ("attack_damage", "attack damage"),
+        ("movement_speed", "movement speed"),
+    ] {
+        if !found_attributes.contains(attribute) {
+            metadata.warnings.push(format!(
+                "{} was not assigned directly in this compiled entity class; the MCreator value is a safe fallback and may come from a superclass or custom stats helper.",
+                label[..1].to_ascii_uppercase() + &label[1..]
+            ));
+        }
+    }
+    if !has_size_assignment {
+        metadata.warnings.push("Entity dimensions were not assigned directly in the compiled class; default dimensions remain in use.".to_owned());
+    }
+    metadata.warnings.push(
+        "Entity source was unavailable; compiled constructor and attribute bytecode were used. Unrecognized fields remain at defaults.".to_owned()
+    );
     metadata
 }
 
@@ -1078,6 +1286,28 @@ mod tests {
         assert!((registration.shadow_size - 0.4).abs() < 1e-6);
         assert_eq!(registration.visual_scale, 1.0);
         assert_eq!(graph.entities["EntityPig"].class_name, "EntityPig");
+    }
+
+    #[test]
+    fn recovers_compiled_entity_dimensions_attributes_xp_and_ai() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("EntityStatFixture.class");
+        fs::write(
+            &path,
+            include_bytes!("../tests/fixtures/EntityStatFixture.class")
+        ).unwrap();
+
+        let metadata = parse_entity_class_metadata(&path, "EntityStatFixture", None);
+        assert!((metadata.width - 1.2).abs() < 1e-5);
+        assert!((metadata.height - 1.4).abs() < 1e-5);
+        assert!((metadata.health - 42.0).abs() < 1e-8);
+        assert!((metadata.movement_speed - 0.28).abs() < 1e-8);
+        assert!((metadata.attack_damage - 7.0).abs() < 1e-8);
+        assert!((metadata.follow_range - 24.0).abs() < 1e-8);
+        assert_eq!(metadata.xp, 12);
+        assert!(metadata.fire_immune);
+        assert!(metadata.flying_mob);
+        assert!(metadata.ai_classes.contains(&"EntityAIAttackMelee".to_owned()));
     }
 
     #[test]
