@@ -104,6 +104,7 @@ impl MojModelBridgeApp {
                 let display = index.display_name.clone();
                 let count = index.entries.len();
                 self.browser = index;
+                self.active_page = "Content Browser".to_owned();
                 self.scan_status = format!("Indexed {count} assets · {display}");
                 self.selected_entry = None;
                 self.scene = None;
@@ -446,9 +447,6 @@ impl MojModelBridgeApp {
                 }
             }
         }
-        if self.texture_paths.len() > 1 {
-            self.refresh_preview_image();
-        }
     }
 
     fn show_viewport(
@@ -537,7 +535,17 @@ impl MojModelBridgeApp {
             }
         } else if entry.icon_kind == IconKind::MobEgg {
             let center = rect.center();
-            ui.painter().ellipse_filled(center, egui::vec2(54.0, 70.0), Color32::from_rgb(230, 230, 218));
+            let mut outline = Vec::new();
+            for index in 0..32 {
+                let angle = std::f32::consts::TAU * index as f32 / 32.0;
+                let vertical = if angle.sin() < 0.0 { 0.82 } else { 1.08 };
+                outline.push(center + egui::vec2(angle.cos() * 42.0, angle.sin() * 58.0 * vertical));
+            }
+            ui.painter().add(egui::Shape::convex_polygon(
+                outline,
+                Color32::from_rgb(230, 230, 218),
+                egui::Stroke::new(2.0, Color32::from_rgb(7, 9, 12)),
+            ));
             ui.painter().circle_filled(center + egui::vec2(2.0, 8.0), 24.0, Color32::from_rgb(93, 153, 71));
         } else {
             ui.painter().text(
