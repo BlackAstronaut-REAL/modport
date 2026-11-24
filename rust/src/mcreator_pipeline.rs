@@ -382,7 +382,7 @@ mod tests {
         assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
         assert_eq!(report.source_modid, "examplemod");
         assert!(report.validation_ok);
-        assert_eq!(report.workspace_file, descriptor);
+        assert_eq!(report.workspace_file, fs::canonicalize(&descriptor).unwrap());
     }
 
     #[test]
