@@ -468,10 +468,14 @@ fn main() -> Result<()> {
             let total: usize = report.stages.iter().map(|stage| stage.exported).sum();
             let skipped: usize = report.stages.iter().map(|stage| stage.skipped).sum();
             println!(
-                "Native export pipeline complete: {} element(s) exported, {} skipped across {} stages.",
+                "Native export pipeline finished: {} element(s) exported, {} skipped across {} stages.",
                 total,
                 skipped,
                 report.stages.len()
+            );
+            println!(
+                "Workspace validation: {}.",
+                if report.validation_ok { "PASS" } else { "FAIL" }
             );
             println!("Updated workspace: {}", report.workspace_file.display());
             for stage in report.stages {
