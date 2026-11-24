@@ -329,6 +329,28 @@ pub fn export_living_entities_to_workspace(
     let mut skipped = 0usize;
 
     for registration in &graph.registrations {
+        let existing_generated = workspace.get("mod_elements").and_then(Value::as_array)
+            .into_iter().flatten().enumerate().find_map(|(index, descriptor)| {
+                let matches = descriptor.get("mojmodelbridge_generated").and_then(Value::as_bool) == Some(true)
+                    && descriptor.get("mojmodelbridge_source_modid").and_then(Value::as_str) == Some(source_modid.as_str())
+                    && descriptor.get("mojmodelbridge_source_entity_class").and_then(Value::as_str)
+                        == Some(registration.entity_class.as_str());
+                if !matches { return None; }
+                Some((
+                    index,
+                    descriptor.get("name").and_then(Value::as_str).unwrap_or("").to_owned(),
+                    descriptor.get("registry_name").and_then(Value::as_str).unwrap_or("").to_owned(),
+                    descriptor.get("mojmodelbridge_model_class").and_then(Value::as_str).map(str::to_owned),
+                ))
+            });
+        if existing_generated.is_some() && !overwrite {
+            skipped += 1;
+            warnings.push(format!(
+                "{} was already exported by MojModelBridge; skipped it (use --overwrite to refresh it).",
+                registration.entity_class
+            ));
+            continue;
+        }
         if registration.entity_class.is_empty() || registration.model_class.is_empty() {
             skipped += 1;
             warnings.push("Skipped a renderer registration with missing entity/model class.".to_owned());
@@ -345,35 +367,44 @@ pub fn export_living_entities_to_workspace(
         let registry_base = slug(graph.registry_names.get(&registration.entity_class)
             .map(String::as_str).filter(|value| !value.is_empty())
             .unwrap_or(&raw_meta.registry_name));
-        let mut registry_name = registry_base.clone();
         let desired_element = pascal(registration.entity_class
             .strip_prefix("Entity").or_else(|| registration.entity_class.strip_prefix("Mob"))
             .unwrap_or(&registration.entity_class));
-        let mut element_name = desired_element.clone();
-        if used_registries.contains(&registry_name.to_ascii_lowercase()) {
-            registry_name = slug(&format!("{source_modid}_{registry_base}"));
-        }
-        if used_names.contains(&element_name.to_ascii_lowercase()) {
-            element_name = format!("{}_{}", desired_element, pascal(&source_modid));
-        }
-        element_name = unique_name(&element_name, &mut used_names);
-        if used_registries.contains(&registry_name.to_ascii_lowercase()) {
-            registry_name = unique_name(&registry_name, &mut used_registries);
+        let (element_name, registry_name) = if let Some((_, name, registry, _)) = existing_generated.as_ref() {
+            (name.clone(), registry.clone())
         } else {
-            used_registries.insert(registry_name.to_ascii_lowercase());
-        }
+            let mut registry_name = registry_base.clone();
+            let mut element_name = desired_element.clone();
+            if used_registries.contains(&registry_name.to_ascii_lowercase()) {
+                registry_name = slug(&format!("{source_modid}_{registry_base}"));
+            }
+            if used_names.contains(&element_name.to_ascii_lowercase()) {
+                element_name = format!("{}_{}", desired_element, pascal(&source_modid));
+            }
+            element_name = unique_name(&element_name, &mut used_names);
+            if used_registries.contains(&registry_name.to_ascii_lowercase()) {
+                registry_name = unique_name(&registry_name, &mut used_registries);
+            } else {
+                used_registries.insert(registry_name.to_ascii_lowercase());
+            }
+            (element_name, registry_name)
+        };
 
-        let source_key = format!("{}|{}|{}", source_model.to_string_lossy(),
-            serde_json::to_string(&registration.model_args)?, generator);
+        let mut requested_model_class = existing_generated.as_ref()
+            .and_then(|entry| entry.3.clone())
+            .unwrap_or_else(|| pascal(&registration.model_class));
+        if existing_generated.as_ref().and_then(|entry| entry.3.as_ref()).is_none()
+            && model_cache.values().any(|entry| entry.class_name.eq_ignore_ascii_case(&requested_model_class))
+        {
+            requested_model_class = pascal(&format!("{} {}", registration.model_class, element_name));
+        }
+        let source_key = format!("{}|{}|{}|{}", source_model.to_string_lossy(),
+            serde_json::to_string(&registration.model_args)?, generator, requested_model_class);
         let cached = if let Some(cached) = model_cache.get(&source_key) {
             cached.clone()
         } else {
-            let mut model_class = pascal(&registration.model_class);
-            if model_cache.values().any(|entry| entry.class_name.eq_ignore_ascii_case(&model_class)) {
-                model_class = pascal(&format!("{} {}", registration.model_class, element_name));
-            }
             let generated = export_model_sources_with_args(
-                &source_model, &workspace_root, &modid, Some(&model_class),
+                &source_model, &workspace_root, &modid, Some(&requested_model_class),
                 &generator, overwrite, &registration.model_args
             )?;
             let cache = CachedModelExport { class_name: generated.class_name.clone(), export: generated };
@@ -413,10 +444,21 @@ pub fn export_living_entities_to_workspace(
             "path":format!("~/Converted {source_modid}/Mobs"),
             "mojmodelbridge_generated":true,
             "mojmodelbridge_source_modid":source_modid,
-            "mojmodelbridge_source_registry":registry_base
+            "mojmodelbridge_source_registry":registry_base,
+            "mojmodelbridge_source_entity_class":registration.entity_class,
+            "mojmodelbridge_model_class":cached.class_name
         });
-        workspace.get_mut("mod_elements").and_then(Value::as_array_mut)
-            .expect("validated mod_elements array").push(descriptor);
+        let descriptors = workspace.get_mut("mod_elements").and_then(Value::as_array_mut)
+            .expect("validated mod_elements array");
+        if let Some((index, _, _, _)) = existing_generated {
+            if let Some(existing) = descriptors.get_mut(index) {
+                *existing = descriptor;
+            } else {
+                descriptors.push(descriptor);
+            }
+        } else {
+            descriptors.push(descriptor);
+        }
         update_language(&mut workspace, &modid, &element_name, &registry_name, &raw_meta.display_name);
 
         records.push(WorkspaceEntityRecord {
@@ -521,5 +563,20 @@ mod tests {
         assert!(workspace.join("elements/WingBeast.mod.json").is_file());
         assert!(workspace.join("src/main/resources/assets/demo/textures/entities/model_wing.png").is_file());
         assert!(workspace.join("src/main/java/net/demo/client/model/ModelWing.java").is_file());
+
+        let skipped = export_living_entities_to_workspace(
+            &graph, &workspace, "neoforge-1.21.1", false
+        ).unwrap();
+        assert_eq!(skipped.exported_entities, 0);
+        assert_eq!(skipped.skipped_entities, 1);
+        let after_skip: Value = serde_json::from_slice(&fs::read(workspace.join("demo.mcreator")).unwrap()).unwrap();
+        assert_eq!(after_skip["mod_elements"].as_array().unwrap().len(), 2);
+
+        let refreshed = export_living_entities_to_workspace(
+            &graph, &workspace, "neoforge-1.21.1", true
+        ).unwrap();
+        assert_eq!(refreshed.exported_entities, 1);
+        let after_refresh: Value = serde_json::from_slice(&fs::read(workspace.join("demo.mcreator")).unwrap()).unwrap();
+        assert_eq!(after_refresh["mod_elements"].as_array().unwrap().len(), 2);
     }
 }
