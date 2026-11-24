@@ -353,7 +353,7 @@ pub fn export_worldgen_to_workspace(
         let updates = crate::worldgen_bridge::resource_biome_updates(payload);
         let name = display_name(registry);
         let definition = merge_definition(&biome_template,&updates,&name);
-        let element_name = unique_element_name(&format!("{name}Biome"),&mut used_names);
+        let element_name = unique_element_name(&format!("{}Biome",pascal_name(registry)),&mut used_names);
         write_worldgen_element(
             &output_elements,&element_name,"biome",template_version(&biome_template,imported_fv),definition
         )?;
@@ -386,7 +386,7 @@ pub fn export_worldgen_to_workspace(
         );
         let name = display_name(registry);
         let definition = merge_definition(&dimension_template,&updates,&name);
-        let element_name = unique_element_name(&format!("{name}Dimension"),&mut used_names);
+        let element_name = unique_element_name(&format!("{}Dimension",pascal_name(registry)),&mut used_names);
         write_worldgen_element(
             &output_elements,&element_name,"dimension",template_version(&dimension_template,imported_fv),definition
         )?;
