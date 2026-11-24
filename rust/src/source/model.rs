@@ -361,7 +361,7 @@ fn extract_modern_render_instances(
         let Ok((loop_body, loop_end)) = extract_balanced(after, loop_open, '{', '}') else { continue; };
         let post_loop = &after[loop_end..];
         if !increment_pattern.captures_iter(post_loop).any(|entry| entry[1] == variable) { continue; }
-        let rendered = resolve_rendered_parts(&loop_body, parts, &aliases);
+        let rendered = resolve_rendered_parts(&loop_body, &aliases);
         let selected: Vec<String> = rendered.into_iter().filter(|name| render_instances.contains_key(name)).collect();
         if selected.is_empty() { continue; }
         if let Ok(speed) = eval_number(increment, constants) {
