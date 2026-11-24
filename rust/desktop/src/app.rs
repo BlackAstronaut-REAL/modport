@@ -1,7 +1,7 @@
 use crate::browser::{self, BrowserEntry, BrowserIndex, IconKind};
 use crate::renderer::{self, Camera};
 use crate::tooltip;
-use eframe::egui::{self, Color32, FontFamily, FontId, RichText, TextureHandle, TextureOptions};
+use eframe::egui::{self, Color32, FontFamily, RichText, TextureHandle, TextureOptions};
 use image::RgbaImage;
 use mojmodelbridge::pipeline::load_model_preview;
 use mojmodelbridge::viewer::ViewerScene;
@@ -62,7 +62,7 @@ impl MojModelBridgeApp {
         visuals.selection.bg_fill = Color32::from_rgb(52, 111, 190);
         visuals.override_text_color = Some(TEXT);
         context.egui_ctx.set_visuals(visuals);
-        context.egui_ctx.style_mut(|style| {
+        context.egui_ctx.global_style_mut(|style| {
             style.spacing.item_spacing = egui::vec2(8.0, 7.0);
             style.spacing.button_padding = egui::vec2(10.0, 7.0);
             style.visuals.window_corner_radius = egui::CornerRadius::same(8);
@@ -187,13 +187,13 @@ impl MojModelBridgeApp {
         Some(handle)
     }
 
-    fn show_sidebar(&mut self, context: &egui::Context) {
+    fn show_sidebar(&mut self, root_ui: &mut egui::Ui) {
         let width = if self.sidebar_collapsed { 68.0 } else { 196.0 };
-        egui::SidePanel::left("main_navigation")
-            .exact_width(width)
+        egui::Panel::left("main_navigation")
+            .exact_size(width)
             .resizable(false)
             .frame(egui::Frame::new().fill(Color32::from_rgb(14, 19, 28)).inner_margin(10.0))
-            .show(context, |ui| {
+            .show(root_ui, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button(if self.sidebar_collapsed { "»" } else { "«" }).clicked() {
                         self.sidebar_collapsed = !self.sidebar_collapsed;
@@ -672,16 +672,16 @@ impl eframe::App for MojModelBridgeApp {
     }
 
     fn ui(&mut self, root_ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let context = root_ui.ctx().clone();
-        self.show_sidebar(&context);
+        self.show_sidebar(root_ui);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(BACKGROUND).inner_margin(14.0))
-            .show(&context, |ui| {
-                self.show_header(context, ui);
+            .show(root_ui, |ui| {
+                let context = ui.ctx().clone();
+                self.show_header(&context, ui);
                 ui.separator();
                 let active_page = self.active_page.clone();
                 match active_page.as_str() {
-                    "Content Browser" => self.show_browser(context, ui),
+                    "Content Browser" => self.show_browser(&context, ui),
                     "Dashboard" => self.show_dashboard(ui),
                     _ => {
                         ui.add_space(18.0);
