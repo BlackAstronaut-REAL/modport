@@ -64,7 +64,7 @@ fn windows_command_line(executable: &Path, args: &[String]) -> Result<String> {
         if value.contains('"') || value.contains('\r') || value.contains('\n') {
             bail!("Gradle executable/arguments cannot contain quotes or newlines when using the Windows batch wrapper");
         }
-        quoted.push(format!(""{value}""));
+        quoted.push(format!("\"{value}\""));
     }
     Ok(quoted.join(" "))
 }
