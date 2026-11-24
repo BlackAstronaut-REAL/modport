@@ -251,7 +251,7 @@ impl TextureIndex {
         let model_canon = canonical_name(model_name);
         let mut result = Vec::new();
         for (index, record) in self.records.iter().enumerate() {
-            let mut score = 0.0;
+            let mut score: f64 = 0.0;
             let mut reason = String::new();
             let mentions_exact = record.model_mentions.iter().any(|name| canonical_name(name) == model_canon);
             let stem_canon = canonical_name(record.path.file_stem().and_then(|v| v.to_str()).unwrap_or(""));
