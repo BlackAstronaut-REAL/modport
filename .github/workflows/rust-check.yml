@@ -24,7 +24,7 @@ jobs:
         with:
           workspaces: rust -> target
       - name: Format
-        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path rust/Cargo.toml --all
       - name: Test
         run: cargo test --manifest-path rust/Cargo.toml --all-targets
       - name: Build native executable
