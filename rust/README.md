@@ -40,6 +40,7 @@ the engine into the native executable.
 - Native Minecraft recipe discovery, MCreator element emission, workspace descriptor updates and data-pack copying for shaped/shapeless crafting, cooking, stonecutting and smithing; item/block/tag references are mapped to MCreator tokens; legacy addShapedRecipe/addShapelessRecipe Java calls are recovered when JSON recipes are absent.
 - Native item/tool MCreator element builders and Java source discovery, including legacy registerItem/registerBlock and modern ITEMS/BLOCKS.register calls; workspace element, texture, metadata and language-map updates.
 - Native MCreator armor set discovery and grouped four-piece export, including independent item icons, layer-1/layer-2 texture copying, metadata manifests and localization.
+- Native registered block export using block/blockstate JSON inference, render-type classification, source model/blockstate copying, texture materialization, and hardness/resistance/light/tool-property recovery.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -55,6 +56,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- export-recipes path/to/MCreatorWorkspace path/to/source --source-modid oldmod --registry-map path/to/registry-map.json
     cargo run --manifest-path rust/Cargo.toml -- export-equipment path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-armor path/to/MCreatorWorkspace path/to/source --source-modid oldmod
+    cargo run --manifest-path rust/Cargo.toml -- export-blocks path/to/MCreatorWorkspace path/to/source --source-modid oldmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -103,6 +105,14 @@ The `export-armor` command groups Java-declared helmet/body/leggings/boots field
 
 ```powershell
 mojmodelbridge export-armor .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
+```
+
+### MCreator block export
+
+The `export-blocks` command discovers registered Java Block subclasses, resolves blockstate variants/multipart models, classifies supported vanilla model parents into MCreator render types, copies blockstate/model JSON with namespace remapping, copies referenced textures and animation metadata, and writes block element/workspace metadata. Hardness, resistance, luminance, gravity/waterlogging, basic sound type and common tool tags are recovered where source evidence is present. Custom loot/drop procedures, complete state/property mapping, and plants are still separate work.
+
+```powershell
+mojmodelbridge export-blocks .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
 ```
 
 ### Renderer-linked MCreator entity export
