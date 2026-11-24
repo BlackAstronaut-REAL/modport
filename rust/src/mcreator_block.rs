@@ -344,20 +344,21 @@ fn number_after(source: &str, patterns: &[&str]) -> Option<f64> {
 }
 
 fn block_display(registry: &str) -> String {
-    pascal(registry).chars().collect::<String>()
-        .split_inclusive(|ch:char| !ch.is_ascii_alphanumeric())
+    registry.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
         .map(|word| {
             let mut chars=word.chars();
             match chars.next() {
-                Some(first)=> {
+                Some(first) => {
                     let mut out=first.to_ascii_uppercase().to_string();
                     out.extend(chars.map(|ch|ch.to_ascii_lowercase()));
                     out
                 },
-                None=>String::new()
+                None => String::new()
             }
-        }).collect::<String>()
-        .replace('_'," ")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn placeholder_png() -> Vec<u8> {
@@ -505,6 +506,14 @@ pub fn export_blocks_to_workspace(
             let resolved=crate::block_model_bridge::copy_model_ref_texture_to_workspace(
                 model_path,raw,&texture_root,"block",&registry
             )?;
+            if !resolved.starts_with("minecraft:") {
+                let target=texture_root.join("block").join(format!("{resolved}.png"));
+                if !target.is_file() {
+                    fs::create_dir_all(target.parent().unwrap())?;
+                    fs::write(&target,placeholder_png())?;
+                    report.warnings.push(format!("Model texture '{}' for {} could not be copied; generated placeholder '{}'.",raw,registry,target.file_name().unwrap_or_default().to_string_lossy()));
+                }
+            }
             textures.insert(key.to_owned(),resolved);
         }
 
@@ -563,12 +572,12 @@ pub fn export_blocks_to_workspace(
         language.insert(format!("block.{target_modid}.{element_name}"),json!(block_display(&registry)));
 
         report.exported+=1;
+        report.warnings.extend(warnings.clone());
         report.records.push(BlockExportRecord{
             class_name:source.class_name,element_name,registry_name:registry,
             render_type:info.get("renderType").and_then(Value::as_i64).unwrap_or(0),
             textures,source_resources:metadata.into_iter().collect(),warnings
         });
-        report.warnings.extend(warnings);
         existing.insert(source.registry_name.to_ascii_lowercase());
     }
 
