@@ -927,6 +927,11 @@ fn block_render_shape_from_model(path: &Path) -> String {
     {
         return "floor".to_owned();
     }
+    if parent.ends_with("block/cube") || parent.ends_with("block/cube_all")
+        || parent.ends_with("block/cube_column") || parent.ends_with("block/orientable")
+    {
+        return "cube".to_owned();
+    }
     let elements = payload.get("elements").and_then(Value::as_array);
     if let Some(elements) = elements.filter(|elements| !elements.is_empty()) {
         let mut low = f64::INFINITY;
@@ -1402,6 +1407,35 @@ mod tests {
         assert_eq!(resolved, Some(model.clone()));
         assert_eq!(shape.as_deref(), Some("plant"));
         assert_eq!(block_render_shape_from_model(&model), "plant");
+    }
+
+    #[test]
+    fn links_legacy_block_render_id_to_renderer_model_and_texture() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("src/main/java/demo")).unwrap();
+        fs::create_dir_all(root.join("assets/demo/textures/blocks")).unwrap();
+        let block_source = root.join("src/main/java/demo/BlockPizza.java");
+        let renderer_source = root.join("src/main/java/demo/PizzaBlockRenderer.java");
+        let model_source = root.join("src/main/java/demo/ModelPizza.java");
+        let texture = root.join("assets/demo/textures/blocks/pizza.png");
+        fs::write(&block_source, "class BlockPizza extends Block { int getRenderType() { return 47; } }").unwrap();
+        fs::write(&renderer_source, r#"
+            class PizzaBlockRenderer implements ISimpleBlockRenderingHandler {
+                int getRenderId() { return 47; }
+                void renderWorldBlock() { ModelPizza model = new ModelPizza(); }
+                String texture = "demo:textures/blocks/pizza.png";
+            }
+        "#).unwrap();
+        fs::write(&model_source, "class ModelPizza {}").unwrap();
+        fs::write(&texture, b"png").unwrap();
+        let files = vec![block_source, renderer_source, model_source.clone(), texture.clone()];
+        let (model, textures) = find_linked_legacy_block_model(
+            &files,
+            "class BlockPizza extends Block { int getRenderType() { return 47; } }",
+        );
+        assert_eq!(model, Some(model_source));
+        assert_eq!(textures, vec![texture]);
     }
 
     #[test]
