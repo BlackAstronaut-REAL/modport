@@ -87,6 +87,58 @@ pub struct MojModelBridgeApp {
     minecraftia_available: bool,
 }
 
+fn parse_animated_texture(
+    image_dimensions: (u32, u32),
+    metadata: &serde_json::Value,
+) -> Option<AnimatedTexture> {
+    let animation = metadata.get("animation")?.as_object()?;
+    let (image_width, image_height) = image_dimensions;
+    let width = animation.get("width").and_then(serde_json::Value::as_u64)
+        .map(|value| value as u32).unwrap_or(image_width);
+    let height = animation.get("height").and_then(serde_json::Value::as_u64)
+        .map(|value| value as u32).unwrap_or(width);
+    if width == 0 || height == 0 || width > image_width || height > image_height {
+        return None;
+    }
+    let columns = image_width / width;
+    let rows = image_height / height;
+    if columns == 0 || rows == 0 { return None; }
+    let frame_count = columns.saturating_mul(rows);
+    let default_duration = animation.get("frametime").and_then(serde_json::Value::as_u64)
+        .unwrap_or(1).max(1) as f32 / 20.0;
+    let frames = if let Some(raw_frames) = animation.get("frames").and_then(serde_json::Value::as_array) {
+        raw_frames.iter().filter_map(|raw| {
+            let (index, duration) = if let Some(index) = raw.as_u64() {
+                (index as u32, default_duration)
+            } else {
+                let object = raw.as_object()?;
+                let index = object.get("index")?.as_u64()? as u32;
+                let ticks = object.get("time").and_then(serde_json::Value::as_u64)
+                    .unwrap_or((default_duration * 20.0) as u64).max(1);
+                (index, ticks as f32 / 20.0)
+            };
+            (index < frame_count).then_some(AnimatedTextureFrame {
+                index,
+                duration_seconds: duration,
+            })
+        }).collect::<Vec<_>>()
+    } else {
+        (0..frame_count).map(|index| AnimatedTextureFrame {
+            index,
+            duration_seconds: default_duration,
+        }).collect()
+    };
+    if frames.is_empty() { return None; }
+    Some(AnimatedTexture {
+        frame_width: width,
+        frame_height: height,
+        columns,
+        frames,
+        elapsed_seconds: 0.0,
+        current_frame: 0,
+    })
+}
+
 impl MojModelBridgeApp {
     pub fn new(context: &eframe::CreationContext<'_>) -> Self {
         let minecraftia_available = load_minecraftia_font(&context.egui_ctx);
@@ -254,53 +306,8 @@ impl MojModelBridgeApp {
         let metadata_path = PathBuf::from(format!("{}.mcmeta", path.display()));
         let Ok(bytes) = fs::read(&metadata_path) else { return; };
         let Ok(metadata) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return; };
-        let Some(animation) = metadata.get("animation").and_then(serde_json::Value::as_object) else { return; };
-
-        let width = animation.get("width").and_then(serde_json::Value::as_u64)
-            .map(|value| value as u32).unwrap_or(image.width());
-        let height = animation.get("height").and_then(serde_json::Value::as_u64)
-            .map(|value| value as u32).unwrap_or(width);
-        if width == 0 || height == 0 || width > image.width() || height > image.height() {
-            return;
-        }
-        let columns = image.width() / width;
-        let rows = image.height() / height;
-        if columns == 0 || rows == 0 { return; }
-        let frame_count = columns.saturating_mul(rows);
-        let default_duration = animation.get("frametime").and_then(serde_json::Value::as_u64)
-            .unwrap_or(1).max(1) as f32 / 20.0;
-
-        let frames = if let Some(raw_frames) = animation.get("frames").and_then(serde_json::Value::as_array) {
-            raw_frames.iter().filter_map(|raw| {
-                let (index, duration) = if let Some(index) = raw.as_u64() {
-                    (index as u32, default_duration)
-                } else {
-                    let object = raw.as_object()?;
-                    let index = object.get("index")?.as_u64()? as u32;
-                    let ticks = object.get("time").and_then(serde_json::Value::as_u64)
-                        .unwrap_or((default_duration * 20.0) as u64).max(1);
-                    (index, ticks as f32 / 20.0)
-                };
-                (index < frame_count).then_some(AnimatedTextureFrame { index, duration_seconds: duration })
-            }).collect::<Vec<_>>()
-        } else {
-            (0..frame_count).map(|index| AnimatedTextureFrame {
-                index,
-                duration_seconds: default_duration,
-            }).collect()
-        };
-        if frames.is_empty() { return; }
-
-        let mut animated = AnimatedTexture {
-            frame_width: width,
-            frame_height: height,
-            columns,
-            frames,
-            elapsed_seconds: 0.0,
-            current_frame: 0,
-        };
+        let Some(animated) = parse_animated_texture((image.width(), image.height()), &metadata) else { return; };
         self.preview_image = Some(animated.crop(image, 0));
-        animated.current_frame = animated.frame_at(0.0);
         self.texture_animation = Some(animated);
     }
 
@@ -890,4 +897,44 @@ fn load_minecraftia_font(context: &egui::Context) -> bool {
         .or_default().push("minecraftia".to_owned());
     context.set_fonts(fonts);
     true
+}
+
+#[cfg(test)]
+mod texture_animation_tests {
+    use super::*;
+
+    #[test]
+    fn parses_mcmeta_frame_order_and_per_frame_durations() {
+        let metadata = serde_json::json!({
+            "animation": {
+                "width": 16,
+                "height": 16,
+                "frametime": 2,
+                "frames": [0, {"index": 2, "time": 4}]
+            }
+        });
+        let animation = parse_animated_texture((32, 48), &metadata).unwrap();
+        assert_eq!(animation.columns, 2);
+        assert_eq!(animation.frame_width, 16);
+        assert_eq!(animation.frame_height, 16);
+        assert_eq!(animation.frames.len(), 2);
+        assert_eq!(animation.frame_at(0.05), 0);
+        assert_eq!(animation.frame_at(0.15), 1);
+        assert_eq!(animation.frame_at(0.31), 0);
+    }
+
+    #[test]
+    fn crops_vertical_and_multi_column_animation_frames() {
+        let mut image = RgbaImage::new(32, 48);
+        image.put_pixel(0, 16, image::Rgba([10, 20, 30, 255]));
+        image.put_pixel(16, 0, image::Rgba([40, 50, 60, 255]));
+        let metadata = serde_json::json!({
+            "animation": {"width": 16, "height": 16, "frames": [2, 1]}
+        });
+        let animation = parse_animated_texture((32, 48), &metadata).unwrap();
+        let frame = animation.crop(&image, 0);
+        assert_eq!(frame.dimensions(), (16, 16));
+        assert_eq!(frame.get_pixel(0, 0).0, [10, 20, 30, 255]);
+        assert_eq!(animation.crop(&image, 1).get_pixel(0, 0).0, [40, 50, 60, 255]);
+    }
 }
