@@ -142,7 +142,7 @@ pub fn build_plant_element(
     definition.insert("generateFeature".to_owned(), json!(true));
     definition.insert("frequencyOnChunks".to_owned(), json!(1));
     definition.insert("generateAtAnyHeight".to_owned(), json!(true));
-    definition.insert("restrictionBiomes".to_owned(), json!([]));
+    definition.insert("restrictionBiomes".to_owned(), Value::Array(Vec::new()));
     definition.insert("patchSize".to_owned(), json!(1));
     definition.insert("offsetType".to_owned(), json!("XZ"));
 
@@ -162,7 +162,7 @@ pub fn build_plant_element(
     if source.source_text.contains("getDrops") || source.source_text.contains("getDrop") {
         warnings.push("Custom plant drops were detected but are not yet reconstructed into MCreator drop/loot fields.".to_owned());
     }
-    if model_info.as_object().is_none_or(Value::is_null) {
+    if model_info.as_object().is_none_or(|object| object.is_empty()) {
         warnings.push("No plant block model was resolved; using the native cross-model plant schema.".to_owned());
     }
     warnings.push("Plant growth behavior, custom placement rules, and biome-specific growth conditions are not fully reconstructed.".to_owned());
@@ -368,15 +368,15 @@ pub fn export_plants_to_workspace(
             .insert(format!("block.{target_modid}.{registry}"), json!(display_name(&registry)));
 
         report.exported += 1;
+        report.warnings.extend(warnings.clone());
         report.records.push(PlantExportRecord {
             class_name:source.class_name,
             element_name,
             registry_name:registry.clone(),
             texture,
             source_resources:metadata.into_iter().collect(),
-            warnings:warnings.clone(),
+            warnings,
         });
-        report.warnings.extend(warnings);
         existing.insert(registry);
     }
 
