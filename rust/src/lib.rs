@@ -9,6 +9,7 @@
 pub mod archive;
 pub mod animation;
 pub mod blockbench;
+pub mod block_model_bridge;
 pub mod bytecode;
 pub mod discovery;
 pub mod metadata;
