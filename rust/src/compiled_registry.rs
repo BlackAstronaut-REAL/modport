@@ -464,6 +464,49 @@ mod tests {
     }
 
     #[test]
+    fn resolves_deferred_register_constructor_method_references() {
+        let class = ClassFile {
+            minor_version: 0,
+            major_version: 61,
+            access_flags: 0,
+            this_class: 2,
+            super_class: 0,
+            interfaces: Vec::new(),
+            constant_pool: vec![
+                None,
+                Some(ConstantPoolEntry::Utf8("RubyItem".to_owned())),
+                Some(ConstantPoolEntry::Class { name_index: 1 }),
+                Some(ConstantPoolEntry::Utf8("<init>".to_owned())),
+                Some(ConstantPoolEntry::Utf8("()V".to_owned())),
+                Some(ConstantPoolEntry::NameAndType { name_index: 3, descriptor_index: 4 }),
+                Some(ConstantPoolEntry::Methodref { class_index: 2, name_and_type_index: 5 }),
+                Some(ConstantPoolEntry::MethodHandle { reference_kind: 8, reference_index: 6 }),
+                Some(ConstantPoolEntry::Utf8("get".to_owned())),
+                Some(ConstantPoolEntry::Utf8("()Ljava/util/function/Supplier;".to_owned())),
+                Some(ConstantPoolEntry::NameAndType { name_index: 8, descriptor_index: 9 }),
+                Some(ConstantPoolEntry::InvokeDynamic { bootstrap_method_attr_index: 0, name_and_type_index: 10 }),
+            ],
+            fields: Vec::new(),
+            methods: Vec::new(),
+            attributes: Vec::new(),
+            bootstrap_methods: vec![crate::bytecode::classfile::BootstrapMethod {
+                method_ref: 0,
+                arguments: vec![7],
+            }],
+        };
+        let instruction = Instruction {
+            offset: 0,
+            opcode: 0xba,
+            mnemonic: "invokedynamic",
+            operands: vec![0, 11, 0, 0],
+        };
+        assert_eq!(
+            lambda_class(&class, &instruction, &HashMap::new()).as_deref(),
+            Some("RubyItem"),
+        );
+    }
+
+    #[test]
     fn reads_class_headers_and_class_literal_registrations_without_java_sources() {
         let temp = tempfile::tempdir().unwrap();
         let fixture = temp.path().join("LegacyEntityRegistry.class");
