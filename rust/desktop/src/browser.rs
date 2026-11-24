@@ -873,14 +873,14 @@ fn is_food_source(source: &str, superclass: &str) -> bool {
 
 fn declared_texture_refs(source: &str) -> Vec<String> {
     let mut refs = Vec::new();
-    let png = Regex::new(r#"(?i)"([^"\n]{1,240}\.png)""#).unwrap();
-    for capture in png.captures_iter(source) {
-        refs.push(capture[1].replace('\\', "/"));
-    }
+
+    // Explicit icon/texture API calls are the strongest signal for the
+    // registered item/block texture and should outrank unrelated PNG literals.
     let single = Regex::new(r#"(?i)\b(?:setTextureName|func_111206_d|setBlockTextureName|func_149658_d|registerIcon|func_94245_a|registerBlockIcons)\s*\([^)]*?["']([^"']+)["']"#).unwrap();
     for capture in single.captures_iter(source) {
         refs.push(capture[1].replace('\\', "/"));
     }
+
     let location = Regex::new(r#"new\s+ResourceLocation\s*\(\s*"([^"]+)"\s*(?:,\s*"([^"]+)")?"#).unwrap();
     for capture in location.captures_iter(source) {
         refs.push(if let Some(path) = capture.get(2) {
@@ -889,12 +889,20 @@ fn declared_texture_refs(source: &str) -> Vec<String> {
             capture[1].to_owned()
         });
     }
+
     let declared = Regex::new(r#"(?i)\b(?:texture|textureName|icon|iconName|sprite|spriteName)\s*(?:=|:)\s*"([^"]+)""#).unwrap();
     for capture in declared.captures_iter(source) {
         refs.push(capture[1].replace('\\', "/"));
     }
-    refs.sort_by_key(|value| value.to_ascii_lowercase());
-    refs.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+
+    // A literal PNG path is useful evidence, but weaker than a texture API call.
+    let png = Regex::new(r#"(?i)"([^"\n]{1,240}\.png)""#).unwrap();
+    for capture in png.captures_iter(source) {
+        refs.push(capture[1].replace('\\', "/"));
+    }
+
+    let mut seen = HashSet::new();
+    refs.retain(|value| seen.insert(value.to_ascii_lowercase()));
     refs
 }
 
