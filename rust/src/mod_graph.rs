@@ -760,7 +760,6 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
                     };
                     let arguments = compiled_pop_n(&mut stack, parsed.parameters.len());
                     let receiver = if op == 0xb8 { CompiledValue::Null } else { compiled_pop(&mut stack) };
-                    if debug_entity { println!("MBDBG invoke @{} {}{} args={:?} receiver={:?}", instruction.offset, name, descriptor, arguments, receiver); }
 
                     if name == "<init>" {
                         if let CompiledValue::Object(index) = receiver {
@@ -1007,6 +1006,7 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
                     let Ok(parsed) = parse_method_descriptor(&descriptor) else { continue; };
                     let arguments = compiled_pop_n(&mut stack, parsed.parameters.len());
                     let receiver = if op == 0xb8 { CompiledValue::Null } else { compiled_pop(&mut stack) };
+                    if debug_entity { println!("MBDBG invoke @{} {}{} args={:?} receiver={:?}", instruction.offset, name, descriptor, arguments, receiver); }
 
                     if name == "<init>" {
                         if let CompiledValue::Object(object_index) = receiver {
