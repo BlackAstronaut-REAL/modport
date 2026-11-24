@@ -278,6 +278,9 @@ pub fn parse_legacy_java_model(
         ("rotation_x", &["field_78795_f", "rotateAngleX", "xRot"]),
         ("rotation_y", &["field_78796_g", "rotateAngleY", "yRot"]),
         ("rotation_z", &["field_78808_h", "rotateAngleZ", "zRot"]),
+        ("position_x", &["field_78800_c", "rotationPointX"]),
+        ("position_y", &["field_78797_d", "rotationPointY"]),
+        ("position_z", &["field_78798_e", "rotationPointZ"]),
         ("mirror", &["field_78809_i", "mirror"]),
     ];
     for (kind, fields) in assignment_specs {
@@ -369,6 +372,11 @@ pub fn parse_legacy_java_model(
                     let value = eval_number(&event.raw_args, &constants)?;
                     let axis = match event.kind { "rotation_x" => 0, "rotation_y" => 1, _ => 2 };
                     builder.parts[index].rotation[axis] = value;
+                }
+                "position_x" | "position_y" | "position_z" => {
+                    let value = eval_number(&event.raw_args, &constants)?;
+                    let axis = match event.kind { "position_x" => 0, "position_y" => 1, _ => 2 };
+                    builder.parts[index].offset[axis] = value;
                 }
                 "rotation_delta_x" | "rotation_delta_y" | "rotation_delta_z" => {
                     let raw = event.raw_args.trim();
@@ -521,6 +529,24 @@ mod tests {
         let head = model.parts.iter().find(|p| p.name == "head").unwrap();
         assert_eq!(head.parent.as_deref(), Some("body"));
         assert_eq!(head.cubes[0].uv_x, 16);
+    }
+
+    #[test]
+    fn reads_direct_legacy_srg_and_named_rotation_point_assignments() {
+        let source = r#"
+            public class ModelDirectOffsets extends ModelBase {
+                public ModelRenderer body;
+                public ModelDirectOffsets() {
+                    this.body = new ModelRenderer(this, 0, 0);
+                    this.body.field_78800_c = 2.0F;
+                    this.body.field_78797_d = 5.0F;
+                    this.body.field_78798_e = -3.0F;
+                }
+            }
+        "#;
+        let model = parse_legacy_java_model(source, "ModelDirectOffsets.java", &[]).unwrap();
+        let body = model.parts.iter().find(|part| part.name == "body").unwrap();
+        assert_eq!(body.offset, [2.0, 5.0, -3.0]);
     }
 
     #[test]
