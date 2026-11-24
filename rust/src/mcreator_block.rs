@@ -225,11 +225,24 @@ fn modern_block_registrations(source: &str) -> Vec<(String, String)> {
     result
 }
 
+pub fn is_plant_source(source: &BlockSource) -> bool {
+    let superclass = source.superclass.to_ascii_lowercase();
+    let class = source.class_name.to_ascii_lowercase();
+    [
+        "blockflower", "blockbush", "blockcrops", "blocksapling",
+        "blocktallgrass", "blockplant", "blockreed", "flowerblock",
+        "saplingblock", "cropblock", "bushblock", "tallgrassblock",
+    ].iter().any(|token| superclass.contains(token))
+        || ["plant", "sapling", "flower", "bush", "crop", "reed", "tallgrass"]
+            .iter().any(|token| class.contains(token))
+}
+
 fn is_block_class(superclass: &str, parents: &BTreeMap<String, String>, depth: usize) -> bool {
     if depth > 12 { return false; }
     let parent = simple_name(superclass);
     let lower = parent.to_ascii_lowercase();
-    if lower == "block" || lower.ends_with("block") || lower == "bushblock" || lower == "plantblock" {
+    if lower == "block" || lower.ends_with("block")
+        || ["blockflower","blockbush","blockcrops","blocksapling","blocktallgrass","blockplant","blockreed","flowerblock","saplingblock","cropblock","bushblock","tallgrassblock"].iter().any(|token| lower.contains(token)) {
         return true;
     }
     parents.get(&parent).is_some_and(|next| is_block_class(next, parents, depth + 1))
@@ -494,6 +507,10 @@ pub fn export_blocks_to_workspace(
     fs::create_dir_all(&output_elements)?;
 
     for source in discovered{
+        if is_plant_source(&source) {
+            report.skipped += 1;
+            continue;
+        }
         let registry=source.registry_name.to_ascii_lowercase();
         if existing.contains(&registry){report.skipped+=1;continue;}
         let copied=crate::block_model_bridge::copy_source_block_model_resources(source_roots,source_modid,&target_modid,&registry,&workspace_root)?;
@@ -610,6 +627,26 @@ mod tests{
         assert_eq!(found.len(),2);
         assert!(found.iter().any(|b|b.class_name=="DemoBlock"&&b.registry_name=="demo_block"));
         assert!(found.iter().any(|b|b.class_name=="ModernBlock"&&b.registry_name=="modern"));
+    }
+
+    #[test]
+    fn plant_like_subclasses_are_not_emitted_as_regular_blocks() {
+        let plant = BlockSource {
+            class_name: "RubyFlower".to_owned(),
+            superclass: "BlockFlower".to_owned(),
+            registry_name: "ruby_flower".to_owned(),
+            source_path: "RubyFlower.java".to_owned(),
+            source_text: String::new(),
+        };
+        let ordinary = BlockSource {
+            class_name: "RubyOre".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "ruby_ore".to_owned(),
+            source_path: "RubyOre.java".to_owned(),
+            source_text: String::new(),
+        };
+        assert!(is_plant_source(&plant));
+        assert!(!is_plant_source(&ordinary));
     }
 
     #[test]
