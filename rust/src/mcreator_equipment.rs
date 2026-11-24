@@ -694,6 +694,141 @@ fn equipment_kind(class: &str, superclass: &str, parents: &BTreeMap<String, Stri
     None
 }
 
+fn parse_material_numbers(arguments: &[String]) -> Option<[f64; 5]> {
+    let numeric = Regex::new(r"^\s*(?:\(\s*float\s*\)\s*)?(-?\d+(?:\.\d+)?)[fFdD]?\s*$").ok()?;
+    let mut values = Vec::<f64>::new();
+    for argument in arguments {
+        if let Some(capture) = numeric.captures(argument) {
+            let value = capture.get(1)?.as_str().parse::<f64>().ok()?;
+            if value.is_finite() {
+                values.push(value);
+            }
+        }
+    }
+    if values.len() < 5 {
+        return None;
+    }
+    let tail = &values[values.len() - 5..];
+    Some([tail[0], tail[1], tail[2], tail[3], tail[4]])
+}
+
+fn material_stats_from_values(values: [f64; 5]) -> ToolMaterialStats {
+    ToolMaterialStats {
+        uses: Some(values[1].round() as i64),
+        efficiency: Some(values[2]),
+        damage: Some(values[3]),
+        enchantability: Some(values[4].round() as i64),
+    }
+}
+
+/// Recover legacy get_*stats objects and addToolMaterial fields, then associate
+/// each material with registered Item/Tool fields that pass it to constructors.
+pub fn source_tool_materials(
+    source_roots: &[PathBuf],
+    source_modid: &str,
+) -> BTreeMap<String, ToolMaterialStats> {
+    use crate::source::java::split_top_level;
+
+    let mut texts = Vec::<String>::new();
+    for path in java_files(source_roots) {
+        if let Ok(bytes) = fs::read(&path) {
+            texts.push(crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes)));
+        }
+    }
+    let combined = texts.join("\n");
+    let stat_call = Regex::new(
+        r"(?s)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:this\s*\.\s*)?(?:get|load)_[A-Za-z0-9_]*stats\s*\((.*?)\)\s*;"
+    ).expect("static tool stat expression");
+    let mut stat_objects = BTreeMap::<String, ToolMaterialStats>::new();
+    for capture in stat_call.captures_iter(&combined) {
+        let field = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+        let arguments = split_top_level(capture.get(2).map(|value| value.as_str()).unwrap_or(""), ',');
+        if let Some(values) = parse_material_numbers(&arguments) {
+            stat_objects.insert(field.to_owned(), material_stats_from_values(values));
+        }
+    }
+
+    let material_call = Regex::new(
+        r"(?s)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:EnumHelper\s*\.\s*)?addToolMaterial\s*\((.*?)\)\s*;"
+    ).expect("addToolMaterial expression");
+    let mut material_fields = BTreeMap::<String, ToolMaterialStats>::new();
+    for capture in material_call.captures_iter(&combined) {
+        let field = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+        let raw = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+        let arguments = split_top_level(raw, ',');
+        let referenced = Regex::new(r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*(?:harvestLevel|maxUses|efficiency|damage|enchantability)\b")
+            .expect("tool stat field reference")
+            .captures_iter(raw)
+            .filter_map(|capture| capture.get(1).map(|value| value.as_str().to_owned()))
+            .collect::<Vec<_>>();
+        let stats = referenced.iter().rev().find_map(|name| stat_objects.get(name).cloned())
+            .or_else(|| parse_material_numbers(&arguments).map(material_stats_from_values));
+        if let Some(stats) = stats {
+            material_fields.insert(field.to_owned(), stats);
+        }
+    }
+
+    let registered_fields = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
+    let mut results = BTreeMap::<String, ToolMaterialStats>::new();
+    let assignments = texts.iter().flat_map(|text| source_constructor_assignments(text)).collect::<Vec<_>>();
+    for (field, _class, arguments) in &assignments {
+        let tokens = Regex::new(r"\b[A-Za-z_$][A-Za-z0-9_$]*\b")
+            .expect("Java identifier")
+            .find_iter(arguments)
+            .map(|matched| matched.as_str())
+            .collect::<BTreeSet<_>>();
+        let Some(stats) = tokens.iter().find_map(|token| material_fields.get(*token)) else {
+            continue;
+        };
+        if let Some(registries) = registered_fields.get(field) {
+            for registry in registries {
+                results.insert(compact_name(registry), stats.clone());
+            }
+        }
+    }
+
+    // Modern deferred-register item factories usually expose the material token
+    // directly in their constructor lambda rather than through a static field assignment.
+    let modern = Regex::new(
+        r#"(?s)\b(?:ITEMS|itemRegistry|REGISTRY)\s*\.\s*register\s*\(\s*"([^"]+)"\s*,\s*\(\s*\)\s*->\s*new\s+[A-Za-z_$][A-Za-z0-9_$.]*\s*\(([^)]*)\)"#
+    ).expect("modern item registry factory");
+    for capture in modern.captures_iter(&combined) {
+        let registry = normalize_registry(capture.get(1).map(|value| value.as_str()).unwrap_or(""));
+        let arguments = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+        let tokens = Regex::new(r"\b[A-Za-z_$][A-Za-z0-9_$]*\b")
+            .expect("Java identifier")
+            .find_iter(arguments)
+            .map(|matched| matched.as_str())
+            .collect::<BTreeSet<_>>();
+        if let Some(stats) = tokens.iter().find_map(|token| material_fields.get(*token)) {
+            results.insert(compact_name(&registry), stats.clone());
+        }
+    }
+
+    // Fallback for older fields whose names encode a material, e.g. rubyPickaxe
+    // resolving to ruby_stats when constructor args are obscured by helper calls.
+    for (field, registries) in &registered_fields {
+        let normalized = compact_name(field);
+        let candidate = stat_objects.iter()
+            .filter_map(|(name, stats)| {
+                let key = compact_name(name.trim_end_matches("_stats"));
+                if !key.is_empty() && normalized.contains(&key) {
+                    Some((key.len(), stats))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(length, _)| *length)
+            .map(|(_, stats)| stats.clone());
+        if let Some(stats) = candidate {
+            for registry in registries {
+                results.entry(compact_name(registry)).or_insert_with(|| stats.clone());
+            }
+        }
+    }
+    results
+}
+
 /// Discover concrete Java-registered item/tool subclasses. Compiled-only registrations
 /// are not yet inferred here; bytecode registry scanning is a subsequent parity stage.
 pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<EquipmentSource>> {
@@ -988,6 +1123,7 @@ pub fn export_equipment_to_workspace(
     };
 
     let discovered = discover_equipment_sources(source_roots)?;
+    let tool_materials = source_tool_materials(source_roots, &import_modid);
     let mut report = EquipmentWorkspaceExportReport {
         workspace_file:workspace_file.clone(), discovered:discovered.len(), exported:0, skipped:0,
         records:Vec::new(), warnings:Vec::new(),
@@ -1057,7 +1193,7 @@ pub fn export_equipment_to_workspace(
             let tool_type = source.tool_type.as_deref().unwrap_or("Sword");
             build_tool_element(
                 Some(&template),&source.class_name,&source.superclass,&source.source_text,
-                &registry,&texture_name,tool_type,None,imported_fv
+                &registry,&texture_name,tool_type,tool_materials.get(&compact_name(&registry)),imported_fv
             )
         } else {
             build_item_element(
@@ -1195,6 +1331,29 @@ mod equipment_discovery_tests {
         assert_eq!(updated["mod_elements"][0]["registry_name"],"example");
         assert_eq!(updated["mod_elements"][0]["metadata"]["files"][0],"src/main/resources/assets/converted/textures/item/example.png");
         assert_eq!(updated["language_map"]["en_us"]["item.converted.example.name"],"Example");
+    }
+
+    #[test]
+    fn resolves_enumhelper_tool_material_to_registered_item() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join("ModItems.java"), r#"
+            public class ModItems {
+                public static ToolMaterial RUBY = EnumHelper.addToolMaterial("RUBY", 3, 850, 9.0F, 4.0F, 17);
+                public static final Item RUBY_PICKAXE = new RubyPickaxe(RUBY);
+                public static void register() {
+                    GameRegistry.registerItem(ModItems.RUBY_PICKAXE, "ruby_pickaxe");
+                }
+            }
+            public class RubyPickaxe extends ItemPickaxe { }
+        "#).unwrap();
+
+        let materials = source_tool_materials(&[root.to_path_buf()], "demo");
+        let ruby = &materials["rubypickaxe"];
+        assert_eq!(ruby.uses, Some(850));
+        assert_eq!(ruby.efficiency, Some(9.0));
+        assert_eq!(ruby.damage, Some(4.0));
+        assert_eq!(ruby.enchantability, Some(17));
     }
 
     #[test]
