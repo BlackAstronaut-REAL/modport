@@ -458,6 +458,22 @@ mod tests {
     }
 
     #[test]
+    fn reads_class_headers_and_class_literal_registrations_without_java_sources() {
+        let temp = tempfile::tempdir().unwrap();
+        let fixture = temp.path().join("LegacyEntityRegistry.class");
+        fs::write(
+            &fixture,
+            include_bytes!("../tests/fixtures/LegacyEntityRegistry.class"),
+        ).unwrap();
+        let index = scan_compiled_registrations(&[temp.path().to_path_buf()]).unwrap();
+        assert!(index.classes.contains_key("LegacyEntityRegistry"));
+        assert_eq!(
+            index.registries.get("EntityRedAnt").and_then(|values| values.iter().next()).map(String::as_str),
+            Some("red_ant"),
+        );
+    }
+
+    #[test]
     fn field_keys_include_owner_to_avoid_name_collisions() {
         assert_ne!(field_key("example/Items", "SWORD"), field_key("example/Blocks", "SWORD"));
     }
