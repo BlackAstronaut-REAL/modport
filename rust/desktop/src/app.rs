@@ -238,7 +238,12 @@ impl MojModelBridgeApp {
         self.selected_error.clear();
 
         if let Some(source) = entry.resource_model_source.as_ref() {
-            match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
+            let loaded = if entry.category == "Blocks" {
+                crate::resource_model::load_block_model(source, &self.browser.texture_roots)
+            } else {
+                crate::resource_model::load_item_model(source, &self.browser.texture_roots)
+            };
+            match loaded {
                 Ok((scene, textures)) => {
                     self.scene = Some(scene);
                     self.texture_paths = if !textures.is_empty() {
@@ -545,6 +550,10 @@ impl MojModelBridgeApp {
                     }
                 });
             });
+            if let Some(shape) = entry.render_shape.as_deref() {
+                ui.label(RichText::new(format!("In-game block model: {shape}"))
+                    .size(10.0).color(MUTED));
+            }
             self.show_viewer_controls(context, ui);
             self.show_viewport(context, ui, &entry, preview_height);
         });
