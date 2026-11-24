@@ -150,15 +150,18 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let icon_path = find_texture_reference(&all_files, &texture_refs)
             .or_else(|| find_texture_by_stems(&all_files, &[registry.as_str(), source.class_name.as_str()]));
         let resource_model_source = find_item_model_json(&all_files, &registry);
-        let model_source = find_linked_java_model(&all_files, &source.source_text, false);
+        let (renderer_model, renderer_textures) = find_held_renderer_model(&all_files, &registry);
+        let model_source = renderer_model
+            .or_else(|| find_linked_java_model(&all_files, &source.source_text, false));
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
         let components_json = find_item_components(&all_files, &registry)
             .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
             .unwrap_or_else(|| "{}".to_owned());
-        let texture_paths = resource_model_source.as_ref()
-            .map(|path| resource_model_texture_paths(&all_files, path))
-            .unwrap_or_default();
+        let mut texture_paths = renderer_textures;
+        if let Some(path) = resource_model_source.as_ref() {
+            append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
+        }
         add(BrowserEntry {
             category: category.to_owned(),
             name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
@@ -681,6 +684,182 @@ fn find_model_source_by_class(files: &[PathBuf], class_name: &str) -> Option<Pat
         let priority = if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java")) { 0 } else { 1 };
         (priority, path.to_string_lossy().to_ascii_lowercase())
     }).cloned()
+}
+
+fn find_held_renderer_model(files: &[PathBuf], registry: &str) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let field_registries = source_field_registry_names(files);
+    let mut source_by_class = BTreeMap::<String, String>::new();
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        let Some(class_name) = path.file_stem().and_then(|value| value.to_str()) else { continue; };
+        if let Ok(text) = fs::read_to_string(path) {
+            source_by_class.entry(class_name.to_owned()).or_insert(text);
+        }
+    }
+
+    let target = compact(registry);
+    let registration = Regex::new(
+        r#"(?s)(?:MinecraftForgeClient\s*\.\s*)?registerItemRenderer\s*\(\s*(?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*new\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*\("#
+    ).unwrap();
+    let mut model_source = None;
+    let mut textures = Vec::new();
+
+    for text in source_by_class.values() {
+        for capture in registration.captures_iter(text) {
+            let field = &capture[1];
+            let renderer_class = capture[2].rsplit(['.', '/', '
+    if source.is_empty() { return None; }
+    if armor && !source.contains("getArmorModel") { return None; }
+    if !armor && !source.contains("IItemRenderer") && !source.contains("renderItem") && !source.contains("getArmorModel") {
+        return None;
+    }
+    let pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    for capture in pattern.captures_iter(source) {
+        if let Some(path) = find_model_source_by_class(files, &capture[1]) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn find_linked_armor_model(files: &[PathBuf], source: &str, prefix: &str) -> Option<PathBuf> {
+    let mut sources = Vec::new();
+    if !source.is_empty() { sources.push(source.to_owned()); }
+    let prefix = compact(prefix);
+    for path in files.iter().filter(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))) {
+        if !path.file_stem().and_then(|value| value.to_str()).map(|stem| compact(stem).contains(&prefix)).unwrap_or(false) {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(path) {
+            if text.contains("getArmorModel") { sources.push(text); }
+        }
+    }
+    for text in sources {
+        if !text.contains("getArmorModel") { continue; }
+        if let Some(method) = Regex::new(r"\bgetArmorModel\s*\([^)]*\)\s*\{").unwrap().find(&text) {
+            let body_start = method.end();
+            let body = text[body_start..].split_once('}').map(|(body, _)| body).unwrap_or("");
+            if let Some(capture) = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap().captures(body) {
+                if let Some(path) = find_model_source_by_class(files, &capture[1]) {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_item_components(files: &[PathBuf], registry: &str) -> Option<Value> {
+    let wanted = compact(registry);
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            && (path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/items/")
+                || path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/item_components/"))
+    }) {
+        if !path.file_stem().and_then(|value| value.to_str()).map(|stem| compact(stem) == wanted).unwrap_or(false) {
+            continue;
+        }
+        let Ok(bytes) = fs::read(path) else { continue; };
+        let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { continue; };
+        if let Some(components) = payload.get("components") {
+            return Some(components.clone());
+        }
+        if payload.as_object().is_some_and(|object| object.keys().any(|key| key.starts_with("minecraft:"))) {
+            return Some(payload);
+        }
+    }
+    None
+}
+
+fn append_unique(target: &mut Vec<String>, values: &[String]) {
+    for value in values {
+        if !target.contains(value) { target.push(value.clone()); }
+    }
+}
+
+fn normalize_registry(value: &str) -> String {
+    let mut value = value.trim().trim_matches('"').trim_matches('\'').to_owned();
+    if let Some((_, path)) = value.split_once(':') { value = path.to_owned(); }
+    value.trim_matches('/').replace('-', "_").replace('/', "_").to_ascii_lowercase()
+}
+
+fn compact(value: &str) -> String {
+    value.chars().filter(|character| character.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+fn category_order(category: &str) -> usize {
+    CATEGORIES.iter().position(|candidate| *candidate == category).unwrap_or(usize::MAX)
+}
+
+fn humanize(value: &str) -> String {
+    let chars: Vec<char> = value.replace('_', " ").replace('-', " ").chars().collect();
+    let mut output = String::with_capacity(chars.len() + 8);
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if index > 0 && ch.is_ascii_uppercase() && chars[index - 1].is_ascii_lowercase() {
+            output.push(' ');
+        }
+        output.push(ch);
+    }
+    output.split_whitespace().map(|word| {
+        let mut chars = word.chars();
+        chars.next().map(|first| first.to_uppercase().to_string() + chars.as_str()).unwrap_or_default()
+    }).collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tooltip_extraction_preserves_legacy_formatting_and_unicode_literals() {
+        let lines = extract_tooltip_lines(r#"
+            tooltip.add(TextFormatting.GOLD + "A golden blade");
+            par1List.add(EnumChatFormatting.ITALIC + "Forged\nbright");
+        "#);
+        assert_eq!(lines[0], "§6A golden blade");
+        assert_eq!(lines[1], "§oForged\nbright");
+    }
+
+    #[test]
+    fn registry_category_logic_does_not_use_texture_filename_guesses() {
+        assert_eq!(category_order("Weapons"), 2);
+        assert_eq!(category_order("Items"), 5);
+        assert_eq!(compact("red_ant"), "redant");
+    }
+
+    #[test]
+    fn humanizes_registry_and_model_names() {
+        assert_eq!(humanize("red_ant"), "Red Ant");
+        assert_eq!(humanize("FireBeetle"), "Fire Beetle");
+        assert_eq!(humanize("ModelTriffid"), "Model Triffid");
+    }
+}
+]).next().unwrap_or(&capture[2]);
+            let registry_match = field_registries.get(field).is_some_and(|registries| {
+                registries.iter().any(|name| compact(name) == target)
+            });
+            if !registry_match { continue; }
+
+            let Some(renderer_text) = source_by_class.get(renderer_class) else { continue; };
+            let model_pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+            if model_source.is_none() {
+                if let Some(model) = model_pattern.captures(renderer_text).and_then(|capture| {
+                    find_model_source_by_class(files, &capture[1])
+                }) {
+                    model_source = Some(model);
+                }
+            }
+            let texture_pattern = Regex::new(r#"(?i)["']([^"'\s]+(?:\.png|/textures/[^"'\s]+))["']"#).unwrap();
+            for texture in texture_pattern.captures_iter(renderer_text) {
+                let reference = texture[1].replace('\\', "/");
+                if let Some(path) = find_texture_reference(files, std::slice::from_ref(&reference)) {
+                    if !textures.contains(&path) { textures.push(path); }
+                }
+            }
+        }
+    }
+    (model_source, textures)
 }
 
 fn find_linked_java_model(files: &[PathBuf], source: &str, armor: bool) -> Option<PathBuf> {
