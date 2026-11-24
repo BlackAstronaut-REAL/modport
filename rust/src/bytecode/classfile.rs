@@ -204,7 +204,7 @@ impl ClassFile {
                 20 => ConstantPoolEntry::Package { name_index: r.u2()? },
                 other => bail!("Unsupported constant-pool tag {other} at index {index}"),
             };
-            let wide = matches!(entry, ConstantPoolEntry::Long(_) | ConstantPoolEntry::Double(_));
+            let wide = matches!(&entry, ConstantPoolEntry::Long(_) | ConstantPoolEntry::Double(_));
             constant_pool[index] = Some(entry);
             index += if wide { 2 } else { 1 };
         }
