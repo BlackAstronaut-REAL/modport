@@ -14,7 +14,7 @@ pub fn extract_archive(archive_path: &Path, destination: &Path) -> Result<PathBu
     if destination.exists() {
         bail!("Extraction destination already exists: {}", destination.display());
     }
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let parent = destination.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)?;
     let staged = Builder::new().prefix(".mojmodelbridge-extract-").tempdir_in(parent)?;
     let staged_path = staged.path().to_path_buf();
