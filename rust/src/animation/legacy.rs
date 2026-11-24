@@ -51,6 +51,7 @@ pub struct LegacyAnimation {
     pub analysis: JsonValue,
     pub logic: String,
     pub source: String,
+    pub blockbench_animations: Vec<JsonValue>,
 }
 
 fn clean_number(value: f64) -> String {
@@ -344,11 +345,19 @@ impl<'a> AnimationContext<'a> {
                     if let (Symbol::Part(index), Some((channel, axis))) = (owner, field_axis(&name)) {
                         if let Some(part) = self.parts.get(index) {
                             let expression = value.text(self.parts);
-                            self.part_state.insert((part.name.clone(), channel.to_owned(), axis.to_owned()), expression.clone());
-                            self.formulas.push(Formula {
-                                bone: part.name.clone(), channel: channel.to_owned(), axis: axis.to_owned(),
-                                expression, offset: instruction.offset, animation_class: String::new(),
-                            });
+                            let key = (part.name.clone(), channel.to_owned(), axis.to_owned());
+                            let previous = self.part_state.get(&key).cloned().unwrap_or_default();
+                            if is_dynamic(&previous) && !is_dynamic(&expression) {
+                                if !self.warnings.iter().any(|warning| warning.contains("dynamic branch fallback")) {
+                                    self.warnings.push("A static branch fallback was ignored because a dynamic pose expression was already recovered.".to_owned());
+                                }
+                            } else {
+                                self.part_state.insert(key, expression.clone());
+                                self.formulas.push(Formula {
+                                    bone: part.name.clone(), channel: channel.to_owned(), axis: axis.to_owned(),
+                                    expression, offset: instruction.offset, animation_class: String::new(),
+                                });
+                            }
                         }
                     }
                 }
@@ -527,7 +536,10 @@ pub fn extract_legacy_animation(
     }
     let mut emitted = HashSet::<String>::new();
     for formula in &context.formulas {
-        let expression = java_expression(&formula.expression);
+        let mut expression = java_expression(&formula.expression);
+        if matches!(formula.axis.as_str(), "x" | "y") {
+            expression = format!("-({expression})");
+        }
         let line = if formula.channel == "rotation" {
             format!("    this.{}.{}Rot = {};", formula.bone, formula.axis, expression)
         } else {
@@ -537,7 +549,18 @@ pub fn extract_legacy_animation(
     }
     logic.push_str("}\n");
 
-    Ok(Some(LegacyAnimation { analysis, logic, source: method_name }))
+    let class_name = class.this_name()
+        .map(|name| name.rsplit('/').next().unwrap_or(name).to_owned())
+        .unwrap_or_default();
+    let blockbench_animations =
+        crate::animation::preview::bake_blockbench_animations(&class_name, parts, &analysis);
+    analysis["baked_blockbench_clips"] = json!(
+        blockbench_animations.iter()
+            .filter_map(|clip| clip["name"].as_str().map(str::to_owned))
+            .collect::<Vec<_>>()
+    );
+
+    Ok(Some(LegacyAnimation { analysis, logic, source: method_name, blockbench_animations }))
 }
 
 #[cfg(test)]

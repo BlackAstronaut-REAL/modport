@@ -633,6 +633,7 @@ pub fn parse_legacy_class_file(path: &Path, constructor_args: &[serde_json::Valu
             model.animation_analysis = animation.analysis;
             model.animation_logic = animation.logic;
             model.animation_source = animation.source;
+            model.blockbench_animations = animation.blockbench_animations;
         }
         Ok(None) => {
             model.warnings.push("No supported procedural pose assignments were recovered from the compiled animation methods.".to_owned());
