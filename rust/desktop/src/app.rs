@@ -430,21 +430,7 @@ impl MojModelBridgeApp {
                         self.last_frame = Instant::now();
                     }
                 }
-                if self.texture_paths.len() > 1 {
-                    let selected = self.texture_paths.get(self.selected_texture)
-                        .and_then(|path| path.file_name()).map(|name| name.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "Texture".to_owned());
-                    egui::ComboBox::from_id_salt("texture_selector")
-                        .selected_text(selected)
-                        .width(180.0)
-                        .show_ui(ui, |ui| {
-                            for (index, path) in self.texture_paths.iter().enumerate() {
-                                let label = path.file_name().map(|name| name.to_string_lossy().to_string())
-                                    .unwrap_or_else(|| path.to_string_lossy().to_string());
-                                ui.selectable_value(&mut self.selected_texture, index, label);
-                            }
-                        });
-                }
+
             } else {
                 ui.label(RichText::new("No model source is linked to this asset yet.").size(10.0).color(MUTED));
             }
@@ -567,6 +553,27 @@ impl MojModelBridgeApp {
 
     fn show_editor(&mut self, ui: &mut egui::Ui) {
         ui.heading("Basic item editor");
+        if self.texture_paths.len() > 1 {
+            let selected = self.texture_paths.get(self.selected_texture)
+                .and_then(|path| path.file_name()).map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Texture".to_owned());
+            let previous = self.selected_texture;
+            egui::ComboBox::from_id_salt("editor_texture_selector")
+                .selected_text(selected)
+                .width(240.0)
+                .show_ui(ui, |ui| {
+                    for (index, path) in self.texture_paths.iter().enumerate() {
+                        let label = path.file_name().map(|name| name.to_string_lossy().to_string())
+                            .unwrap_or_else(|| path.to_string_lossy().to_string());
+                        ui.selectable_value(&mut self.selected_texture, index, label);
+                    }
+                });
+            if previous != self.selected_texture {
+                self.refresh_preview_image();
+            }
+        } else if let Some(path) = self.texture_paths.first() {
+            ui.label(RichText::new(path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string_lossy().to_string())).size(10.0).color(MUTED));
+        }
         ui.horizontal(|ui| {
             ui.label("Name");
             ui.add(egui::TextEdit::singleline(&mut self.draft_name).desired_width(f32::INFINITY));
@@ -615,15 +622,12 @@ impl MojModelBridgeApp {
                 }
                 if self.components_json.trim() != "{}" && !self.components_json.trim().is_empty() {
                     match serde_json::from_str::<serde_json::Value>(&self.components_json) {
-                        Ok(value) => {
-                            if let Some(text) = value.get("custom_name").or_else(|| value.get("text")) {
-                                if let Some(text) = text.as_str() {
-                                    tooltip::draw_formatted_text(
-                                        ui, text, Color32::from_rgb(170, 170, 170), self.minecraftia_available,
-                                    );
-                                }
-                            }
-                        }
+                        Ok(value) => tooltip::draw_component_json(
+                            ui,
+                            &value,
+                            Color32::from_rgb(170, 170, 170),
+                            self.minecraftia_available,
+                        ),
                         Err(error) => {
                             ui.label(RichText::new(format!("Component JSON error: {error}")).size(9.0).color(Color32::from_rgb(240, 130, 120)));
                         }
@@ -653,11 +657,12 @@ impl eframe::App for MojModelBridgeApp {
         }
     }
 
-    fn ui(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
-        self.show_sidebar(context);
+    fn ui(&mut self, root_ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let context = root_ui.ctx().clone();
+        self.show_sidebar(&context);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(BACKGROUND).inner_margin(14.0))
-            .show(context, |ui| {
+            .show(&context, |ui| {
                 self.show_header(context, ui);
                 ui.separator();
                 match self.active_page.as_str() {
