@@ -145,8 +145,11 @@ fn relative_path(root: &Path, path: &Path) -> String {
 fn texture_filename(path: &Path, fallback_registry: &str) -> String {
     let raw = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
     let stem = Path::new(raw).file_stem().and_then(|value| value.to_str()).unwrap_or(fallback_registry);
-    let sanitized = slug(stem);
-    if sanitized.is_empty() { format!("{fallback_registry}.png") } else { format!("{sanitized}.png") }
+    let sanitized: String = stem.chars().map(|ch| {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.' { ch.to_ascii_lowercase() } else { '_' }
+    }).collect();
+    let stem = sanitized.trim_matches('_');
+    if stem.is_empty() { format!("{fallback_registry}.png") } else { format!("{stem}.png") }
 }
 
 fn placeholder_png() -> Vec<u8> {
@@ -155,24 +158,64 @@ fn placeholder_png() -> Vec<u8> {
     ).expect("embedded one-pixel placeholder PNG is valid base64")
 }
 
+
+fn resolve_explicit_texture(reference_values: &[String], roots: &[PathBuf], source_modid: &str) -> Option<PathBuf> {
+    for reference in reference_values {
+        let mut raw = reference.trim().replace('\\', "/");
+        if raw.is_empty() { continue; }
+        if let Some(path) = Path::new(&raw).is_file().then(|| PathBuf::from(&raw)) {
+            return Some(path);
+        }
+        if let Some((namespace, rest)) = raw.split_once(':') {
+            if !rest.is_empty() { raw = rest.to_owned(); }
+            let _ = namespace;
+        }
+        while raw.starts_with("./") { raw = raw[2..].to_owned(); }
+        if let Some(rest) = raw.strip_prefix("assets/") {
+            raw = rest.to_owned();
+        }
+        if let Some(rest) = raw.strip_prefix(&format!("{source_modid}/textures/")) {
+            raw = rest.to_owned();
+        } else if let Some(rest) = raw.strip_prefix("textures/") {
+            raw = rest.to_owned();
+        }
+        let relative = PathBuf::from(&raw);
+        for root in roots {
+            let candidates = [
+                root.join(&relative),
+                root.join("textures").join(&relative),
+                root.join("src/main/resources").join(&relative),
+                root.join("src/main/resources/assets").join(source_modid).join("textures").join(&relative),
+                root.join("assets").join(source_modid).join("textures").join(&relative),
+            ];
+            if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+                return fs::canonicalize(&path).ok().or(Some(path));
+            }
+        }
+    }
+    None
+}
+
 fn ensure_texture(
     texture_index: Option<&TextureIndex>,
     source_model: &Path,
     model_class: &str,
+    texture_refs: &[String],
     roots: &[PathBuf],
+    source_modid: &str,
     workspace_root: &Path,
     modid: &str,
     registry_name: &str,
     overwrite: bool,
 ) -> Result<(String, String, Vec<String>)> {
     let mut warnings = Vec::new();
-    let explicit = texture_index.and_then(|_| None::<PathBuf>);
+    let explicit = resolve_explicit_texture(texture_refs, roots, source_modid);
     let resolved = if let Some(index) = texture_index {
         index.resolve_set(source_model, model_class, explicit.as_deref(), 16)?
     } else {
         Default::default()
     };
-    let texture_source = resolved.primary;
+    let texture_source = explicit.or(resolved.primary);
     let textures_dir = workspace_root.join("src/main/resources/assets")
         .join(modid).join("textures/entities");
     fs::create_dir_all(&textures_dir)?;
@@ -341,8 +384,9 @@ pub fn export_living_entities_to_workspace(
 
         let mut entity_warnings = cached.export.warnings.clone();
         let (texture_name, texture_relative, texture_warnings) = ensure_texture(
-            texture_index.as_ref(), &source_model, &registration.model_class, &roots,
-            &workspace_root, &modid, &registry_name, overwrite
+            texture_index.as_ref(), &source_model, &registration.model_class,
+            &registration.texture_refs, &roots, &source_modid, &workspace_root,
+            &modid, &registry_name, overwrite
         )?;
         entity_warnings.extend(texture_warnings);
 
@@ -453,7 +497,7 @@ mod tests {
         let registration = RendererRegistration {
             entity_class:"EntityWingBeast".into(),renderer_class:"RenderWingBeast".into(),
             model_class:"ModelWing".into(),model_args:Vec::new(),renderer_args:Vec::new(),
-            shadow_size:0.5,visual_scale:1.0,texture_refs:Vec::new(),
+            shadow_size:0.5,visual_scale:1.0,texture_refs:vec!["ModelWing.png".into()],
             source_class:"RenderRegistry".into(),source_offset:0
         };
         let metadata = EntityMetadata {
