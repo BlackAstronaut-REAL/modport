@@ -184,10 +184,8 @@ fn ranged_updates(text: &str, definition: &Map<String, Value>) -> Map<String, Va
     updates.insert("projectileDisableAmmoCheck".to_owned(), json!(false));
     updates.insert("animation".to_owned(), json!(if is_bow { "bow" } else { "crossbow" }));
     updates.insert("projectile".to_owned(), json!("Arrow"));
-    if definition.contains_key("useDuration") {
-        if let Some(duration) = regex_number(text, &[r"\bgetUseDuration\s*\([^)]*\)\s*\{\s*return\s+(\d+)\s*;"]) {
-            updates.insert("useDuration".to_owned(), json!(duration as i64));
-        }
+    if let Some(duration) = regex_number(text, &[r"\bgetUseDuration\s*\([^)]*\)\s*\{\s*return\s+(\d+)\s*;"]) {
+        updates.insert("useDuration".to_owned(), json!(duration as i64));
     }
     if let Ok(regex) = Regex::new(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$]*(?:Arrow|Projectile|Bolt|Shot))\s*\(") {
         if let Some(captures) = regex.captures(text) {
@@ -221,9 +219,6 @@ fn finish_element(
     };
     updates.entry("creativeTabs".to_owned()).or_insert(default_tabs);
     for (key, value) in updates {
-        if key == "name" && !definition.contains_key("name") {
-            continue;
-        }
         definition.insert(key, value);
     }
     json!({
@@ -272,8 +267,8 @@ pub fn build_item_element(
     }
     let mut element = finish_element("item", template, imported_fv, simple_class, registry, updates);
     if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
-        definition.entry("renderType".to_owned()).or_insert(json!(0));
-        definition.entry("customModelName".to_owned()).or_insert(json!("Normal"));
+        definition.insert("renderType".to_owned(), json!(0));
+        definition.insert("customModelName".to_owned(), json!("Normal"));
     }
     (element, warnings)
 }
@@ -396,8 +391,8 @@ pub fn build_tool_element(
 
     let mut element = finish_element("tool", template, imported_fv, simple_class, registry, updates);
     if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
-        definition.entry("renderType".to_owned()).or_insert(json!(0));
-        definition.entry("customModelName".to_owned()).or_insert(json!("Normal"));
+        definition.insert("renderType".to_owned(), json!(0));
+        definition.insert("customModelName".to_owned(), json!("Normal"));
         if definition.contains_key("blockingRenderType") {
             definition.insert("blockingRenderType".to_owned(), json!(0));
         }
