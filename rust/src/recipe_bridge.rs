@@ -739,3 +739,311 @@ mod workspace_export_tests {
         assert!(workspace_root.join("src/main/resources/data/converted/recipes/stone_from_dirt.json").is_file());
     }
 }
+
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct JavaRecipePayload {
+    pub name: String,
+    pub payload: Value,
+    pub warnings: Vec<String>,
+}
+
+fn normalize_java_item_ref(expression: &str) -> String {
+    let mut expression = expression.trim().trim_matches('"').trim_matches('\'').to_owned();
+    if let Some(path) = expression.strip_prefix("minecraft:block/") {
+        return format!("minecraft:{path}");
+    }
+    if let Some(path) = expression.strip_prefix("minecraft:item/") {
+        return format!("minecraft:{path}");
+    }
+    if let Some(tail) = expression.strip_prefix("Items.").or_else(|| expression.strip_prefix("items.")) {
+        let mut tail = tail.to_owned();
+        while let Some(next) = tail.strip_prefix("ITEMS.").or_else(|| tail.strip_prefix("items.")) {
+            tail = next.to_owned();
+        }
+        return format!("Items.{}", tail.to_ascii_uppercase().replace('-', "_"));
+    }
+    if let Some(tail) = expression.strip_prefix("Blocks.").or_else(|| expression.strip_prefix("blocks.")) {
+        let mut tail = tail.to_owned();
+        while let Some(next) = tail.strip_prefix("BLOCKS.").or_else(|| tail.strip_prefix("blocks.")) {
+            tail = next.to_owned();
+        }
+        return format!("Blocks.{}", tail.to_ascii_uppercase().replace('-', "_"));
+    }
+    expression = expression.trim().to_owned();
+    expression
+}
+
+fn java_call_arguments(source: &str, wanted: &[&str]) -> Vec<(String, String)> {
+    use crate::source::java::{extract_balanced, strip_java_comments};
+    let source = strip_java_comments(source);
+    let bytes = source.as_bytes();
+    let mut result = Vec::new();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'"' || byte == b'\'' {
+            let quote = byte;
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\\' {
+                    index = (index + 2).min(bytes.len());
+                } else if bytes[index] == quote {
+                    index += 1;
+                    break;
+                } else {
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        if byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$' {
+            let start = index;
+            index += 1;
+            while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_' || bytes[index] == b'$') {
+                index += 1;
+            }
+            let name = &source[start..index];
+            if !wanted.contains(&name) {
+                continue;
+            }
+            let mut open = index;
+            while open < bytes.len() && bytes[open].is_ascii_whitespace() {
+                open += 1;
+            }
+            if open >= bytes.len() || bytes[open] != b'(' {
+                continue;
+            }
+            if let Ok((arguments, end)) = extract_balanced(&source, open, '(', ')') {
+                result.push((name.to_owned(), arguments));
+                index = end;
+            }
+            continue;
+        }
+        index += 1;
+    }
+    result
+}
+
+/// Resolve one Java ItemStack/Ingredient expression to an MCreator item token.
+pub fn java_recipe_item_ref(
+    expression: &str,
+    field_map: &BTreeMap<String, std::collections::BTreeSet<String>>,
+    registry_to_element: &BTreeMap<String, String>,
+    source_modid: &str,
+) -> String {
+    use crate::source::java::split_top_level;
+
+    let mut expression = normalize_java_item_ref(expression);
+    for wrapper in ["new ItemStack", "Ingredient.of"] {
+        if let Some(position) = expression.find(wrapper) {
+            if let Some(open_rel) = expression[position..].find('(') {
+                let open = position + open_rel;
+                if let Ok((arguments, _)) = crate::source::java::extract_balanced(&expression, open, '(', ')') {
+                    if let Some(first) = split_top_level(&arguments, ',').first() {
+                        expression = normalize_java_item_ref(first);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(position) = expression.find("createVanillaSpawnEgg") {
+        if let Some(open_rel) = expression[position..].find('(') {
+            let open = position + open_rel;
+            if let Ok((arguments, _)) = crate::source::java::extract_balanced(&expression, open, '(', ')') {
+                if let Some(value) = split_top_level(&arguments, ',').first() {
+                    let entity = value.trim().trim_matches('"').trim_matches('\'');
+                    if !entity.is_empty() {
+                        let path = entity.split(':').last().unwrap_or(entity);
+                        return format!("Items.{}_SPAWN_EGG", path.to_ascii_uppercase().replace('-', "_"));
+                    }
+                }
+            }
+        }
+    }
+
+    let normalized = normalize_java_item_ref(&expression);
+    if normalized == "AIR" {
+        return "Items.AIR".to_owned();
+    }
+    let parts: Vec<&str> = normalized.split('.').collect();
+    if !parts.is_empty() && parts.iter().all(|part| {
+        !part.is_empty() && part.chars().enumerate().all(|(index, ch)| {
+            ch.is_ascii_alphanumeric() || ch == '_' || ch == '$' && index > 0
+        })
+    }) {
+        let name = parts.last().copied().unwrap_or("");
+        if name == "Items" || name == "Blocks" {
+            return String::new();
+        }
+        if let Some(registries) = field_map.get(name) {
+            for registry in registries {
+                if let Some(element) = registry_to_element.get(&compact_registry(registry)) {
+                    return format!("CUSTOM:{element}");
+                }
+            }
+            if let Some(registry) = registries.iter().next() {
+                return format!("CUSTOM:{registry}");
+            }
+        }
+        if normalized.starts_with("Items.") {
+            return format!("Items.{}", name.to_ascii_uppercase());
+        }
+        if normalized.starts_with("Blocks.") {
+            return format!("Blocks.{}#0", name.to_ascii_uppercase());
+        }
+    }
+    let normalized = normalize_java_item_ref(&expression);
+    if normalized.starts_with("Items.") || normalized.starts_with("Blocks.") {
+        return normalized;
+    }
+    let _ = source_modid;
+    String::new()
+}
+
+/// Recover addShapedRecipe/addShapelessRecipe Java helper calls when recipe JSON is absent.
+pub fn java_recipe_payloads(
+    source_roots: &[PathBuf],
+    source_modid: &str,
+    field_map: &BTreeMap<String, std::collections::BTreeSet<String>>,
+    registry_to_element: &BTreeMap<String, String>,
+) -> Vec<JavaRecipePayload> {
+    let mut java_files = Vec::new();
+    for root in source_roots {
+        if !root.exists() { continue; }
+        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+            if entry.file_type().is_file()
+                && entry.path().extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("java")) {
+                java_files.push(entry.into_path());
+            }
+        }
+    }
+    java_files.sort();
+    let mut combined = String::new();
+    for path in java_files {
+        if let Ok(bytes) = fs::read(path) {
+            combined.push_str(&String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}'));
+            combined.push('\n');
+        }
+    }
+
+    use crate::source::java::{split_top_level, unquote_java_string};
+    let mut output = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for (call_name, raw_args) in java_call_arguments(&combined, &["addShapelessRecipe", "addShapedRecipe"]) {
+        let args = split_top_level(&raw_args, ',');
+        if args.len() < 4 { continue; }
+        let name = if let Some(position) = args[0].find("cpId") {
+            let tail = &args[0][position..];
+            tail.find('"').and_then(|start| {
+                let value = &tail[start..];
+                value[1..].find('"').map(|end| snake_name(&value[1..end]))
+            }).unwrap_or_default()
+        } else {
+            let start = args[0].find('"');
+            start.and_then(|start| args[0][start + 1..].find('"').map(|end| snake_name(&args[0][start + 1..start + 1 + end])))
+                .unwrap_or_default()
+        };
+        if name.is_empty() || !seen.insert(name.clone()) { continue; }
+        let output_ref = java_recipe_item_ref(&args[2], field_map, registry_to_element, source_modid);
+        if output_ref.is_empty() { continue; }
+
+        let mut warnings = Vec::new();
+        let payload = if call_name == "addShapelessRecipe" {
+            let mut ingredients = Vec::new();
+            for argument in args.iter().skip(3) {
+                let reference = java_recipe_item_ref(argument, field_map, registry_to_element, source_modid);
+                if !reference.is_empty() {
+                    ingredients.push(json!({"item":reference}));
+                }
+            }
+            if ingredients.is_empty() { continue; }
+            json!({
+                "type":"minecraft:crafting_shapeless",
+                "ingredients":ingredients,
+                "result":{"item":output_ref,"count":1}
+            })
+        } else {
+            let mut patterns = Vec::new();
+            let mut index = 3usize;
+            while index < args.len() {
+                let value = args[index].trim();
+                if value.starts_with('"') && value.ends_with('"') {
+                    let decoded = unquote_java_string(value);
+                    if !decoded.is_empty() && decoded.len() <= 3 {
+                        patterns.push(decoded);
+                        index += 1;
+                        continue;
+                    }
+                }
+                break;
+            }
+            let mut key = serde_json::Map::new();
+            while index + 1 < args.len() {
+                let token = args[index].trim();
+                let value = args[index + 1].trim();
+                index += 2;
+                let Some(start) = token.find('\'') else { continue };
+                let Some(end_rel) = token[start + 1..].find('\'') else { continue };
+                let character = &token[start + 1..start + 1 + end_rel];
+                let reference = java_recipe_item_ref(value, field_map, registry_to_element, source_modid);
+                if !reference.is_empty() {
+                    key.insert(character.to_owned(), json!({"item":reference}));
+                }
+            }
+            if patterns.is_empty() || key.is_empty() { continue; }
+            json!({
+                "type":"minecraft:crafting_shaped",
+                "pattern":patterns,
+                "key":key,
+                "result":{"item":output_ref,"count":1}
+            })
+        };
+        output.push(JavaRecipePayload { name, payload, warnings:std::mem::take(&mut warnings) });
+    }
+    output
+}
+
+#[cfg(test)]
+mod java_recipe_tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_wrapped_vanilla_and_custom_java_recipe_references() {
+        let field_map = BTreeMap::from([
+            ("IRON_INGOT".to_owned(), std::collections::BTreeSet::from(["iron_ingot".to_owned()]))
+        ]);
+        let registry = BTreeMap::from([("ironingot".to_owned(),"IronIngot".to_owned())]);
+        assert_eq!(java_recipe_item_ref("Items.ITEMS.STICK", &field_map, &registry, "demo"), "Items.STICK");
+        assert_eq!(java_recipe_item_ref("new ItemStack(Blocks.BLOCKS.STONE, 1)", &field_map, &registry, "demo"), "Blocks.STONE#0");
+        assert_eq!(java_recipe_item_ref("Ingredient.of(Items.IRON_INGOT)", &field_map, &registry, "demo"), "CUSTOM:IronIngot");
+        assert_eq!(java_recipe_item_ref("Items.createVanillaSpawnEgg(\\"minecraft:zombie\\")", &field_map, &registry, "demo"), "Items.ZOMBIE_SPAWN_EGG");
+    }
+
+    #[test]
+    fn recovers_java_shaped_and_shapeless_recipe_helper_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("Recipes.java"), r#"
+            // addShapelessRecipe(cpId("ignored"), 0, Items.STICK, Items.STONE);
+            public void register() {
+              addShapelessRecipe(cpId("magic_dust"), 0, Items.STICK,
+                  Items.REDSTONE, Ingredient.of(Items.GLOWSTONE_DUST));
+              addShapedRecipe(cpId("test_sword"), 0, Items.DIAMOND_SWORD,
+                  " D ", " D ", " S ", 'D', Items.DIAMOND, 'S', Items.STICK);
+            }
+        "#).unwrap();
+        let field_map = BTreeMap::new();
+        let registry = BTreeMap::new();
+        let recovered = java_recipe_payloads(&[source], "demo", &field_map, &registry);
+        assert_eq!(recovered.len(), 2);
+        assert_eq!(recovered[0].name, "magic_dust");
+        assert_eq!(recovered[0].payload["type"], "minecraft:crafting_shapeless");
+        assert_eq!(recovered[1].name, "test_sword");
+        assert_eq!(recovered[1].payload["type"], "minecraft:crafting_shaped");
+        assert_eq!(recovered[1].payload["pattern"][0], " D ");
+        assert_eq!(recovered[1].payload["key"]["D"]["item"], "Items.DIAMOND");
+    }
+}
