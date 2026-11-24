@@ -17,6 +17,7 @@ pub struct ExportStageResult {
 pub struct ExportAllReport {
     pub workspace_file: PathBuf,
     pub source_modid: String,
+    pub validation_ok: bool,
     pub stages: Vec<ExportStageResult>,
     pub warnings: Vec<String>,
 }
@@ -274,6 +275,7 @@ pub fn export_all_to_workspace(
     Ok(ExportAllReport {
         workspace_file,
         source_modid: import_modid,
+        validation_ok,
         stages,
         warnings,
     })
@@ -375,10 +377,11 @@ mod tests {
         let names: Vec<&str> = report.stages.iter().map(|stage| stage.name.as_str()).collect();
         assert_eq!(names, vec![
             "equipment", "armor", "blocks", "plants",
-            "worldgen", "living_entities", "projectiles", "recipes"
+            "worldgen", "living_entities", "projectiles", "recipes", "validation"
         ]);
         assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
         assert_eq!(report.source_modid, "examplemod");
+        assert!(report.validation_ok);
         assert_eq!(report.workspace_file, descriptor);
     }
 
