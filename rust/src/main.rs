@@ -10,6 +10,7 @@ use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
 use mojmodelbridge::source_bridge::copy_model_sources;
+use mojmodelbridge::recipe_bridge::export_recipes_to_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -49,6 +50,18 @@ enum Command {
         /// Write the graph as JSON instead of stdout.
         #[arg(short, long)]
         output: Option<PathBuf>,
+    },
+    /// Import recipe JSON files as MCreator recipe elements and copy their data resources.
+    ExportRecipes {
+        workspace_root: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long)]
+        source_modid: String,
+        #[arg(long)]
+        registry_map: Option<PathBuf>,
+        #[arg(long, default_value_t = 89)]
+        imported_fv: i64,
     },
     /// Validate an exported MCreator workspace and write parity diagnostics.
     ValidateWorkspace {
@@ -157,6 +170,28 @@ fn main() -> Result<()> {
                 println!("{data}");
             }
             for warning in graph.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportRecipes { workspace_root, source_roots, source_modid, registry_map, imported_fv } => {
+            let registry_to_element = if let Some(path) = registry_map {
+                serde_json::from_slice::<std::collections::BTreeMap<String, String>>(&std::fs::read(&path)?)?
+            } else {
+                std::collections::BTreeMap::new()
+            };
+            let report = export_recipes_to_workspace(
+                &source_roots,
+                &workspace_root,
+                &source_modid,
+                &registry_to_element,
+                imported_fv,
+            )?;
+            println!(
+                "Exported {} MCreator recipe element(s) and copied {} recipe resource(s).",
+                report.exported.len(),
+                report.copied_recipe_resources.len()
+            );
+            for warning in report.warnings.iter().chain(report.exported.iter().flat_map(|item| item.warnings.iter())) {
                 eprintln!("[WARN] {warning}");
             }
         }
