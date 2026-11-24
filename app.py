@@ -562,7 +562,10 @@ class MojModelBridgeApp(tk.Tk):
 
     def _run_gradle(self, workspace: Path, wrapper: Path) -> None:
         try:
-            proc = subprocess.Popen([str(wrapper), "build"], cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            command = [str(wrapper), "build"]
+            if os.name == "nt":
+                command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", f'"{wrapper}" build']
+            proc = subprocess.Popen(command, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
             assert proc.stdout is not None
             for line in proc.stdout:
                 self.log_queue.put(line)
