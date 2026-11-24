@@ -42,6 +42,7 @@ the engine into the native executable.
 - Native MCreator armor set discovery and grouped four-piece export, including independent item icons, layer-1/layer-2 texture copying, metadata manifests and localization.
 - Native registered block export using block/blockstate JSON inference, render-type classification, source model/blockstate copying, texture materialization, and hardness/resistance/light/tool-property recovery.
 - Native registered plant export for flower/bush/crop/sapling subclasses, with PlantSchema fields, cross-model texture resolution, source resource copying, metadata and localization.
+- Native resource-authored biome/dimension export using biome JSON, dimension JSON and dimension-type JSON to build MCreator elements and custom-biome references.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -59,6 +60,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- export-armor path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-blocks path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-plants path/to/MCreatorWorkspace path/to/source --source-modid oldmod
+    cargo run --manifest-path rust/Cargo.toml -- export-worldgen path/to/MCreatorWorkspace path/to/source --source-modid oldmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -123,6 +125,14 @@ The `export-plants` command discovers registered flower/bush/crop/sapling-style 
 
 ```powershell
 mojmodelbridge export-plants .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
+```
+
+### MCreator biome and dimension export
+
+The `export-worldgen` command discovers resource-authored `data/<modid>/worldgen/biome`, `dimension`, and `dimension_type` JSON. It generates native MCreator biome/dimension elements, maps biome source references to `CUSTOM:` entries, carries dimension-type lighting/respawn/coordinate/time/sky flags and biome effects/spawn tables, and updates the workspace descriptor and English language map. It does not yet reconstruct all configured/placed feature generation into MCreator biome/ore procedures.
+
+```powershell
+mojmodelbridge export-worldgen .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
 ```
 
 ### Renderer-linked MCreator entity export
