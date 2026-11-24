@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::blockbench::model_to_bbmodel;
-use crate::bytecode::parse_legacy_class_file;
+use crate::bytecode::parse_any_model_class;
 use crate::discovery::discover_mod_layout;
 use crate::source::parse_java_model;
 
@@ -93,7 +93,7 @@ pub fn convert_model_source(
                 .with_context(|| format!("Reading model source {}", source.display()))?;
             parse_java_model(&source_text, &source.to_string_lossy(), &[])?
         }
-        "class" => parse_legacy_class_file(source, &[])?,
+        "class" => parse_any_model_class(source, &[])?,
         _ => bail!("This stage accepts decompiled .java or compiled legacy .class model files."),
     };
     let resolved_textures = discover_textures(source, &model.class_name, texture_roots);
