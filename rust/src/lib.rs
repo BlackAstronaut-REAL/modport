@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 //! MojModelBridge native engine.
 //!
 //! The Python Beta 12 engine in ../oldVer remains a read-only behavioral
