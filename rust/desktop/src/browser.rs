@@ -725,7 +725,12 @@ fn item_source_properties(
     ];
     for (key, names, label) in fields {
         if let Some(value) = numeric_source_call(text, names) {
-            properties.insert((*key).to_owned(), serde_json::json!(value));
+            let normalized = if *key == "nutrition" {
+                serde_json::json!(value.round() as i64)
+            } else {
+                serde_json::json!(value)
+            };
+            properties.insert((*key).to_owned(), normalized);
             lore.push(format!("{label}: {}", format_stat(value)));
         }
     }
