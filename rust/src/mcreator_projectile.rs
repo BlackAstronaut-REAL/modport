@@ -209,10 +209,24 @@ pub fn discover_projectile_sources(source_roots: &[PathBuf]) -> Result<Vec<Proje
     }
 
     let instantiated = source_instantiations(&combined);
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    for (class, info) in &compiled.classes {
+        class_paths.entry(class.clone()).or_insert_with(|| info.path.clone());
+        parents.entry(class.clone()).or_insert_with(|| info.superclass.clone());
+        if info.access_flags & 0x0400 != 0 {
+            abstract_classes.insert(class.clone());
+        }
+    }
     let mut registry_names = BTreeMap::<String,String>::new();
     if let Some(root) = source_roots.first() {
         if let Ok(graph) = crate::mod_graph::scan_mod_graph(root,source_roots) {
             registry_names = graph.registry_names;
+        }
+    }
+
+    for (class, registries) in &compiled.registries {
+        if let Some(registry) = registries.iter().next() {
+            registry_names.entry(class.clone()).or_insert_with(|| registry.clone());
         }
     }
 
@@ -223,7 +237,7 @@ pub fn discover_projectile_sources(source_roots: &[PathBuf]) -> Result<Vec<Proje
         }
         let registered = registry_names.get(class).cloned().filter(|value|!value.trim().is_empty());
         let is_instantiated = instantiated.contains(class);
-        let Some(source_text) = class_texts.get(class) else {continue};
+        let source_text = class_texts.get(class).cloned().unwrap_or_default();
         let Some(source_path) = class_paths.get(class) else {continue};
         if registered.is_none() && !is_instantiated {
             continue;
