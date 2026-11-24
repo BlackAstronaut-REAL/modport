@@ -541,6 +541,7 @@ mod tests {
                     this.body.field_78800_c = 2.0F;
                     this.body.field_78797_d = 5.0F;
                     this.body.field_78798_e = -3.0F;
+                    this.body.addBox(-1, -1, -1, 2, 2, 2);
                 }
             }
         "#;
