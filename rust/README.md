@@ -43,6 +43,7 @@ the engine into the native executable.
 - Native registered block export using block/blockstate JSON inference, render-type classification, source model/blockstate copying, texture materialization, and hardness/resistance/light/tool-property recovery.
 - Native registered plant export for flower/bush/crop/sapling subclasses, with PlantSchema fields, cross-model texture resolution, source resource copying, metadata and localization.
 - Native resource-authored biome/dimension export using biome JSON, dimension JSON and dimension-type JSON to build MCreator elements and custom-biome references.
+- Native projectile element export for arrow/throwable/projectile subclasses, pickup-item references and back-linking to ranged item/tool definitions.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -61,6 +62,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- export-blocks path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-plants path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-worldgen path/to/MCreatorWorkspace path/to/source --source-modid oldmod
+    cargo run --manifest-path rust/Cargo.toml -- export-projectiles path/to/MCreatorWorkspace path/to/source --source-modid oldmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -133,6 +135,14 @@ The `export-worldgen` command discovers resource-authored `data/<modid>/worldgen
 
 ```powershell
 mojmodelbridge export-worldgen .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
+```
+
+### MCreator projectile export
+
+The `export-projectiles` command discovers registered or source-instantiated arrow/throwable/projectile subclasses, emits ProjectileSchema elements, resolves pickup-item references from registered item fields, and links ranged item/tool elements back to their custom projectile elements. Custom collision/hit procedures, projectile renderer models, and compiled-only registrations remain to be ported.
+
+```powershell
+mojmodelbridge export-projectiles .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
 ```
 
 ### Renderer-linked MCreator entity export
