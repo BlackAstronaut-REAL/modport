@@ -443,6 +443,19 @@ mod tests {
     use image::RgbaImage;
 
     #[test]
+    fn renders_torch_and_wall_torch_as_vertical_models() {
+        let (torch, _) = synthetic_block_preview("Torch", "torch", None).unwrap();
+        let torch_cube = &torch.nodes[0].cubes[0];
+        assert!(torch_cube.max[1] > torch_cube.min[1] + 8.0);
+        assert!(torch_cube.max[0] - torch_cube.min[0] < 4.0);
+
+        let (wall, _) = synthetic_block_preview("Wall Torch", "wall_torch", None).unwrap();
+        let wall_cube = &wall.nodes[0].cubes[0];
+        assert!(wall_cube.max[1] > wall_cube.min[1] + 8.0);
+        assert_ne!(wall.nodes[0].base_rotation[2], 0.0);
+    }
+
+    #[test]
     fn synthesizes_legacy_block_shape_previews_with_source_texture() {
         let temp = tempfile::tempdir().unwrap();
         let texture = temp.path().join("stone.png");
