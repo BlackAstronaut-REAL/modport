@@ -570,6 +570,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn maps_legacy_modelrenderer_position_fields_to_correct_axes() {
+        assert_eq!(field_axis("field_78800_c"), Some(("position", "x")));
+        assert_eq!(field_axis("field_78797_d"), Some(("position", "y")));
+        assert_eq!(field_axis("field_78798_e"), Some(("position", "z")));
+    }
+
+    #[test]
     fn classifies_animation_formula_channels() {
         let f = Formula { bone:"wing".into(), channel:"rotation".into(), axis:"x".into(),
             expression:"Mth.sin(ageInTicks * 0.5F) + limbSwing".into(), offset:23, animation_class:String::new() };
