@@ -450,8 +450,6 @@ pub fn export_projectiles_to_workspace(
         let mut definition=template.get("definition").and_then(Value::as_object).cloned().unwrap_or_default();
         definition.insert("projectileItem".to_owned(),json!(bound_item.as_ref().map(|name|format!("CUSTOM:{name}")).unwrap_or_default()));
         definition.insert("customModelTexture".to_owned(),json!(""));
-        definition.insert("modelWidth".to_owned(),json!(0.5));
-        definition.insert("modelHeight".to_owned(),json!(0.5));
         definition.insert("actionSound".to_owned(),json!(projectile_sound(&source.source_text,&template)));
         if source.source_text.contains("noGravity")||source.source_text.contains("setNoGravity(true)"){
             definition.insert("disableGravity".to_owned(),json!(true));
