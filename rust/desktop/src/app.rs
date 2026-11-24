@@ -172,8 +172,8 @@ impl MojModelBridgeApp {
         let Some(entry) = self.browser.entries.get(index).cloned() else { return; };
         self.selected_entry = Some(index);
         self.draft_name = entry.name.clone();
-        self.draft_lore.clear();
-        self.components_json = "{}".to_owned();
+        self.draft_lore = entry.lore.join("\n");
+        self.components_json = entry.components_json.clone();
         self.scene = None;
         self.texture_paths.clear();
         self.selected_texture = 0;
@@ -190,6 +190,9 @@ impl MojModelBridgeApp {
                 Ok(asset) => match ViewerScene::from_parsed_model(&asset.model) {
                     Ok(scene) => {
                         self.texture_paths = asset.texture_paths;
+                        if self.texture_paths.is_empty() {
+                            self.texture_paths = entry.texture_paths.clone();
+                        }
                         self.selected_texture = self.texture_paths.iter()
                             .position(|path| path.to_string_lossy() == asset.model.primary_texture)
                             .unwrap_or(0);
@@ -200,8 +203,32 @@ impl MojModelBridgeApp {
                 },
                 Err(error) => self.selected_error = format!("Model preview could not be loaded: {error:#}"),
             }
-        } else if let Some(path) = entry.icon_path.as_ref() {
-            self.texture_paths.push(path.clone());
+        } else if let Some(source) = entry.resource_model_source.as_ref() {
+            match crate::resource_model::load_item_model(source, &self.browser.texture_roots) {
+                Ok((scene, textures)) => {
+                    self.scene = Some(scene);
+                    self.texture_paths = if textures.is_empty() {
+                        entry.texture_paths.clone()
+                    } else {
+                        textures
+                    };
+                    self.selected_texture = 0;
+                    self.refresh_preview_image();
+                }
+                Err(error) => {
+                    self.selected_error = format!("Resource model preview could not be loaded: {error:#}");
+                    if let Some(path) = entry.icon_path.as_ref() {
+                        self.texture_paths.push(path.clone());
+                        self.refresh_preview_image();
+                    }
+                }
+            }
+        } else if let Some(path) = entry.icon_path.as_ref().or_else(|| entry.texture_paths.first()) {
+            self.texture_paths = if entry.texture_paths.is_empty() {
+                vec![path.clone()]
+            } else {
+                entry.texture_paths.clone()
+            };
             self.refresh_preview_image();
         }
         context.request_repaint();
