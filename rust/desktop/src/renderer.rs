@@ -239,8 +239,6 @@ fn draw_cube(
     let [x1, y1, z1] = cube.max;
     let u = cube.uv_origin[0];
     let v = cube.uv_origin[1];
-    let tw = texture_size[0].max(1) as f32;
-    let th = texture_size[1].max(1) as f32;
     let dz = z1 - z0;
     let dx = x1 - x0;
     let dy = y1 - y0;
@@ -543,6 +541,7 @@ mod tests {
                     max: [4.0, 0.0, 4.0],
                     uv_origin: [0.0, 0.0],
                     face_uvs: None,
+                    face_texture_indices: None,
                     mirror: false,
                     name: "body_cube".to_owned(),
                 }],
