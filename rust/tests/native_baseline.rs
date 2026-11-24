@@ -97,6 +97,31 @@ fn converts_legacy_modelrenderer_java_model_to_blockbench() {
 }
 
 #[test]
+fn converts_compiled_modern_model_and_samples_setup_anim_bytecode() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("ModelBytecodeAnim.class");
+    let output = temp.path().join("compiled-animated/ModelBytecodeAnim.bbmodel");
+    fs::write(
+        &source,
+        include_bytes!("fixtures/ModelBytecodeAnim.class"),
+    ).unwrap();
+
+    let converted = convert_model_source(&source, &output, &[], false).unwrap();
+    assert_eq!(converted.source_format, "modern_mojmap_bytecode");
+    assert_eq!(converted.part_count, 1);
+    assert_eq!(converted.cube_count, 1);
+
+    let project: serde_json::Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    let animations = project["animations"].as_array().unwrap();
+    assert_eq!(animations.len(), 2);
+    let names: Vec<&str> = animations.iter()
+        .filter_map(|animation| animation["name"].as_str()).collect();
+    assert!(names.contains(&"animation.model.walk"));
+    assert!(names.contains(&"animation.model.idle"));
+    assert!(animations.iter().all(|animation| !animation["animators"].as_object().unwrap().is_empty()));
+}
+
+#[test]
 fn converts_compiled_legacy_model_class_without_javap() {
     let temp = tempdir().unwrap();
     let source = temp.path().join("ModelDeviantPiglin.class");

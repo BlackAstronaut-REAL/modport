@@ -96,6 +96,8 @@ fn parameter_names(method: &MemberInfo) -> Result<BTreeMap<usize, String>> {
     let name = method.name.as_str();
     let names: Vec<&str> = if matches!(name, "func_78087_a" | "setRotationAngles") {
         vec!["limbSwing", "limbSwingAmount", "ageInTicks", "netHeadYaw", "headPitch", "scaleFactor", "entity"]
+    } else if name == "setupAnim" {
+        vec!["entity", "limbSwing", "limbSwingAmount", "ageInTicks", "netHeadYaw", "headPitch", "scaleFactor"]
     } else if matches!(name, "func_78088_a" | "render") {
         vec!["entity", "limbSwing", "limbSwingAmount", "ageInTicks", "netHeadYaw", "headPitch", "scaleFactor"]
     } else {
@@ -469,7 +471,7 @@ pub fn extract_legacy_animation(
     parts: &[Part],
     scalar_fields: &BTreeMap<String, f64>,
 ) -> Result<Option<LegacyAnimation>> {
-    let preferred = ["func_78087_a", "setRotationAngles", "func_78088_a", "render"];
+    let preferred = ["func_78087_a", "setRotationAngles", "setupAnim", "func_78088_a", "render"];
     let mut candidates = Vec::<(usize, String, AnimationContext<'_>)>::new();
     for method_name in preferred {
         for (index, method) in class.methods.iter().enumerate() {

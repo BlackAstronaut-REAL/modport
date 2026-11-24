@@ -489,15 +489,43 @@ pub fn parse_modern_bytecode_class_file(path:&Path,constructor_args:&[serde_json
         let bytecode=method.code.as_ref().map(|code|code.code.iter().map(|b|format!("{b:02x}")).collect::<String>()).unwrap_or_default();
         serde_json::json!({"method":method.name,"descriptor":method.descriptor,"bytecode_hex":bytecode})
     }).collect();
-    if !animation_methods.is_empty(){
-        model.warnings.push("Compiled animation methods were found and their raw bytecode was retained; automatic JVM pose/keyframe evaluation is not ported yet.".into());
-    }
-    model.animation_analysis=serde_json::json!({
+    let mut preserved_analysis = serde_json::json!({
         "source_format":"modern_mojmap_bytecode",
         "mode":"preserve_bytecode",
         "animation_methods":animation_methods,
         "note":"Geometry was interpreted directly from JVM bytecode. Animation methods are retained as exact bytecode evidence."
     });
+    match crate::animation::legacy::extract_legacy_animation(
+        &class,
+        &model.parts,
+        &std::collections::BTreeMap::new()
+    ) {
+        Ok(Some(animation)) => {
+            model.animation_analysis = animation.analysis;
+            model.animation_analysis["source_format"] = serde_json::json!("modern_mojmap_bytecode");
+            model.animation_analysis["mode"] = serde_json::json!("sampled_bytecode_formulas");
+            model.animation_analysis["preserved_bytecode_methods"] = preserved_analysis["animation_methods"].clone();
+            model.animation_logic = animation.logic;
+            model.animation_source = animation.source;
+            model.blockbench_animations = animation.blockbench_animations;
+            model.warnings.extend(
+                model.animation_analysis["warnings"].as_array()
+                    .into_iter().flatten()
+                    .filter_map(|warning| warning.as_str().map(str::to_owned))
+            );
+            model.baked_animation_json = model.animation_analysis.clone();
+        }
+        Ok(None) => {
+            if !animation_methods.is_empty() {
+                model.warnings.push("Compiled animation methods were found and their raw bytecode was retained; no supported ModelPart pose assignments were recovered.".into());
+            }
+            model.animation_analysis = preserved_analysis;
+        }
+        Err(error) => {
+            model.warnings.push(format!("Compiled modern animation analysis was incomplete: {error}"));
+            model.animation_analysis = preserved_analysis;
+        }
+    }
     Ok(model)
 }
 
