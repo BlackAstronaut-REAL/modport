@@ -312,7 +312,7 @@ impl<'a> Interpreter<'a>{
                     let args=pop_n(&mut stack,count);
                     stack.push(Value::String(self.concat_dynamic(index,&args)));
                 }
-                0xb6..=0xb9|0xb7=>{
+                0xb6..=0xb9=>{
                     let index=u16::from_be_bytes([ins.operands[0],ins.operands[1]]);
                     let Some((owner,name,desc))=self.class.member_reference(index) else{continue;};
                     let descriptor=parse_method_descriptor(&desc)?;
@@ -324,7 +324,9 @@ impl<'a> Interpreter<'a>{
                             let object=&mut self.objects[id];
                             match object.kind{
                                 ObjectKind::Deformation=>{
-                                    object.inflate=args.last().and_then(Value::number).unwrap_or(0.0);
+                                    let values:Vec<f64>=args.iter().filter_map(Value::number).collect();
+                                    object.inflate=if values.len()>=3 {(values[values.len()-3]+values[values.len()-2]+values[values.len()-1])/3.0}
+                                        else {values.last().copied().unwrap_or(0.0)};
                                 }
                                 ObjectKind::Pose=>{
                                     let values:Vec<f64>=args.iter().filter_map(Value::number).collect();
@@ -333,7 +335,10 @@ impl<'a> Interpreter<'a>{
                                 }
                                 ObjectKind::Other=>{
                                     if simple=="CubeDeformation"||simple=="Dilation"{
-                                        object.kind=ObjectKind::Deformation;object.inflate=args.last().and_then(Value::number).unwrap_or(0.0);
+                                        let values:Vec<f64>=args.iter().filter_map(Value::number).collect();
+                                        object.kind=ObjectKind::Deformation;
+                                        object.inflate=if values.len()>=3 {(values[values.len()-3]+values[values.len()-2]+values[values.len()-1])/3.0}
+                                            else {values.last().copied().unwrap_or(0.0)};
                                     }
                                 }
                                 _=>{}
@@ -424,14 +429,13 @@ impl<'a> Interpreter<'a>{
                         stack.push(Value::Number(if name=="sin"{value.sin()}else{value.cos()}));continue;
                     }
                     if owner.is_empty()||simple==self.class_name{
-                        if let Some(candidates)=self.methods.get(&name){
-                            let chosen=candidates.iter().copied().find(|idx|{
-                                self.class.methods[*idx].descriptor==desc
-                            }).or_else(||candidates.first().copied());
-                            if let Some(chosen)=chosen{
-                                let helper_args=args.clone();
-                                if let Some(value)=self.invoke_helper(chosen,&helper_args)?{stack.push(value);continue;}
-                            }
+                        let chosen=self.methods.get(&name).and_then(|candidates|{
+                            candidates.iter().copied().find(|idx|self.class.methods[*idx].descriptor==desc)
+                                .or_else(||candidates.first().copied())
+                        });
+                        if let Some(chosen)=chosen{
+                            let helper_args=args.clone();
+                            if let Some(value)=self.invoke_helper(chosen,&helper_args)?{stack.push(value);continue;}
                         }
                     }
                     if !return_is_void(&desc){stack.push(Value::Opaque(format!("{owner}.{name}")));}
