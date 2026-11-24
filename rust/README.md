@@ -33,6 +33,7 @@ the engine into the native executable.
   loops and helper-call position variants, expanded into actual Blockbench parts.
 - Native MCreator workspace validation, including duplicate registry/name checks, element schema checks, dimension/biome integrity, copied-resource references, automatic BlockItem collisions and machine-readable/text reports.
 - Native source resource bridge for namespace-aware assets/data import, sound path canonicalization, generated-worldgen exclusions and Forge-to-NeoForge biome modifier migration.
+- Native model/animation Java source copying, texture animation metadata copying and element metadata manifest updates.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -43,6 +44,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- mod-graph path/to/mod --source-root path/to/decompiled-source --output output/mod-graph.json
     cargo run --manifest-path rust/Cargo.toml -- validate-workspace path/to/MCreatorWorkspace
     cargo run --manifest-path rust/Cargo.toml -- copy-resources path/to/source path/to/workspace/src/main/resources --source-modid oldmod --target-modid newmod
+    cargo run --manifest-path rust/Cargo.toml -- copy-model-sources path/to/workspace com.example.mod --model path/to/Model.java --animation path/to/ModelAnimation.java
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
