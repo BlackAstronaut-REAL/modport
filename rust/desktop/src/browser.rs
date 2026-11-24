@@ -256,7 +256,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let icon_path = find_texture_reference(&all_files, &texture_refs)
             .or_else(|| texture_paths.first().cloned());
         let render_shape = resource_model_source.as_ref()
-            .map(|path| block_render_shape(path, source))
+            .map(|path| block_render_shape(path, source, &all_files))
             .or(blockstate_shape)
             .unwrap_or_else(|| if legacy_model_source.is_some() {
                 "custom".to_owned()
@@ -1138,8 +1138,12 @@ fn block_render_shape_from_model(path: &Path, files: &[PathBuf]) -> String {
     "custom".to_owned()
 }
 
-fn block_render_shape(path: &Path, source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
-    let shape = block_render_shape_from_model(path, &[]);
+fn block_render_shape(
+    path: &Path,
+    source: &mojmodelbridge::mcreator_block::BlockSource,
+    files: &[PathBuf],
+) -> String {
+    let shape = block_render_shape_from_model(path, files);
     if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
 }
 
@@ -1734,7 +1738,7 @@ mod tests {
         let (resolved, shape) = find_block_model_json(&files, "living_flower");
         assert_eq!(resolved, Some(model.clone()));
         assert_eq!(shape.as_deref(), Some("plant"));
-        assert_eq!(block_render_shape_from_model(&model), "plant");
+        assert_eq!(block_render_shape_from_model(&model, &files), "plant");
     }
 
     #[test]
