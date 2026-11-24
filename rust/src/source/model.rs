@@ -168,7 +168,7 @@ fn extract_method_body(source: &str, method_names: &[&str]) -> Option<(String, S
         let Some(found) = pattern.find(source) else { continue; };
         let open = source[found.start()..found.end()].rfind('{')? + found.start();
         let Ok((body, _)) = extract_balanced(source, open, '{', '}') else { continue; };
-        return Some((name.to_owned(), body));
+        return Some(((*name).to_owned(), body));
     }
     None
 }
@@ -180,7 +180,6 @@ fn canonical_part_name(value: &str) -> String {
 
 fn resolve_rendered_parts(
     body: &str,
-    parts: &[Part],
     aliases: &HashMap<String, String>,
 ) -> BTreeSet<String> {
     let call_pattern = Regex::new(r"(?:this\.)?([A-Za-z_$][\w$]*)\s*\.\s*render\s*\(").unwrap();
@@ -249,7 +248,7 @@ fn extract_modern_render_instances(
         };
         let Some(count) = count.filter(|value| *value >= 2 && *value <= 512) else { continue; };
 
-        let rendered = resolve_rendered_parts(&loop_body, parts, &aliases);
+        let rendered = resolve_rendered_parts(&loop_body, &aliases);
         if rendered.is_empty() { continue; }
 
         let increments: BTreeMap<String, String> = increment_pattern.captures_iter(&loop_body)
@@ -275,8 +274,8 @@ fn extract_modern_render_instances(
 
         if chosen_axis.is_none() {
             for capture in direct_rotation_pattern.captures_iter(&loop_body) {
-                let raw_part = capture[1].as_str();
-                let field = capture[2].as_str();
+                let raw_part = &capture[1];
+                let field = &capture[2];
                 let expression = capture[3].trim();
                 let resolved = aliases.get(&canonical_part_name(raw_part));
                 if resolved.is_none() { continue; }
@@ -586,7 +585,7 @@ pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedMo
         }
     }
 
-    let (render_instances, render_runtime_rotations, render_warnings) =
+    let (mut render_instances, render_runtime_rotations, render_warnings) =
         extract_modern_render_instances(&clean, &class_name, &parts, &constants);
     let helper_instances = extract_modern_helper_render_instances(&clean, &parts, &constants);
     for (name, specs) in helper_instances {
