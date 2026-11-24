@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::mcreator_armor::discover_armor_sources;
-use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
+use mojmodelbridge::mcreator_block::{discover_block_sources};
 use mojmodelbridge::mcreator_equipment::discover_equipment_sources;
 use regex::Regex;
 use serde_json::Value;
@@ -135,7 +135,6 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     // evidence, never from texture filename substrings.
     for source in &equipment {
         let registry = normalize_registry(&source.registry_name);
-        let class_path = PathBuf::from(&source.source_path);
         let category = if source.element_type == "tool" {
             if matches!(source.tool_type.as_deref(), Some("Sword" | "Bow" | "Crossbow" | "Trident" | "Staff" | "Dagger" | "Spear")) {
                 "Weapons"
@@ -172,7 +171,6 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             lore,
             components_json,
         });
-        let _ = class_path;
     }
 
     // Armor pieces come from the armor set/registry parser. A Java getArmorModel
