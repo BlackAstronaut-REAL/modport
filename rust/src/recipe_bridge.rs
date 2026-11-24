@@ -42,6 +42,7 @@ pub fn recipe_ref(
     let raw = raw.trim();
     if raw.is_empty() { return String::new(); }
     if raw.starts_with('#') { return raw.to_owned(); }
+    if raw.starts_with("Items.") || raw.starts_with("Blocks.") { return raw.to_owned(); }
     let (namespace, path) = raw.split_once(':').unwrap_or(("minecraft", raw));
     if namespace.eq_ignore_ascii_case(source_modid) {
         let compact = compact_registry(path);
@@ -848,7 +849,7 @@ pub fn java_recipe_item_ref(
         }
     }
 
-    if let Some(position) = expression.find("createVanillaSpawnEgg") {
+    if let Some(position) = expression.to_ascii_lowercase().find("createvanillaspawnegg") {
         if let Some(open_rel) = expression[position..].find('(') {
             let open = position + open_rel;
             if let Ok((arguments, _)) = crate::source::java::extract_balanced(&expression, open, '(', ')') {
