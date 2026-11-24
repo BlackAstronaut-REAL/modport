@@ -180,7 +180,7 @@ pub fn unquote_java_string(value: &str) -> String {
 fn normalize_java_number(expression: &str) -> String {
     let cast = Regex::new(r"\((?:float|double|int|long|short|byte)\)\s*").unwrap();
     let suffix = Regex::new(r"(?i)(?<=[0-9])(?:f|d|l)\b").unwrap();
-    let mut expr = suffix.replace_all(&cast.replace_all(expression.trim(), ""), "").to_string();
+    let mut expr = suffix.replace_all(&cast.replace_all(expression.trim(), ""), "$1").to_string();
     let replacements = [
         ("StrictMath.PI", std::f64::consts::PI),
         ("Math.PI", std::f64::consts::PI),
