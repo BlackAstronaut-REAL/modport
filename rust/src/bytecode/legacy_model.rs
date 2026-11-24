@@ -359,21 +359,42 @@ fn run_constructor(
                             }
                             field_objects.insert(name, index);
                         }
-                        Value::Number(number) if matches!(&owner, Value::This) => {
-                            if name == "field_78090_t" || name == "textureWidth" {
-                                texture_width = (number as i64).max(1) as u32;
-                                explicit_width = true;
-                            } else if name == "field_78089_u" || name == "textureHeight" {
-                                texture_height = (number as i64).max(1) as u32;
-                                explicit_height = true;
-                            } else {
-                                scalar_fields.insert(name, number);
+                        Value::Number(number) => {
+                            match &owner {
+                                Value::This => {
+                                    if name == "field_78090_t" || name == "textureWidth" {
+                                        texture_width = (number as i64).max(1) as u32;
+                                        explicit_width = true;
+                                    } else if name == "field_78089_u" || name == "textureHeight" {
+                                        texture_height = (number as i64).max(1) as u32;
+                                        explicit_height = true;
+                                    } else {
+                                        scalar_fields.insert(name.clone(), number);
+                                    }
+                                }
+                                Value::Object(index) => {
+                                    if let Some(part) = parts.get_mut(*index) {
+                                        match name.as_str() {
+                                            "field_78809_i" | "mirror" => part.mirror = number != 0.0,
+                                            "field_78795_f" | "rotateAngleX" | "xRot" => part.rotation[0] = number,
+                                            "field_78796_g" | "rotateAngleY" | "yRot" => part.rotation[1] = number,
+                                            "field_78808_h" | "rotateAngleZ" | "zRot" => part.rotation[2] = number,
+                                            "field_78798_e" | "rotationPointX" => part.offset[0] = number,
+                                            "field_78797_d" | "rotationPointY" => part.offset[1] = number,
+                                            "field_78800_c" | "rotationPointZ" => part.offset[2] = number,
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
                         }
-                        Value::Boolean(value) => {
-                            if let Value::Object(index) = &owner {
-                                if let Some(part) = parts.get_mut(*index) {
-                                    if name == "field_78809_i" || name == "mirror" { part.mirror = value; }
+                        Value::Boolean(boolean) => {
+                            if let Value::Object(index) = owner {
+                                if let Some(part) = parts.get_mut(index) {
+                                    if name == "field_78809_i" || name == "mirror" {
+                                        part.mirror = boolean;
+                                    }
                                 }
                             }
                         }
