@@ -596,6 +596,70 @@ pub fn build_armor_element(
     (element,warnings)
 }
 
+fn compact_id(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// Recover source get_armorstats / load_armorstats calls. The first six
+/// numeric arguments match the legacy exporter contract:
+/// durability, helmet, chestplate, leggings, boots, enchantability.
+pub fn source_armor_stats(source_roots: &[PathBuf]) -> BTreeMap<String, BTreeMap<String, f64>> {
+    use crate::source::java::{extract_balanced, split_top_level};
+
+    let call = Regex::new(r"(?i)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:this\s*\.\s*)?(?:get|load)_armorstats\s*\(").unwrap();
+    let numeric = Regex::new(r"^\s*(-?\d+(?:\.\d+)?)[fFdD]?\s*$").unwrap();
+    let mut result = BTreeMap::<String, BTreeMap<String, f64>>::new();
+
+    for path in java_files(source_roots) {
+        let Ok(bytes) = fs::read(&path) else { continue };
+        let source = strip_comments(&String::from_utf8_lossy(&bytes));
+        for capture in call.captures_iter(&source) {
+            let Some(field) = capture.get(1).map(|value| value.as_str()) else { continue };
+            let Some(matched) = capture.get(0) else { continue };
+            let Some(open) = matched.as_str().rfind('(').map(|offset| matched.start() + offset) else { continue };
+            let Ok((arguments, _)) = extract_balanced(&source, open, '(', ')') else { continue };
+            let arguments = split_top_level(&arguments, ',');
+            let mut label = String::new();
+            let mut numbers = Vec::<f64>::new();
+            for argument in &arguments {
+                let argument = argument.trim();
+                if argument.len() >= 2 && (
+                    (argument.starts_with('"') && argument.ends_with('"')) ||
+                    (argument.starts_with('\'') && argument.ends_with('\''))
+                ) {
+                    label = argument[1..argument.len()-1].to_owned();
+                }
+                if let Some(captures) = numeric.captures(argument) {
+                    if let Some(value) = captures.get(1).and_then(|value| value.as_str().parse::<f64>().ok()) {
+                        if value.is_finite() {
+                            numbers.push(value);
+                        }
+                    }
+                }
+            }
+            if numbers.len() < 6 { continue; }
+            let mut stats = BTreeMap::<String, f64>::new();
+            for (key, value) in [
+                ("durability", numbers[0]),
+                ("helmet", numbers[1]),
+                ("body", numbers[2]),
+                ("leggings", numbers[3]),
+                ("boots", numbers[4]),
+                ("enchantability", numbers[5]),
+            ] {
+                stats.insert(key.to_owned(), value);
+            }
+            for key in [&label, field, field.trim_end_matches("_armorstats").trim_end_matches("ArmorStats")] {
+                let key = compact_id(key);
+                if !key.is_empty() {
+                    result.insert(key, stats.clone());
+                }
+            }
+        }
+    }
+    result
+}
+
 /// Export grouped Java armor sets into MCreator armor elements and resource files.
 pub fn export_armor_to_workspace(
     source_roots: &[PathBuf],
@@ -737,7 +801,9 @@ pub fn export_armor_to_workspace(
         }
 
         let element_name=unique_element_name(&set.prefix,&mut used_names);
-        let stats=None;
+        let recovered_armor_stats = source_armor_stats(source_roots);
+        let stats = recovered_armor_stats.get(&compact_id(&set.prefix))
+            .or_else(|| recovered_armor_stats.get(&compact_id(&set.registry_name)));
         let (element,mut builder_warnings)=build_armor_element(
             Some(&template),&set.prefix,&set.registry_name,&set.fields,&piece_textures,&layer_prefix,stats,imported_fv
         );
@@ -867,6 +933,25 @@ mod tests {
         let updated:Value=serde_json::from_slice(&fs::read(workspace.join("test.mcreator")).unwrap()).unwrap();
         assert_eq!(updated["mod_elements"][0]["registry_name"],"ruby_armor");
         assert_eq!(updated["mod_elements"][0]["type"],"armor");
+    }
+
+    #[test]
+    fn recovers_armor_defense_durability_and_enchantability_from_source_stats() {
+        let temp=tempdir().unwrap();
+        let source=temp.path().join("ArmorStats.java");
+        fs::write(&source,r#"
+            public class ArmorStats {
+                public static ArmorStats ruby_stats = get_armorstats("ruby", 80, 7, 10, 8, 7, 12, 1, 2, 3, 4, 5, 6, 7, 8);
+            }
+        "#).unwrap();
+        let stats=source_armor_stats(&[temp.path().to_path_buf()]);
+        let ruby=&stats["ruby"];
+        assert_eq!(ruby["durability"],80.0);
+        assert_eq!(ruby["helmet"],7.0);
+        assert_eq!(ruby["body"],10.0);
+        assert_eq!(ruby["leggings"],8.0);
+        assert_eq!(ruby["boots"],7.0);
+        assert_eq!(ruby["enchantability"],12.0);
     }
 
     #[test]
