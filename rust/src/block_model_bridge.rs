@@ -102,7 +102,7 @@ fn texture_value(textures: &Map<String, Value>, names: &[&str]) -> String {
 
 /// Infer MCreator's native block render mode and concrete texture references from
 /// block model/blockstate JSON. This ports the old _mcreator_block_model_info helper.
-pub fn mcreator_block_model_info(source_roots: &[PathBuf], source_modid: &str, registry: &str) -> Value {
+fn mcreator_block_model_info_raw(source_roots: &[PathBuf], source_modid: &str, registry: &str) -> Value {
     let registry = snake_case(registry);
     let mut candidates = Vec::new();
 
@@ -195,6 +195,29 @@ pub fn mcreator_block_model_info(source_roots: &[PathBuf], source_modid: &str, r
         }
     }
     Value::Object(Map::new())
+}
+
+/// Normalize block-model texture fields to MCreator-compatible resource references.
+pub fn normalize_block_model_info_textures(mut info: Value) -> Value {
+    const FIELDS: &[&str] = &[
+        "texture", "textureTop", "textureBottom", "textureLeft",
+        "textureFront", "textureRight", "textureBack", "itemTexture",
+        "particleTexture",
+    ];
+    if let Some(object) = info.as_object_mut() {
+        for field in FIELDS {
+            let value = object.get(*field).and_then(Value::as_str).unwrap_or("").to_owned();
+            if !value.is_empty() {
+                object.insert((*field).to_owned(), Value::String(mcreator_texture_ref(&value)));
+            }
+        }
+    }
+    info
+}
+
+/// Infer a block render type and normalize all returned texture references.
+pub fn mcreator_block_model_info(source_roots: &[PathBuf], source_modid: &str, registry: &str) -> Value {
+    normalize_block_model_info_textures(mcreator_block_model_info_raw(source_roots, source_modid, registry))
 }
 
 fn model_texture_stem(reference: &str) -> String {
@@ -522,6 +545,23 @@ mod tests {
         assert_eq!(stem, "foo");
         assert_eq!(fs::read(output.join("block/foo.png")).unwrap(), b"pngdata");
         assert_eq!(fs::read(output.join("block/foo.png.mcmeta")).unwrap(), b"{\"animation\":{}}");
+    }
+
+    #[test]
+    fn normalizes_all_mcreator_texture_fields_and_keeps_unknown_fields() {
+        let info = json!({
+            "texture":"minecraft:block/stone",
+            "textureTop":"demo:block/top",
+            "textureBack":"minecraft:item/stick",
+            "modelPath":"source/models/block/test.json",
+            "extra":"preserved"
+        });
+        let normalized = normalize_block_model_info_textures(info);
+        assert_eq!(normalized["texture"], "minecraft:stone");
+        assert_eq!(normalized["textureTop"], "demo:block/top");
+        assert_eq!(normalized["textureBack"], "minecraft:stick");
+        assert_eq!(normalized["modelPath"], "source/models/block/test.json");
+        assert_eq!(normalized["extra"], "preserved");
     }
 
     #[test]
