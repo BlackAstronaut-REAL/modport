@@ -10,6 +10,7 @@ pub mod blockbench;
 pub mod bytecode;
 pub mod discovery;
 pub mod metadata;
+pub mod mcreator_model;
 pub mod mod_graph;
 pub mod model;
 pub mod pipeline;

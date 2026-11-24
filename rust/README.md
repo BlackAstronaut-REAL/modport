@@ -64,3 +64,13 @@ pivots, rotations, UV offsets, inflate/mirror behavior, UUIDs, texture selection
 animation formulas/timing/loop endpoints, warnings, reports and MCreator output.
 Differences must be documented and covered by regression tests against oldVer/.
 Never silently simplify unsupported input; retain source evidence and warnings.
+
+
+### MCreator model source generation
+
+Generate the Mojmap model and sampled AnimationDefinition Java sources from either decompiled Java or a compiled model class. The files are written to the same staging directories used by the Beta 12 exporter: `models/mojmap-1.21.x` and `models/animations` for NeoForge 1.21.1.
+
+```powershell
+mojmodelbridge export-model-sources .\ModelDragon.class .\MCreatorWorkspace --modid examplemod
+mojmodelbridge export-model-sources .\ModelDragon.java .\MCreatorWorkspace --modid examplemod --overwrite
+```

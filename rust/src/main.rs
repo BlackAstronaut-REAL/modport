@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use mojmodelbridge::pipeline::convert_model_source;
+use mojmodelbridge::mcreator_model::export_model_sources;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
@@ -54,6 +55,19 @@ enum Command {
         /// Skip writing the JSON and text validation report files.
         #[arg(long)]
         no_reports: bool,
+    },
+    /// Generate MCreator Mojmap model and animation Java files from a Java or class model.
+    ExportModelSources {
+        source: PathBuf,
+        output_root: PathBuf,
+        #[arg(long, default_value = "converted_mod")]
+        modid: String,
+        #[arg(long)]
+        class_name: Option<String>,
+        #[arg(long, default_value = "neoforge-1.21.1")]
+        generator: String,
+        #[arg(long)]
+        overwrite: bool,
     },
     /// Copy imported mod assets/data while remapping namespaces for the target workspace.
     CopyResources {
@@ -140,6 +154,26 @@ fn main() -> Result<()> {
             }
             if !report.ok {
                 std::process::exit(2);
+            }
+        }
+        Command::ExportModelSources { source, output_root, modid, class_name, generator, overwrite } => {
+            let result = export_model_sources(
+                &source, &output_root, &modid, class_name.as_deref(), &generator, overwrite
+            )?;
+            println!(
+                "Generated MCreator model {}: {} part(s), {} cube(s).",
+                result.class_name, result.part_count, result.cube_count
+            );
+            println!("Model Java: {}", result.model_path.display());
+            if let Some(path) = result.animation_path {
+                println!("Animation Java: {}", path.display());
+            }
+            for animation in result.animations {
+                println!("Animation {} -> {} ({} channels, {:.3}s).",
+                    animation.source_name, animation.field, animation.channel_count, animation.length);
+            }
+            for warning in result.warnings {
+                eprintln!("[WARN] {warning}");
             }
         }
         Command::CopyResources { source_root, output_resources, source_modid, target_modid } => {
