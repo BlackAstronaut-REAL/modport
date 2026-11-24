@@ -290,7 +290,7 @@ fn armor_group_registry(prefix: &str, fields: &BTreeMap<String, String>, ids: &B
                     for suffix in aliases {
                         let suffix = format!("_{suffix}");
                         if lower.ends_with(&suffix) {
-                            return format!("{}armor", lower.trim_end_matches(&suffix).trim_end_matches('_'));
+                            return format!("{}_armor", lower.trim_end_matches(&suffix).trim_end_matches('_'));
                         }
                     }
                 }
@@ -321,9 +321,9 @@ fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource
     }
 
     let mut results = Vec::new();
+    let combined_registry_source = all_texts.join("\n");
     for (prefix, group) in groups {
-        let combined = group.texts.join("\n");
-        let ids = field_registry_map(&combined);
+        let ids = field_registry_map(&combined_registry_source);
         let registry_name = armor_group_registry(&prefix, &group.fields, &ids);
         results.push(ArmorSetSource {
             prefix,
@@ -588,10 +588,8 @@ pub fn build_armor_element(
     }
 
     let fv = template.get("_fv").and_then(Value::as_i64).unwrap_or(imported_fv).clamp(0,89);
-    let mut element = json!({"_fv":fv,"_type":"armor","definition":definition});
-    if let Some(object) = element.as_object_mut() {
-        object.insert("registry_name".to_owned(), json!(registry));
-    }
+    let element = json!({"_fv":fv,"_type":"armor","definition":definition});
+    let _ = registry;
     if stats.is_none() {
         warnings.push("Armor defense values, durability, enchantability, and special effects use conservative defaults.".to_owned());
     }
@@ -711,10 +709,10 @@ pub fn export_armor_to_workspace(
         candidates_two.dedup();
         if let Some(source)=candidates_one.first() {
             let stem=source.file_stem().and_then(|value|value.to_str()).unwrap_or(&layer_prefix);
-            if let Some(stripped)=stem.strip_suffix("_layer_1") {
-                layer_prefix=stripped.to_owned();
-            } else if let Some(stripped)=stem.strip_suffix("__layer_1") {
+            if let Some(stripped)=stem.strip_suffix("__layer_1") {
                 layer_prefix=format!("{stripped}_");
+            } else if let Some(stripped)=stem.strip_suffix("_layer_1") {
+                layer_prefix=stripped.to_owned();
             } else if let Some(stripped)=stem.strip_suffix("_1") {
                 layer_prefix=stripped.to_owned();
             } else if let Some(stripped)=stem.strip_suffix("layer1") {
@@ -878,7 +876,7 @@ mod tests {
         let root=source.join("assets/demo/textures/item");
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("ruby_boots.png"),b"boots").unwrap();
-        let candidates=texture_matches(&[source],"demo",&[
+        let candidates=texture_matches(&[source],&[
             "ruby_helmet".to_owned(),"RubyHelmet".to_owned()
         ],"helmet");
         assert!(candidates.is_empty());
