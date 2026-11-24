@@ -19,6 +19,18 @@ The files under [oldVer/](oldVer/) are the known-working MojModelBridge 3.4.0 Be
 
 The long-term plan for complex logic is to retain recovered source/bytecode evidence, represent behavior independently of the target loader, and translate or rebuild it using MCreator's procedure/text representation where appropriate. Unsupported sections must remain attached to the project with provenance and conversion warnings rather than silently disappearing. Logic rewriting is not part of this baseline.
 
+## Native Rust desktop prototype
+
+A separate native Rust desktop application is now under [rust/desktop/](rust/desktop/). It keeps the existing far-left navigation as a collapsible rail and adds a categorized content browser, textured model/animation preview, and basic name/lore/component editor with a live Minecraft tooltip preview.
+
+Run it from the repository root:
+
+```powershell
+cargo run --manifest-path rust/desktop/Cargo.toml
+```
+
+The desktop app uses the native Rust engine library and does not load oldVer/. Its current browser indexes extracted mod directories; item/block entries are texture-derived, and editor fields are preview drafts rather than workspace write-back. See [rust/desktop/README.md](rust/desktop/README.md) for build instructions and prototype boundaries. The established Python/Tkinter application below remains available while the Rust app is developed.
+
 ## Run from source
 
 Requirements: Python 3.10+ and a JDK with javap available on PATH for compiled .class analysis.
