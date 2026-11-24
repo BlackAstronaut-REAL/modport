@@ -109,7 +109,7 @@ fn converts_compiled_legacy_model_class_without_javap() {
     let converted = convert_model_source(&source, &output, &[], false).unwrap();
     assert!(converted.part_count > 0);
     assert!(converted.cube_count > 0);
-    assert_eq!(converted.source_format, "minecraft_1.7_1.8_modelbase_class");
+    assert_eq!(converted.source_format, "minecraft_1.9_1.12_modelbase_class");
 
     let project: serde_json::Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
     assert_eq!(project["elements"].as_array().unwrap().len(), converted.cube_count);
