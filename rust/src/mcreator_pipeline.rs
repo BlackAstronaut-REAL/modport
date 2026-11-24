@@ -233,6 +233,34 @@ pub fn export_all_to_workspace(
         serde_json::to_value(&recipes)?,
     ));
 
+    let validation = crate::workspace_validation::validate_workspace(
+        &workspace_root,
+        None,
+        true,
+    )?;
+    let validation_details = serde_json::to_value(&validation)?;
+    let validation_ok = validation_details.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    if let Some(errors) = validation_details.get("errors").and_then(Value::as_array) {
+        for error in errors {
+            let code = error.get("code").and_then(Value::as_str).unwrap_or("validation_error");
+            let message = error.get("message").and_then(Value::as_str).unwrap_or("Workspace validation error");
+            warnings.push(format!("[{code}] {message}"));
+        }
+    }
+    if let Some(items) = validation_details.get("warnings").and_then(Value::as_array) {
+        for warning in items {
+            let code = warning.get("code").and_then(Value::as_str).unwrap_or("validation_warning");
+            let message = warning.get("message").and_then(Value::as_str).unwrap_or("Workspace validation warning");
+            warnings.push(format!("[{code}] {message}"));
+        }
+    }
+    stages.push(stage(
+        "validation",
+        usize::from(validation_ok),
+        0,
+        validation_details,
+    ));
+
     Ok(ExportAllReport {
         workspace_file,
         source_modid: import_modid,
@@ -296,7 +324,7 @@ mod tests {
 
         let report = export_all_to_workspace(&[source], &workspace, "demo", 89).unwrap();
         assert_eq!(report.stages.iter().map(|stage| stage.name.as_str()).collect::<Vec<_>>(), vec![
-            "equipment","armor","blocks","plants","worldgen","living_entities","projectiles","recipes"
+            "equipment","armor","blocks","plants","worldgen","living_entities","projectiles","recipes","validation"
         ]);
         assert!(report.stages.iter().all(|stage| stage.exported == 0 && stage.skipped == 0));
         assert!(report.workspace_file.ends_with("test.mcreator"));
