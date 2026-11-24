@@ -305,9 +305,9 @@ pub fn parse_legacy_java_model(
         ("rotation_delta_x", &["field_78795_f", "rotateAngleX", "xRot"]),
         ("rotation_delta_y", &["field_78796_g", "rotateAngleY", "yRot"]),
         ("rotation_delta_z", &["field_78808_h", "rotateAngleZ", "zRot"]),
-        ("position_delta_x", &["field_78798_e", "rotationPointX", "x"]),
+        ("position_delta_x", &["field_78800_c", "rotationPointX", "x"]),
         ("position_delta_y", &["field_78797_d", "rotationPointY", "y"]),
-        ("position_delta_z", &["field_78800_c", "rotationPointZ", "z"]),
+        ("position_delta_z", &["field_78798_e", "rotationPointZ", "z"]),
     ];
     for (kind, fields) in delta_specs {
         let field_alt = fields.iter().map(|field| regex::escape(field)).collect::<Vec<_>>().join("|");
