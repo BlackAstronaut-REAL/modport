@@ -145,11 +145,8 @@ fn relative_path(root: &Path, path: &Path) -> String {
 fn texture_filename(path: &Path, fallback_registry: &str) -> String {
     let raw = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
     let stem = Path::new(raw).file_stem().and_then(|value| value.to_str()).unwrap_or(fallback_registry);
-    let sanitized: String = stem.chars().map(|ch| {
-        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.' { ch.to_ascii_lowercase() } else { '_' }
-    }).collect();
-    let stem = sanitized.trim_matches('_');
-    if stem.is_empty() { format!("{fallback_registry}.png") } else { format!("{stem}.png") }
+    let sanitized = slug(stem);
+    if sanitized.is_empty() { format!("{fallback_registry}.png") } else { format!("{sanitized}.png") }
 }
 
 fn placeholder_png() -> Vec<u8> {
