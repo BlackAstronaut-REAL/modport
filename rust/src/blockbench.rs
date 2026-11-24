@@ -27,7 +27,7 @@ pub fn deterministic_uuid(model_name: &str, kind: &str, index: usize, name: &str
     Uuid::new_v5(&namespace, format!("{model_name}:{kind}:{index}:{name}").as_bytes()).to_string()
 }
 
-fn calculate_origins(parts: &[Part]) -> Result<Vec<[f64; 3]>> {
+pub(crate) fn calculate_origins(parts: &[Part]) -> Result<Vec<[f64; 3]>> {
     let by_name: HashMap<String, usize> = parts.iter().enumerate().map(|(i, p)| (p.name.clone(), i)).collect();
     fn visit(
         index: usize,
