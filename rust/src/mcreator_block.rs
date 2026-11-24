@@ -560,7 +560,10 @@ pub fn export_blocks_to_workspace(
             suffix+=1;
         }
 
-        let (element,warnings)=build_block_element(&template,&source,&info,&textures,imported_fv);
+        let (element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv);
+        if source.source_text.trim().is_empty() {
+            warnings.push("Block class and registry ID were recovered from compiled bytecode only; source-defined state properties, hardness, drops, and special behavior may need manual reconstruction.".to_owned());
+        }
         let element_path=output_elements.join(format!("{element_name}.mod.json"));
         fs::write(&element_path,format!("{}\n",serde_json::to_string_pretty(&element)?))
             .with_context(||format!("Writing block element {}",element_path.display()))?;
