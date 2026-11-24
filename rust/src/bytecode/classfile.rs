@@ -16,6 +16,16 @@ pub enum ConstantPoolEntry {
     Module { name_index: u16 }, Package { name_index: u16 },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstantValue {
+    Integer(i32),
+    Float(f32),
+    Long(i64),
+    Double(f64),
+    String(String),
+    Class(String),
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AttributeInfo { pub name: String, pub info: Vec<u8> }
 
@@ -257,6 +267,34 @@ impl ClassFile {
             ConstantPoolEntry::String { string_index } => self.utf8(*string_index),
             ConstantPoolEntry::Utf8(value) => Some(value), _ => None,
         }
+    }
+
+    /// Resolve an ldc-loadable constant into a typed value.
+    pub fn constant(&self, index: u16) -> Option<ConstantValue> {
+        match self.constant_pool.get(index as usize)?.as_ref()? {
+            ConstantPoolEntry::Integer(value) => Some(ConstantValue::Integer(*value)),
+            ConstantPoolEntry::Float(value) => Some(ConstantValue::Float(*value)),
+            ConstantPoolEntry::Long(value) => Some(ConstantValue::Long(*value)),
+            ConstantPoolEntry::Double(value) => Some(ConstantValue::Double(*value)),
+            ConstantPoolEntry::String { string_index } => self.utf8(*string_index).map(|v| ConstantValue::String(v.to_owned())),
+            ConstantPoolEntry::Class { name_index } => self.utf8(*name_index).map(|v| ConstantValue::Class(v.to_owned())),
+            _ => None,
+        }
+    }
+
+    /// Resolve an invokedynamic constant to its bootstrap method index, name,
+    /// and descriptor. Bootstrap arguments remain available on the class file.
+    pub fn invoke_dynamic(&self, index: u16) -> Option<(u16, String, String)> {
+        let (bootstrap_index, name_and_type_index) = match self.constant_pool.get(index as usize)?.as_ref()? {
+            ConstantPoolEntry::InvokeDynamic { bootstrap_method_attr_index, name_and_type_index } =>
+                (*bootstrap_method_attr_index, *name_and_type_index),
+            _ => return None,
+        };
+        let (name_index, descriptor_index) = match self.constant_pool.get(name_and_type_index as usize)?.as_ref()? {
+            ConstantPoolEntry::NameAndType { name_index, descriptor_index } => (*name_index, *descriptor_index),
+            _ => return None,
+        };
+        Some((bootstrap_index, self.utf8(name_index)?.to_owned(), self.utf8(descriptor_index)?.to_owned()))
     }
 
     fn read_bootstrap_methods(&self) -> Result<Vec<BootstrapMethod>> {
