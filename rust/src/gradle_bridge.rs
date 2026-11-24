@@ -82,7 +82,7 @@ fn parse_diagnostics(output: &str) -> Vec<CompileDiagnostic> {
             Some("error")
         } else if lower.contains(" warning:") || lower.starts_with("warning:") {
             Some("warning")
-        } else if lower == "build failed" || lower.starts_with("build failed with an exception") {
+        } else if lower.starts_with("build failed") || lower.contains("execution failed for task") {
             Some("error")
         } else {
             None
