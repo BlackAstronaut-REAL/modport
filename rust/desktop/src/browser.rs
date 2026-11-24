@@ -1017,11 +1017,15 @@ mod tests {
 
     #[test]
     fn classifies_weapons_from_registered_type_and_superclass_evidence() {
-        let mut source = mojmodelbridge::mcreator_equipment::EquipmentSource::default();
-        source.class_name = "CustomBlade".to_owned();
-        source.registry_name = "ancient_blade".to_owned();
-        source.superclass = "net.minecraft.item.ItemSword".to_owned();
-        source.element_type = "item".to_owned();
+        let mut source = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "CustomBlade".to_owned(),
+            registry_name: "ancient_blade".to_owned(),
+            superclass: "net.minecraft.item.ItemSword".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: String::new(),
+        };
         assert!(is_weapon_source(&source));
 
         source.superclass = "net.minecraft.item.ItemAxe".to_owned();
