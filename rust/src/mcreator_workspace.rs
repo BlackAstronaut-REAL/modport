@@ -278,6 +278,21 @@ pub fn export_living_entities_to_workspace(
     target_generator: &str,
     overwrite: bool,
 ) -> Result<McreatorWorkspaceExportReport> {
+    export_living_entities_to_workspace_with_modid(
+        graph, workspace_root, target_generator, overwrite, None
+    )
+}
+
+/// Export renderer-linked entities while preserving an explicit source namespace.
+/// The standalone exporter derives the namespace from the graph root; export-all
+/// supplies the user-selected mod id because its source roots may have arbitrary names.
+pub fn export_living_entities_to_workspace_with_modid(
+    graph: &ModGraph,
+    workspace_root: &Path,
+    target_generator: &str,
+    overwrite: bool,
+    source_modid_override: Option<&str>,
+) -> Result<McreatorWorkspaceExportReport> {
     let workspace_root = fs::canonicalize(workspace_root)
         .unwrap_or_else(|_| workspace_root.to_path_buf());
     let workspace_path = workspace_file(&workspace_root)?;
@@ -300,8 +315,10 @@ pub fn export_living_entities_to_workspace(
         .filter(|value| matches!(*value, "neoforge-1.21.1" | "forge-1.20.1"))
         .unwrap_or(target_generator).to_owned();
 
-    let source_modid = graph.root.file_name().and_then(|value| value.to_str())
-        .map(slug).unwrap_or_else(|| "imported_mod".to_owned());
+    let source_modid = source_modid_override
+        .map(str::to_owned)
+        .unwrap_or_else(|| graph.root.file_name().and_then(|value| value.to_str())
+            .map(slug).unwrap_or_else(|| "imported_mod".to_owned()));
     let template = find_living_entity_template(&workspace_root)?.map(|(_, value, _)| value);
 
     let mut roots = vec![graph.root.clone()];
