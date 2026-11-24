@@ -298,9 +298,7 @@ pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSourc
                 source_path:source_path.to_string_lossy().replace('\\', "/"),
                 source_text:source_text.clone(),
             };
-            if !is_plant_source(&source) {
-                output.push(source);
-            }
+            output.push(source);
         }
     }
     output.sort_by(|a,b| a.registry_name.cmp(&b.registry_name).then(a.class_name.cmp(&b.class_name)));
@@ -489,7 +487,10 @@ pub fn export_blocks_to_workspace(
     let mut workspace:Value=serde_json::from_slice(&bytes)?;
     let target_modid=workspace.get("workspaceSettings").and_then(|v|v.get("modid")).and_then(Value::as_str)
         .filter(|s|!s.trim().is_empty()).unwrap_or("converted_mod").to_owned();
-    let discovered=discover_block_sources(source_roots)?;
+    let discovered: Vec<BlockSource> = discover_block_sources(source_roots)?
+        .into_iter()
+        .filter(|source| !is_plant_source(source))
+        .collect();
     let template=definition_template(&workspace_root)?;
 
     let mut report=BlockWorkspaceExportReport{
@@ -510,10 +511,6 @@ pub fn export_blocks_to_workspace(
     fs::create_dir_all(&output_elements)?;
 
     for source in discovered{
-        if is_plant_source(&source) {
-            report.skipped += 1;
-            continue;
-        }
         let registry=source.registry_name.to_ascii_lowercase();
         if existing.contains(&registry){report.skipped+=1;continue;}
         let copied=crate::block_model_bridge::copy_source_block_model_resources(source_roots,source_modid,&target_modid,&registry,&workspace_root)?;
@@ -666,7 +663,8 @@ mod tests{
             class RubyFlower extends BlockFlower { }
         "#).unwrap();
         let found=discover_block_sources(&[root.to_path_buf()]).unwrap();
-        assert!(found.is_empty());
+        assert_eq!(found.len(),1);
+        assert!(is_plant_source(&found[0]));
     }
 
     #[test]
