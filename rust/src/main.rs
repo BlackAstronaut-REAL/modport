@@ -16,6 +16,7 @@ use mojmodelbridge::mcreator_armor::export_armor_to_workspace;
 use mojmodelbridge::mcreator_block::export_blocks_to_workspace;
 use mojmodelbridge::mcreator_plant::export_plants_to_workspace;
 use mojmodelbridge::mcreator_worldgen::export_worldgen_to_workspace;
+use mojmodelbridge::mcreator_projectile::export_projectiles_to_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -110,6 +111,16 @@ enum Command {
     },
     /// Export resource-authored biome and dimension JSON as MCreator elements.
     ExportWorldgen {
+        workspace_root: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long, default_value = "")]
+        source_modid: String,
+        #[arg(long, default_value_t = 89)]
+        imported_fv: i64,
+    },
+    /// Export Java arrow/throwable/projectile subclasses and bind pickup/ranged items.
+    ExportProjectiles {
         workspace_root: PathBuf,
         #[arg(required = true)]
         source_roots: Vec<PathBuf>,
@@ -399,6 +410,37 @@ fn main() -> Result<()> {
                 );
                 for warning in item.warnings {
                     eprintln!("[WARN] {}: {warning}", item.registry_name);
+                }
+            }
+            for warning in report.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportProjectiles { workspace_root, source_roots, source_modid, imported_fv } => {
+            let report = export_projectiles_to_workspace(
+                &source_roots,
+                &workspace_root,
+                &source_modid,
+                imported_fv,
+            )?;
+            println!(
+                "MCreator projectile export: {} discovered, {} exported, {} skipped; {} ranged item(s) linked.",
+                report.discovered,
+                report.exported,
+                report.skipped,
+                report.ranged_items_updated
+            );
+            println!("Updated workspace: {}", report.workspace_file.display());
+            for item in report.records {
+                println!(
+                    "{} [{}] -> {} (pickup item={})",
+                    item.class_name,
+                    item.registry_name,
+                    item.element_name,
+                    item.bound_item.as_deref().unwrap_or("unresolved")
+                );
+                for warning in item.warnings {
+                    eprintln!("[WARN] {}: {warning}", item.class_name);
                 }
             }
             for warning in report.warnings {
