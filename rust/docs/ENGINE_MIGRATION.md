@@ -22,7 +22,7 @@ The Rust implementation is independent under rust/ and must not invoke Python.
 | mcreator_export.py::export_mcreator_workspace | export/mcreator | Not ported |
 | mcreator_content_export.py | export/mcreator/content | Not ported |
 | mcreator_source_bridge.py | export/mcreator/source_bridge | Not ported |
-| workspace_validator.py | validate/workspace | Not ported |
+| workspace_validator.py::validate_workspace | workspace_validation | Initial native parity port with report output and focused regression tests; corpus parity review remains |
 | model_bridge.py::batch_convert | pipeline | Not ported: mixed roots, resume/cache, reports and MCreator handoff |
 
 ## Shared representations

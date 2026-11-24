@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
+use mojmodelbridge::workspace_validation::validate_workspace;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -44,6 +45,14 @@ enum Command {
         /// Write the graph as JSON instead of stdout.
         #[arg(short, long)]
         output: Option<PathBuf>,
+    },
+    /// Validate an exported MCreator workspace and write parity diagnostics.
+    ValidateWorkspace {
+        /// Workspace directory containing a root-level .mcreator file.
+        root: PathBuf,
+        /// Skip writing the JSON and text validation report files.
+        #[arg(long)]
+        no_reports: bool,
     },
     /// Safely extract a JAR or ZIP archive.
     Extract {
@@ -103,6 +112,24 @@ fn main() -> Result<()> {
             }
             for warning in graph.warnings {
                 eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ValidateWorkspace { root, no_reports } => {
+            let report = validate_workspace(&root, None, !no_reports)?;
+            println!(
+                "Workspace validation: {} ({} error(s), {} warning(s)).",
+                if report.ok { "PASS" } else { "FAIL" },
+                report.errors.len(),
+                report.warnings.len()
+            );
+            if !no_reports {
+                println!("Reports: {}/MOJMODELBRIDGE_WORKSPACE_VALIDATION.[json|txt]", root.display());
+            }
+            for issue in report.errors.iter().chain(report.warnings.iter()) {
+                eprintln!("[{}:{}] {}", issue.severity.to_ascii_uppercase(), issue.code, issue.message);
+            }
+            if !report.ok {
+                std::process::exit(2);
             }
         }
         Command::Extract { archive, destination } => {

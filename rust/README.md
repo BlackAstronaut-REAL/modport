@@ -31,6 +31,7 @@ the engine into the native executable.
   Blockbench preview clips, rebased to the converted bind pose.
 - Repeated-render source detection for modern Mojmap models, including rotation
   loops and helper-call position variants, expanded into actual Blockbench parts.
+- Native MCreator workspace validation, including duplicate registry/name checks, element schema checks, dimension/biome integrity, copied-resource references, automatic BlockItem collisions and machine-readable/text reports.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -39,6 +40,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
     cargo run --manifest-path rust/Cargo.toml -- mod-graph path/to/mod --source-root path/to/decompiled-source --output output/mod-graph.json
+    cargo run --manifest-path rust/Cargo.toml -- validate-workspace path/to/MCreatorWorkspace
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
