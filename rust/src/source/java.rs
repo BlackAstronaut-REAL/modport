@@ -246,35 +246,30 @@ impl<'a> NumberParser<'a> {
     }
 
     fn parse_mul_div(&mut self) -> Result<f64> {
-        let mut value = self.parse_power()?;
+        let mut value = self.parse_unary()?;
         loop {
             if self.consume("*") {
-                // Python's exponent operator is **; don't consume it as multiply.
-                if self.input[self.position..].starts_with('*') {
-                    self.position -= 1;
-                    break;
-                }
-                value *= self.parse_power()?;
+                value *= self.parse_unary()?;
             } else if self.consume("/") {
-                value /= self.parse_power()?;
+                value /= self.parse_unary()?;
             } else if self.consume("%") {
-                value %= self.parse_power()?;
+                value %= self.parse_unary()?;
             } else { break; }
         }
         Ok(value)
     }
 
     fn parse_power(&mut self) -> Result<f64> {
-        let value = self.parse_unary()?;
+        let value = self.parse_atom()?;
         if self.consume("**") {
-            Ok(value.powf(self.parse_power()?))
+            Ok(value.powf(self.parse_unary()?))
         } else { Ok(value) }
     }
 
     fn parse_unary(&mut self) -> Result<f64> {
         if self.consume("+") { self.parse_unary() }
         else if self.consume("-") { Ok(-self.parse_unary()?) }
-        else { self.parse_atom() }
+        else { self.parse_power() }
     }
 
     fn parse_atom(&mut self) -> Result<f64> {
@@ -396,6 +391,8 @@ mod tests {
         assert!((eval_number("Mth.HALF_PI * 2", &constants).unwrap() - std::f64::consts::PI).abs() < 1e-9);
         assert_eq!(eval_int("2.5", &BTreeMap::new()).unwrap(), 2);
         assert_eq!(eval_int("3.5", &BTreeMap::new()).unwrap(), 4);
+        assert_eq!(eval_number("-2 ** 2", &BTreeMap::new()).unwrap(), -4.0);
+        assert_eq!(eval_number("2 ** 3 * 4", &BTreeMap::new()).unwrap(), 32.0);
     }
 
     #[test]
