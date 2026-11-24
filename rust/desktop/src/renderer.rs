@@ -509,6 +509,28 @@ mod tests {
     }
 
     #[test]
+    fn rectangular_viewport_keeps_model_units_isotropic() {
+        let camera = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            distance: 100.0,
+            target: [0.0; 3],
+            initialized: true,
+        };
+        let world = Transform::identity();
+        let texture_size = [16, 16];
+        let origin = MeshVertex { position: [0.0; 3], uv: [0.0; 2] };
+        let x_unit = MeshVertex { position: [1.0, 0.0, 0.0], uv: [0.0; 2] };
+        let y_unit = MeshVertex { position: [0.0, 1.0, 0.0], uv: [0.0; 2] };
+        let project = |vertex| project_vertex(vertex, world, &camera, 160, 320, 232.0).unwrap();
+        let origin = project(origin);
+        let x = project(x_unit);
+        let y = project(y_unit);
+        assert!(((x.x - origin.x).abs() - (y.y - origin.y).abs()).abs() < 1e-5);
+        let _ = texture_size;
+    }
+
+    #[test]
     fn software_viewport_draws_a_textured_scene_without_gpu_state() {
         let scene = ViewerScene {
             name: "TestCube".to_owned(),
