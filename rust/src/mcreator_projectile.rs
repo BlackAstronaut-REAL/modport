@@ -287,7 +287,7 @@ fn unique_element_name(base: &str, used: &mut HashSet<String>) -> String {
 
 fn source_class_text<'a>(java: &'a [(String,String)], class_name: &str) -> Option<&'a str> {
     let simple = simple_name(class_name);
-    let declaration = Regex::new(&format!(r"\bclass\s+{}\b",Regex::escape(&simple))).ok()?;
+    let declaration = Regex::new(&format!(r"\bclass\s+{}\b",regex::escape(&simple))).ok()?;
     java.iter()
         .find(|(file_name,text)|file_name.eq_ignore_ascii_case(&simple)||declaration.is_match(text))
         .map(|(_,text)|text.as_str())
