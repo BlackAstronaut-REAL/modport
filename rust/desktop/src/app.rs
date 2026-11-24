@@ -139,6 +139,29 @@ fn parse_animated_texture(
     })
 }
 
+fn preferred_texture_index(entry: &BrowserEntry, textures: &[PathBuf]) -> usize {
+    if entry.category != "Armor" || textures.len() < 2 {
+        return 0;
+    }
+    let detail = entry.detail.to_ascii_lowercase();
+    if detail.contains("leggings") || detail.contains("leg_armor") || detail.contains("pants") {
+        return textures.iter().position(|path| {
+            path.file_name().and_then(|value| value.to_str())
+                .is_some_and(|name| {
+                    let name = name.to_ascii_lowercase();
+                    name.contains("layer_2") || name.contains("layer2")
+                })
+        }).unwrap_or(0);
+    }
+    textures.iter().position(|path| {
+        path.file_name().and_then(|value| value.to_str())
+            .is_some_and(|name| {
+                let name = name.to_ascii_lowercase();
+                name.contains("layer_1") || name.contains("layer1")
+            })
+    }).unwrap_or(0)
+}
+
 impl MojModelBridgeApp {
     pub fn new(context: &eframe::CreationContext<'_>) -> Self {
         let minecraftia_available = load_minecraftia_font(&context.egui_ctx);
@@ -251,7 +274,7 @@ impl MojModelBridgeApp {
                     } else {
                         entry.texture_paths.clone()
                     };
-                    self.selected_texture = 0;
+                    self.selected_texture = preferred_texture_index(&entry, &self.texture_paths);
                     self.refresh_preview_image();
                 }
                 Err(error) => {
@@ -276,7 +299,7 @@ impl MojModelBridgeApp {
                             self.texture_paths = asset.texture_paths;
                         }
                         self.selected_texture = if !entry.texture_paths.is_empty() {
-                            0
+                            preferred_texture_index(&entry, &self.texture_paths)
                         } else {
                             self.texture_paths.iter()
                                 .position(|path| path.to_string_lossy() == asset.model.primary_texture)
@@ -945,5 +968,39 @@ mod texture_animation_tests {
         assert_eq!(frame.dimensions(), (16, 16));
         assert_eq!(frame.get_pixel(0, 0).0, [10, 20, 30, 255]);
         assert_eq!(animation.crop(&image, 1).get_pixel(0, 0).0, [40, 50, 60, 255]);
+    }
+}
+
+#[cfg(test)]
+mod armor_texture_selection_tests {
+    use super::*;
+
+    #[test]
+    fn leggings_select_layer_two_while_other_armor_selects_layer_one() {
+        let layer_one = PathBuf::from("dragon_layer_1.png");
+        let layer_two = PathBuf::from("dragon_layer_2.png");
+        let textures = vec![layer_one.clone(), layer_two.clone()];
+
+        let leggings = BrowserEntry {
+            category: "Armor".into(),
+            name: "Dragon Leggings".into(),
+            detail: "dragon_leggings · dragon armor set".into(),
+            icon_kind: IconKind::Texture,
+            icon_path: Some(layer_one.clone()),
+            model_source: None,
+            resource_model_source: None,
+            texture_paths: textures.clone(),
+            render_shape: None,
+            lore: Vec::new(),
+            components_json: "{}".into(),
+        };
+        assert_eq!(preferred_texture_index(&leggings, &textures), 1);
+
+        let chestplate = BrowserEntry {
+            name: "Dragon Chestplate".into(),
+            detail: "dragon_chestplate · dragon armor set".into(),
+            ..leggings
+        };
+        assert_eq!(preferred_texture_index(&chestplate, &textures), 0);
     }
 }
