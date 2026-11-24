@@ -314,7 +314,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
     }
 
     if texture_paths.len() > 1 {
-        warnings.push("The resource model references multiple texture images; the preview currently displays the first resolved texture.".to_owned());
+        warnings.push("The resource model references multiple texture images; each cuboid face uses its declared texture when that reference resolves.".to_owned());
     }
     if texture_paths.is_empty() {
         warnings.push("No referenced texture PNG could be resolved for this item model.".to_owned());
