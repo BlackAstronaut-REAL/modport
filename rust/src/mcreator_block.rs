@@ -272,6 +272,11 @@ pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSourc
     }
 
     let combined = texts.join("\n");
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    for (class, info) in &compiled.classes {
+        class_paths.entry(class.clone()).or_insert_with(|| info.path.clone());
+        parents.entry(class.clone()).or_insert_with(|| info.superclass.clone());
+    }
     let field_ids = field_registry_map(&combined);
     let mut class_ids = BTreeMap::<String, BTreeSet<String>>::new();
 
@@ -283,12 +288,15 @@ pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSourc
     for (class, registry) in modern_block_registrations(&combined) {
         class_ids.entry(class).or_default().insert(registry);
     }
+    for (class, registries) in &compiled.registries {
+        class_ids.entry(class.clone()).or_default().extend(registries.iter().cloned());
+    }
 
     let mut output = Vec::new();
     for (class, registries) in class_ids {
         let Some(superclass) = parents.get(&class) else { continue };
         if !is_block_class(superclass, &parents, 0) { continue; }
-        let Some(source_text) = class_texts.get(&class) else { continue };
+        let source_text = class_texts.get(&class).cloned().unwrap_or_default();
         let Some(source_path) = class_paths.get(&class) else { continue };
         for registry in registries {
             let source = BlockSource {
