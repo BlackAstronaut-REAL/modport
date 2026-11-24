@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
-use crate::bytecode::classfile::{ClassFile, ConstantPoolEntry};
-use crate::bytecode::{decode_instructions, parse_method_descriptor, ConstantValue, Instruction, JvmType};
+use crate::bytecode::classfile::{ClassFile, ConstantPoolEntry, ConstantValue};
+use crate::bytecode::{decode_instructions, parse_method_descriptor, Instruction, JvmType};
 use crate::model::{Cube, ParsedModel, Part};
 
 #[derive(Debug, Clone)]
@@ -229,11 +229,12 @@ fn run_constructor(
 
         // Local loads.
         if let Some(index) = local_index(instruction) {
-            if matches!(op, 0x15..=0x19 | 0x1a..=0x2d) {
+            let effective = if op == 0xc4 { instruction.operands.first().copied().unwrap_or(0) } else { op };
+            if matches!(effective, 0x15..=0x19 | 0x1a..=0x2d) {
                 stack.push(locals.get(&index).cloned().unwrap_or(Value::Opaque(format!("local{index}"))));
                 continue;
             }
-            if matches!(op, 0x36..=0x3a | 0x3b..=0x4e) {
+            if matches!(effective, 0x36..=0x3a | 0x3b..=0x4e) {
                 locals.insert(index, pop(&mut stack));
                 continue;
             }
@@ -299,9 +300,10 @@ fn run_constructor(
             0xb2 | 0xb4 => {
                 let cp_index = u16_at(&instruction.operands, 0).unwrap_or(0);
                 let reference = class.member_reference(cp_index);
-                let owner = pop(&mut stack);
+                let owner = if op == 0xb4 { pop(&mut stack) } else { Value::Null };
                 if let Some((_, name, _)) = reference {
-                    if let Value::Object(part_index) = owner {
+                    if op == 0xb4 {
+                      if let Value::Object(part_index) = owner {
                         if name == "field_78804_l" || name == "cubeList" {
                             stack.push(Value::CubeList(part_index));
                         } else if let Some(part) = parts.get(part_index) {
@@ -318,10 +320,13 @@ fn run_constructor(
                         } else {
                             stack.push(Value::Opaque(name));
                         }
-                    } else if matches!(owner, Value::This) && name == "field_78090_t" {
-                        stack.push(Value::Opaque("__texture_width".into()));
-                    } else if matches!(owner, Value::This) && name == "field_78089_u" {
-                        stack.push(Value::Opaque("__texture_height".into()));
+                      } else if matches!(&owner, Value::This) && name == "field_78090_t" {
+                          stack.push(Value::Opaque("__texture_width".into()));
+                      } else if matches!(&owner, Value::This) && name == "field_78089_u" {
+                          stack.push(Value::Opaque("__texture_height".into()));
+                      } else {
+                          stack.push(Value::Opaque(name));
+                      }
                     } else {
                         stack.push(Value::Opaque(name));
                     }
@@ -341,7 +346,7 @@ fn run_constructor(
                             }
                             field_objects.insert(name, index);
                         }
-                        Value::Number(number) if matches!(owner, Value::This) => {
+                        Value::Number(number) if matches!(&owner, Value::This) => {
                             if name == "field_78090_t" || name == "textureWidth" {
                                 texture_width = (number as i64).max(1) as u32;
                                 explicit_width = true;
@@ -353,8 +358,8 @@ fn run_constructor(
                             }
                         }
                         Value::Boolean(value) => {
-                            if let Value::Object(index) = owner {
-                                if let Some(part) = parts.get_mut(index) {
+                            if let Value::Object(index) = &owner {
+                                if let Some(part) = parts.get_mut(*index) {
                                     if name == "field_78809_i" || name == "mirror" { part.mirror = value; }
                                 }
                             }
@@ -450,8 +455,9 @@ fn run_constructor(
 
                 if name == "addChild" || name == "func_78792_a" {
                     if let (Value::Object(parent),Some(Value::Object(child)))=(receiver,args.first()) {
+                        let parent_name = parts.get(parent).map(|p|p.name.clone());
                         if let Some(child_part)=parts.get_mut(*child) {
-                            child_part.parent=parts.get(parent).map(|p|p.name.clone());
+                            child_part.parent=parent_name;
                         }
                     }
                     continue;
