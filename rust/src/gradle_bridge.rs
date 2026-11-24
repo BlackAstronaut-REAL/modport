@@ -164,7 +164,7 @@ pub fn compile_workspace(
         use std::os::windows::process::CommandExt;
         let command_line = windows_command_line(&executable, &args)?;
         let mut command = Command::new("cmd.exe");
-        command.raw_arg(format!(" /D /S /C {command_line}"));
+        command.raw_arg(format!(" /D /S /C \"{command_line}\""));
         command
     };
     #[cfg(not(windows))]
