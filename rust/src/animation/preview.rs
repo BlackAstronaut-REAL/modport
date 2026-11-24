@@ -50,17 +50,73 @@ fn base_state(parts: &[Part]) -> HashMap<AxisKey, f64> {
     result
 }
 
+fn gcd(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left.max(1)
+}
+
+fn lcm(left: u64, right: u64) -> u64 {
+    left.saturating_div(gcd(left, right)).saturating_mul(right)
+}
+
+fn rational_period_ratio(value: f64) -> Option<(u64, u64)> {
+    if !value.is_finite() || value < 1.0 { return None; }
+    let mut best: Option<(u64, u64, f64)> = None;
+    for denominator in 1..=64_u64 {
+        let numerator = (value * denominator as f64).round() as u64;
+        if numerator == 0 { continue; }
+        let divisor = gcd(numerator, denominator);
+        let numerator = numerator / divisor;
+        let denominator = denominator / divisor;
+        let error = (value - numerator as f64 / denominator as f64).abs();
+        if best.map(|entry| error < entry.2).unwrap_or(true) {
+            best = Some((numerator, denominator, error));
+        }
+        if error < 1e-7 { break; }
+    }
+    best.filter(|entry| entry.2 <= 0.002)
+        .map(|entry| (entry.0, entry.1))
+}
+
 fn period_for(formulas: &[Formula], variable: &str) -> f64 {
-    let mut shortest = f64::INFINITY;
+    let mut periods = Vec::<f64>::new();
     for formula in formulas {
         for coefficient in trig_coefficients(&formula.expression, variable) {
             let period = std::f64::consts::TAU / (coefficient * 20.0);
             if (0.08..=12.0).contains(&period) {
-                shortest = shortest.min(period);
+                periods.push(period);
             }
         }
     }
-    if shortest.is_finite() { shortest } else { 1.0 }
+    if periods.is_empty() { return 1.0; }
+    periods.sort_by(f64::total_cmp);
+    let base = periods[0];
+    let mut numerator_lcm = 1_u64;
+    let mut denominator_gcd = 0_u64;
+    for period in periods {
+        let Some((numerator, denominator)) = rational_period_ratio(period / base) else {
+            return period_for_single_cycle(base);
+        };
+        numerator_lcm = lcm(numerator_lcm, numerator);
+        denominator_gcd = if denominator_gcd == 0 {
+            denominator
+        } else {
+            gcd(denominator_gcd, denominator)
+        };
+        let multiplier = numerator_lcm as f64 / denominator_gcd.max(1) as f64;
+        if multiplier * base > 12.0 {
+            return period_for_single_cycle(base);
+        }
+    }
+    (base * numerator_lcm as f64 / denominator_gcd.max(1) as f64).clamp(0.08, 12.0)
+}
+
+fn period_for_single_cycle(base: f64) -> f64 {
+    base.clamp(0.08, 12.0)
 }
 
 fn runtime_samples(kind: &str, length: f64, count: usize) -> Vec<(f64, HashMap<String, f64>)> {
@@ -130,6 +186,32 @@ fn sample_clip(parts: &[Part], formulas: &[Formula], kind: &str, length: f64) ->
                 .entry(key.1.clone()).or_default()
                 .entry(format!("{time:.8}")).or_insert([0.0; 3]);
             vector[index] = axis_delta(key, target, neutral);
+        }
+    }
+
+    // Close each loop with a short eased return to its initial pose. This gives
+    // source cycles an explicit reverse keyframe run instead of depending on
+    // floating-point period detection to land perfectly on the first sample.
+    let recovery_start = length * 0.875;
+    for channels in clip.values_mut() {
+        for keys in channels.values_mut() {
+            let initial = keys.get("0.00000000").copied().unwrap_or([0.0; 3]);
+            let start = keys.get(&format!("{recovery_start:.8}")).copied()
+                .or_else(|| keys.iter().min_by(|a, b| {
+                    let ta = a.0.parse::<f64>().unwrap_or(0.0);
+                    let tb = b.0.parse::<f64>().unwrap_or(0.0);
+                    (ta - recovery_start).abs().total_cmp(&(tb - recovery_start).abs())
+                }).map(|(_, value)| *value))
+                .unwrap_or(initial);
+            for sample in 57..=64 {
+                let linear = (sample - 56) as f64 / 8.0;
+                let amount = (linear * linear * (3.0 - 2.0 * linear)) as f64;
+                let value = std::array::from_fn(|axis| {
+                    start[axis] + (initial[axis] - start[axis]) * amount
+                });
+                let time = length * sample as f64 / 64.0;
+                keys.insert(format!("{time:.8}"), value);
+            }
         }
     }
     clip
