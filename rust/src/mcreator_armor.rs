@@ -345,13 +345,6 @@ fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource
         let group = groups.entry(prefix).or_default();
         group.fields.insert(part.to_owned(), class_name.clone());
         group.paths.insert(info.path.clone());
-        for registry in registries {
-            // The field key is the concrete class name for class-file-derived sets.
-            // This preserves the exact per-piece registry path for icon lookup.
-            let key = format!("__compiled_piece__{class_name}");
-            let _ = key;
-            group.texts.shrink_to_fit();
-        }
     }
 
     // Keep per-piece registry IDs separate from the source field-name map.
