@@ -65,4 +65,4 @@ Classify every difference as intentional, parity bug or unsupported. Rust is not
 considered faster solely because of its language; profile after parity and
 preserve deterministic output while parallelizing.
 
-| native staged workspace orchestration | mcreator_pipeline | Initial dependency-aware `export-all` sequence for registered item/tool, armor, block, plant, biome/dimension, living entity, projectile, and recipe exporters, with recipe registry map generation after content stages; source-root corpus regression and full Gradle compile/validation orchestration remain pending |
+| native staged workspace orchestration | mcreator_pipeline | Initial dependency-aware `export-all` sequence for registered item/tool, armor, block, plant, biome/dimension, living entity, projectile, and recipe exporters, with recipe registry map generation after content stages and an automatic final workspace validation report; source-root corpus regression and full Gradle compile bridge remain pending |
