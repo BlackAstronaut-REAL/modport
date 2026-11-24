@@ -51,8 +51,16 @@ fn gradle_command(root: &Path) -> Result<PathBuf> {
 }
 
 fn windows_command_line(executable: &Path, args: &[String]) -> Result<String> {
+    let raw_path = executable.to_string_lossy();
+    let executable_text = if let Some(unc) = raw_path.strip_prefix(r"\\?\UNC\\") {
+        format!(r"\\\\{unc}")
+    } else if let Some(local) = raw_path.strip_prefix(r"\\?\\") {
+        local.to_owned()
+    } else {
+        raw_path.into_owned()
+    };
     let mut values = Vec::with_capacity(args.len() + 1);
-    values.push(executable.display().to_string());
+    values.push(executable_text);
     values.extend(args.iter().cloned());
 
     // cmd.exe /S /C treats the first and last quote specially. Pass one
@@ -150,11 +158,13 @@ pub fn compile_workspace(
     args.extend(selected_tasks);
     #[cfg(windows)]
     let mut command = {
-        // A batch wrapper must run under cmd.exe. /S applies the documented
-        // first/last-quote handling to the one complete command string.
+        // A batch wrapper must run under cmd.exe. raw_arg is deliberate:
+        // cmd.exe does not use the normal Windows argv backslash-quote rules.
+        // Pass /C plus its fully quoted command string verbatim.
+        use std::os::windows::process::CommandExt;
         let command_line = windows_command_line(&executable, &args)?;
         let mut command = Command::new("cmd.exe");
-        command.arg("/D").arg("/S").arg("/C").arg(command_line);
+        command.raw_arg(format!(" /D /S /C {command_line}"));
         command
     };
     #[cfg(not(windows))]
@@ -261,6 +271,16 @@ mod tests {
         assert!(report.report_file.is_file());
         assert!(fs::read_to_string(&report.log_file).unwrap().contains("Gradle wrapper test output"));
         assert!(report.command.first().unwrap().to_ascii_lowercase().contains("gradlew"));
+    }
+
+    #[test]
+    fn strips_windows_extended_path_prefix_for_cmd() {
+        let executable = Path::new(r"\\?\C:\Users\Dev User\MCreator Workspace\gradlew.bat");
+        let args = vec!["build".to_owned()];
+        assert_eq!(
+            windows_command_line(executable, &args).unwrap(),
+            r#""C:\Users\Dev User\MCreator Workspace\gradlew.bat" "build""#,
+        );
     }
 
     #[test]
