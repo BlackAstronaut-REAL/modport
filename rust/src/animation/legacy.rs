@@ -209,7 +209,7 @@ impl<'a> AnimationContext<'a> {
         let mut locals = HashMap::<usize, Symbol>::new();
         if !is_static { locals.insert(0, Symbol::This); }
         let mut slot = if is_static { 0 } else { 1 };
-        let names = parameter_names(method)?;
+        let names = parameter_names(&method)?;
         for (index, ty) in descriptor.parameters.iter().enumerate() {
             let value = incoming.get(index).cloned()
                 .unwrap_or_else(|| Symbol::Expr(names.get(&slot).cloned().unwrap_or_else(|| format!("arg{}", index + 1))));
@@ -219,7 +219,7 @@ impl<'a> AnimationContext<'a> {
 
         let instructions = decode_instructions(&code.code)?;
         self.active_methods.push(method_index);
-        let result = self.interpret_instructions(method, &instructions, &mut locals, depth);
+        let result = self.interpret_instructions(&method, &instructions, &mut locals, depth);
         self.active_methods.pop();
         result
     }
@@ -250,7 +250,7 @@ impl<'a> AnimationContext<'a> {
                     }));
                     continue;
                 }
-                if matches!(effective, 0x36..=0x3a | 0x3a | 0x3b..=0x4e) {
+                if matches!(effective, 0x36..=0x3a | 0x3b..=0x4e) {
                     let value = pop(&mut stack);
                     let previous = locals.get(&index).map(|v| v.text(self.parts));
                     let current = value.text(self.parts);
