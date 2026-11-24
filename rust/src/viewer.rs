@@ -16,6 +16,10 @@ pub struct ViewerCube {
     /// Optional per-face UV rectangles in source texture pixels. Minecraft
     /// resource item models use independent face UVs rather than a ModelBox net.
     pub face_uvs: Option<[[f32; 4]; 6]>,
+    /// Texture index per face in ViewerScene.texture_variants. None uses the
+    /// scene's active texture, as with legacy ModelRenderer meshes.
+    #[serde(default)]
+    pub face_texture_indices: Option<[usize; 6]>,
     pub mirror: bool,
     pub name: String,
 }
@@ -127,6 +131,7 @@ impl ViewerScene {
                     ],
                     uv_origin: [cube.uv_x as f32, cube.uv_y as f32],
                     face_uvs: None,
+                    face_texture_indices: None,
                     mirror: cube.mirror,
                     name: cube.name.clone(),
                 }
