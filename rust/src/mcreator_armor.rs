@@ -823,6 +823,9 @@ pub fn export_armor_to_workspace(
             "mojmodelbridge_generated":true,
             "mojmodelbridge_source_modid":source_modid,
             "mojmodelbridge_source_prefix":set.prefix,
+            "mojmodelbridge_source_piece_ids":set.fields.iter().filter_map(|(part,field)| {
+                set.registered_piece_ids.get(field).map(|registry| (part.clone(), registry.clone()))
+            }).collect::<BTreeMap<String,String>>(),
             "mojmodelbridge_source_paths":set.source_paths
         });
         workspace["mod_elements"].as_array_mut().expect("workspace has mod_elements").push(descriptor);
