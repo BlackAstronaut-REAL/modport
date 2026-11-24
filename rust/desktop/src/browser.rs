@@ -3,7 +3,7 @@ use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::{scan_mod_graph, EntityMetadata};
 use mojmodelbridge::mcreator_armor::discover_armor_sources;
 use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
-use mojmodelbridge::mcreator_equipment::discover_equipment_sources;
+use mojmodelbridge::mcreator_equipment::{discover_equipment_sources, source_tool_materials, ToolMaterialStats};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
@@ -94,6 +94,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
 
     let source_roots = vec![root.clone()];
     let equipment = discover_equipment_sources(&source_roots)?;
+    let tool_materials = source_tool_materials(&source_roots, &source_modid);
     let blocks = discover_block_sources(&source_roots)?;
     let armor_sets = discover_armor_sources(&source_roots)?;
     let languages = load_language_data(&all_files, &source_modid);
@@ -161,7 +162,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             .or_else(|| find_linked_java_model(&all_files, &source.source_text, false));
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
-        let (source_properties, source_property_lore) = item_source_properties(source);
+        let (source_properties, source_property_lore) =
+            item_source_properties(source, tool_materials.get(&compact(&registry)));
         append_unique(&mut lore, &source_property_lore);
         let mut components = find_item_components(&all_files, &registry)
             .unwrap_or_else(|| serde_json::json!({}));
@@ -706,7 +708,10 @@ fn numeric_source_call(source: &str, methods: &[&str]) -> Option<f64> {
     None
 }
 
-fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> (Value, Vec<String>) {
+fn item_source_properties(
+    source: &mojmodelbridge::mcreator_equipment::EquipmentSource,
+    material: Option<&ToolMaterialStats>,
+) -> (Value, Vec<String>) {
     let text = &source.source_text;
     let mut properties = serde_json::Map::new();
     let mut lore = Vec::new();
@@ -714,7 +719,7 @@ fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::Equipment
         ("max_stack_size", &["setMaxStackSize", "stacksTo", "maxStackSize", "getItemStackLimit"], "Stack size"),
         ("max_damage", &["setMaxDamage", "durability", "maxDamage", "getMaxDamage"], "Durability"),
         ("attack_damage", &["setAttackDamage", "attackDamage", "getDamageVsEntity"], "Attack damage"),
-        ("enchantability", &["getItemEnchantability", "getEnchantability", "enchantability"], "Enchantability"),
+        ("enchantability", &["getItemEnchantability", "getEnchantability", "getEnchantmentValue", "enchantability"], "Enchantability"),
         ("nutrition", &["setHealAmount", "nutrition"], "Food nutrition"),
         ("saturation", &["setSaturationModifier", "saturationMod", "saturation"], "Food saturation"),
     ];
@@ -724,25 +729,134 @@ fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::Equipment
             lore.push(format!("{label}: {}", format_stat(value)));
         }
     }
+
+    if let Some(material) = material {
+        if let Some(uses) = material.uses {
+            properties.entry("max_damage".to_owned()).or_insert_with(|| serde_json::json!(uses));
+        }
+        if let Some(efficiency) = material.efficiency {
+            properties.insert("efficiency".to_owned(), serde_json::json!(efficiency));
+            lore.push(format!("Mining efficiency: {}", format_stat(efficiency)));
+        }
+        if let Some(level) = material.enchantability {
+            properties.entry("enchantability".to_owned()).or_insert_with(|| serde_json::json!(level));
+        }
+        if let Some(harvest) = material.harvest_level {
+            properties.insert("harvest_level".to_owned(), serde_json::json!(harvest));
+            lore.push(format!("Harvest level: {}", format_stat(harvest as f64)));
+        }
+        if let Some(damage) = material.damage {
+            let offset = match source.tool_type.as_deref() {
+                Some("Sword") => 4.0,
+                Some("Axe") => 3.0,
+                Some("Pickaxe") => 2.0,
+                Some("Shovel") => 1.0,
+                Some("Hoe") => 0.0,
+                _ => 0.0,
+            };
+            properties.entry("attack_damage".to_owned())
+                .or_insert_with(|| serde_json::json!(damage + offset));
+        }
+        if let Some(value) = properties.get("max_damage").and_then(Value::as_f64) {
+            if !lore.iter().any(|line| line.starts_with("Durability:")) {
+                lore.push(format!("Durability: {}", format_stat(value)));
+            }
+        }
+        if let Some(value) = properties.get("enchantability").and_then(Value::as_i64) {
+            if !lore.iter().any(|line| line.starts_with("Enchantability:")) {
+                lore.push(format!("Enchantability: {value}"));
+            }
+        }
+        if let Some(value) = properties.get("attack_damage").and_then(Value::as_f64) {
+            if !lore.iter().any(|line| line.starts_with("Attack damage:")) {
+                lore.push(format!("Attack damage: {}", format_stat(value)));
+            }
+        }
+    }
+
     if let Some(capture) = Regex::new(r"(?i)\b(?:Rarity|EnumRarity)\s*\.\s*(COMMON|UNCOMMON|RARE|EPIC)").unwrap()
         .captures(text)
     {
         let rarity = capture[1].to_ascii_lowercase();
         properties.insert("rarity".to_owned(), serde_json::json!(rarity));
-        lore.push(format!("Rarity: {}", capture[1].to_ascii_lowercase()));
+        lore.push(format!("Rarity: {}", rarity));
     }
     if let Some(tool_type) = source.tool_type.as_deref() {
         properties.insert("tool_type".to_owned(), serde_json::json!(tool_type));
-        lore.push(format!("Tool type: {tool_type}"));
+        if !lore.iter().any(|line| line.starts_with("Tool type:")) {
+            lore.push(format!("Tool type: {tool_type}"));
+        }
     }
+
+    let is_food = is_food_source(text, &source.superclass);
+    properties.insert("is_food".to_owned(), serde_json::json!(is_food));
+    if is_food {
+        if let Some(capture) = Regex::new(r"(?is)\bsuper\s*\(\s*(-?\d+)\s*,\s*(-?\d+(?:\.\d+)?)[fFdD]?\s*(?:,\s*(true|false))?").unwrap()
+            .captures(text)
+        {
+            if !properties.contains_key("nutrition") {
+                if let Ok(value) = capture[1].parse::<i64>() {
+                    properties.insert("nutrition".to_owned(), serde_json::json!(value));
+                }
+            }
+            if !properties.contains_key("saturation") {
+                if let Ok(value) = capture[2].parse::<f64>() {
+                    properties.insert("saturation".to_owned(), serde_json::json!(value));
+                }
+            }
+            if let Some(meat) = capture.get(3) {
+                properties.insert("is_meat".to_owned(), serde_json::json!(meat.as_str().eq_ignore_ascii_case("true")));
+            }
+        }
+        if let Some(value) = properties.get("nutrition").and_then(Value::as_i64) {
+            lore.push(format!("Food nutrition: {value}"));
+        }
+        if let Some(value) = properties.get("saturation").and_then(Value::as_f64) {
+            lore.push(format!("Food saturation: {}", format_stat(value)));
+        }
+    }
+    let always_edible = text.contains("alwaysEat()") || text.contains("setAlwaysEdible") || text.contains("func_77848_i");
+    if always_edible {
+        properties.insert("always_edible".to_owned(), serde_json::json!(true));
+        lore.push("Always edible: true".to_owned());
+    }
+    if text.contains(".meat()") {
+        properties.insert("is_meat".to_owned(), serde_json::json!(true));
+    }
+
     let no_repair = text.contains("setNoRepair") || text.contains("setNoRepair()");
     if no_repair {
         properties.insert("repairable".to_owned(), serde_json::json!(false));
+        lore.push("Repairable: false".to_owned());
     }
-    properties.insert("is_food".to_owned(), serde_json::json!(is_food_source(text, &source.superclass)));
+
+    let ranged_animation = if text.contains("UseAnim.BOW") || text.contains("EnumAction.bow") {
+        Some("bow")
+    } else if text.contains("UseAnim.CROSSBOW") {
+        Some("crossbow")
+    } else if text.contains("UseAnim.SPEAR") {
+        Some("spear")
+    } else {
+        None
+    };
+    if let Some(animation) = ranged_animation {
+        properties.insert("ranged_animation".to_owned(), serde_json::json!(animation));
+        properties.insert("enable_ranged".to_owned(), serde_json::json!(true));
+        lore.push(format!("Ranged item: true ({animation})"));
+        if let Some(duration) = numeric_source_call(text, &["getUseDuration"]) {
+            properties.insert("use_duration".to_owned(), serde_json::json!(duration));
+        }
+        if let Some(projectile) = Regex::new(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$]*(?:Arrow|Projectile|Bolt|Shot))\s*\(").unwrap()
+            .captures(text)
+        {
+            properties.insert("projectile_class".to_owned(), serde_json::json!(&projectile[1]));
+        }
+    } else {
+        properties.insert("enable_ranged".to_owned(), serde_json::json!(false));
+    }
+
     (Value::Object(properties), lore)
 }
-
 fn is_food_source(source: &str, superclass: &str) -> bool {
     let parent = superclass.to_ascii_lowercase();
     parent.contains("itemfood") || parent.contains("itemseedfood")
@@ -1419,6 +1533,39 @@ mod tests {
         assert_eq!(model, Some(model_path));
         let textures = find_armor_layer_textures(&files, "Dragon", "");
         assert_eq!(textures, vec![layer_one, layer_two]);
+    }
+
+    #[test]
+    fn recovers_legacy_and_modern_food_properties() {
+        let legacy = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemRoastBeast".to_owned(),
+            superclass: "ItemFood".to_owned(),
+            registry_name: "roast_beast".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: "public ItemRoastBeast() { super(8, 0.8F, true); setAlwaysEdible(); }".to_owned(),
+        };
+        let (legacy_properties, _) = item_source_properties(&legacy, None);
+        assert_eq!(legacy_properties["nutrition"], 8);
+        assert_eq!(legacy_properties["saturation"], 0.8);
+        assert_eq!(legacy_properties["is_meat"], true);
+        assert_eq!(legacy_properties["always_edible"], true);
+
+        let modern = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemBerryPie".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "berry_pie".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: "new Item.Properties().food(new FoodProperties.Builder().nutrition(6).saturationMod(0.7F).alwaysEat().meat().build())".to_owned(),
+        };
+        let (modern_properties, _) = item_source_properties(&modern, None);
+        assert_eq!(modern_properties["nutrition"], 6);
+        assert_eq!(modern_properties["saturation"], 0.7);
+        assert_eq!(modern_properties["always_edible"], true);
+        assert_eq!(modern_properties["is_meat"], true);
     }
 
     #[test]
