@@ -423,6 +423,7 @@ pub struct EquipmentSource {
     pub superclass: String,
     pub registry_name: String,
     pub element_type: String,
+    pub tool_type: Option<String>,
     pub source_path: String,
     #[serde(skip)]
     pub source_text: String,
@@ -450,130 +451,7 @@ pub struct EquipmentWorkspaceExportReport {
 }
 
 fn simple_java_name(value: &str) -> String {
-    value.rsplit(['.', '
-    use super::*;
-
-    #[test]
-    fn builds_native_item_schema_with_stack_and_damage_recovery() {
-        let (element, warnings) = build_item_element(
-            None, "ItemCrystal", "Item", "setMaxStackSize(16); setMaxDamage(32);",
-            "crystal", "crystal.png", 89
-        );
-        assert!(warnings.is_empty());
-        assert_eq!(element["_type"], "item");
-        assert_eq!(element["_fv"], 89);
-        assert_eq!(element["definition"]["name"], "Crystal");
-        assert_eq!(element["definition"]["stackSize"], 16);
-        assert_eq!(element["definition"]["damageCount"], 32);
-        assert_eq!(element["definition"]["texture"], "crystal.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-    }
-
-    #[test]
-    fn caps_stack_size_and_preserves_template_specific_fields() {
-        let template = json!({
-            "_fv":88,"_type":"item",
-            "definition":{
-                "name":"Old","texture":"old.png","guiTexture":"old.png",
-                "renderType":7,"customModelName":"OldModel",
-                "creativeTabs":["BLOCKS"],"templateMarker":{"keep":true}
-            }
-        });
-        let (element, _) = build_item_element(Some(&template), "ItemBigStack", "Item",
-            "setMaxStackSize(128);", "big_stack", "new.png", 89);
-        assert_eq!(element["_fv"], 88);
-        assert_eq!(element["definition"]["stackSize"], 64);
-        assert_eq!(element["definition"]["texture"], "new.png");
-        assert_eq!(element["definition"]["guiTexture"], "new.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-        assert_eq!(element["definition"]["templateMarker"]["keep"], true);
-    }
-
-    #[test]
-    fn recognizes_modern_food_properties_and_food_creative_tab() {
-        let source = r#"
-            public class ExampleFood extends Item {
-                public ExampleFood() {
-                    super(new Item.Properties().food(new FoodProperties.Builder()
-                        .nutrition(6).saturationMod(0.8F).meat().alwaysEat().build()));
-                }
-            }
-        "#;
-        let (element, warnings) = build_item_element(None, "ExampleFood", "Item", source, "example_food", "food.png", 89);
-        assert!(warnings.is_empty());
-        assert_eq!(element["definition"]["isFood"], true);
-        assert_eq!(element["definition"]["nutritionalValue"], 6);
-        assert_eq!(element["definition"]["saturation"], 0.8);
-        assert_eq!(element["definition"]["isMeat"], true);
-        assert_eq!(element["definition"]["isAlwaysEdible"], true);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["FOOD"]));
-    }
-
-    #[test]
-    fn recognizes_native_bow_behavior_and_projectile_trace() {
-        let source = r#"
-            public class OldBow extends Item {
-                public UseAnim getUseAnimation() { return UseAnim.BOW; }
-                public int getUseDuration() { return 72; }
-                public void releaseUsing() { new CustomArrow(); }
-            }
-        "#;
-        let (element, _) = build_item_element(None, "OldBow", "Item", source, "old_bow", "bow.png", 89);
-        let definition = &element["definition"];
-        assert_eq!(definition["enableRanged"], true);
-        assert_eq!(definition["animation"], "bow");
-        assert_eq!(definition["useDuration"], 72);
-        assert_eq!(definition["projectile"], "Arrow");
-        assert_eq!(definition["mojmodelbridge_source_projectile_class"], "CustomArrow");
-    }
-
-    #[test]
-    fn classifies_legacy_and_modern_tools() {
-        assert_eq!(classify_tool("ItemSword", "Example"), Some("Sword".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.PickaxeItem", "Custom"), Some("Pickaxe".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.Item", "ExampleBow"), Some("Bow".to_owned()));
-        assert_eq!(classify_tool("LivingEntity", "EntityDragon"), None);
-    }
-
-    #[test]
-    fn recovers_tool_durability_damage_enchantability_and_attack_speed() {
-        let source = r#"
-            public class TestSword extends ItemSword {
-                private static final float weaponDamage = 7.0F;
-                public int getEnchantmentValue() { return 14; }
-                public TestSword() { super(2, -2.4F, new Properties()); }
-            }
-            setMaxDamage(900);
-        "#;
-        let material = ToolMaterialStats { efficiency:Some(8.0), ..Default::default() };
-        let (element, warnings) = build_tool_element(
-            None,"TestSword","ItemSword",source,"test_sword","test_sword.png","Sword",Some(&material),89
-        );
-        assert_eq!(element["definition"]["toolType"], "Sword");
-        assert_eq!(element["definition"]["usageCount"], 900);
-        assert_eq!(element["definition"]["damageVsEntity"], 7.0);
-        assert_eq!(element["definition"]["efficiency"], 8.0);
-        assert_eq!(element["definition"]["enchantability"], 14);
-        assert_eq!(element["definition"]["attackSpeed"], 1.6);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["COMBAT"]));
-        assert!(warnings.iter().any(|warning| warning.contains("repair ingredient")));
-    }
-
-    #[test]
-    fn defaults_unrecovered_tool_stats_conservatively() {
-        let (element, warnings) = build_tool_element(
-            None,"UnknownPickaxe","Item","", "unknown_pickaxe", "", "Pickaxe", None,89
-        );
-        assert_eq!(element["definition"]["usageCount"], 250);
-        assert_eq!(element["definition"]["damageVsEntity"], 3.0);
-        assert_eq!(element["definition"]["efficiency"], 4.0);
-        assert_eq!(element["definition"]["enchantability"], 10);
-        assert_eq!(warnings.len(), 3);
-    }
-}
-]).next().unwrap_or(value).to_owned()
+    value.rsplit('.').next().unwrap_or(value).rsplit('$').next().unwrap_or(value).to_owned()
 }
 
 fn normalize_registry(value: &str) -> String {
@@ -613,13 +491,14 @@ fn java_files(roots: &[PathBuf]) -> Vec<PathBuf> {
 
 fn source_class_headers(text: &str) -> Vec<(String, String, bool)> {
     let Ok(regex) = Regex::new(
-        r"\b(?:(abstract|final)\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^>{}]*>)?\s+extends\s+([A-Za-z_$][A-Za-z0-9_$.]*)"
+        r"\b((?:(?:public|protected|private|static|final|abstract)\s+)*)class\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^>{}]*>)?\s+extends\s+([A-Za-z_$][A-Za-z0-9_$.]*)"
     ) else { return Vec::new() };
     regex.captures_iter(text).filter_map(|capture| {
+        let modifiers = capture.get(1).map(|value| value.as_str()).unwrap_or("");
         Some((
             capture.get(2)?.as_str().to_owned(),
             simple_java_name(capture.get(3)?.as_str()),
-            capture.get(1).is_some_and(|value| value.as_str() == "abstract"),
+            modifiers.split_whitespace().any(|part| part == "abstract"),
         ))
     }).collect()
 }
@@ -680,257 +559,11 @@ fn java_call_arguments(source: &str, names: &[&str]) -> Vec<(String, String)> {
             }
             continue;
         }
-        if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' || bytes[index] == b'
-    use super::*;
-
-    #[test]
-    fn builds_native_item_schema_with_stack_and_damage_recovery() {
-        let (element, warnings) = build_item_element(
-            None, "ItemCrystal", "Item", "setMaxStackSize(16); setMaxDamage(32);",
-            "crystal", "crystal.png", 89
-        );
-        assert!(warnings.is_empty());
-        assert_eq!(element["_type"], "item");
-        assert_eq!(element["_fv"], 89);
-        assert_eq!(element["definition"]["name"], "Crystal");
-        assert_eq!(element["definition"]["stackSize"], 16);
-        assert_eq!(element["definition"]["damageCount"], 32);
-        assert_eq!(element["definition"]["texture"], "crystal.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-    }
-
-    #[test]
-    fn caps_stack_size_and_preserves_template_specific_fields() {
-        let template = json!({
-            "_fv":88,"_type":"item",
-            "definition":{
-                "name":"Old","texture":"old.png","guiTexture":"old.png",
-                "renderType":7,"customModelName":"OldModel",
-                "creativeTabs":["BLOCKS"],"templateMarker":{"keep":true}
-            }
-        });
-        let (element, _) = build_item_element(Some(&template), "ItemBigStack", "Item",
-            "setMaxStackSize(128);", "big_stack", "new.png", 89);
-        assert_eq!(element["_fv"], 88);
-        assert_eq!(element["definition"]["stackSize"], 64);
-        assert_eq!(element["definition"]["texture"], "new.png");
-        assert_eq!(element["definition"]["guiTexture"], "new.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-        assert_eq!(element["definition"]["templateMarker"]["keep"], true);
-    }
-
-    #[test]
-    fn recognizes_modern_food_properties_and_food_creative_tab() {
-        let source = r#"
-            public class ExampleFood extends Item {
-                public ExampleFood() {
-                    super(new Item.Properties().food(new FoodProperties.Builder()
-                        .nutrition(6).saturationMod(0.8F).meat().alwaysEat().build()));
-                }
-            }
-        "#;
-        let (element, warnings) = build_item_element(None, "ExampleFood", "Item", source, "example_food", "food.png", 89);
-        assert!(warnings.is_empty());
-        assert_eq!(element["definition"]["isFood"], true);
-        assert_eq!(element["definition"]["nutritionalValue"], 6);
-        assert_eq!(element["definition"]["saturation"], 0.8);
-        assert_eq!(element["definition"]["isMeat"], true);
-        assert_eq!(element["definition"]["isAlwaysEdible"], true);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["FOOD"]));
-    }
-
-    #[test]
-    fn recognizes_native_bow_behavior_and_projectile_trace() {
-        let source = r#"
-            public class OldBow extends Item {
-                public UseAnim getUseAnimation() { return UseAnim.BOW; }
-                public int getUseDuration() { return 72; }
-                public void releaseUsing() { new CustomArrow(); }
-            }
-        "#;
-        let (element, _) = build_item_element(None, "OldBow", "Item", source, "old_bow", "bow.png", 89);
-        let definition = &element["definition"];
-        assert_eq!(definition["enableRanged"], true);
-        assert_eq!(definition["animation"], "bow");
-        assert_eq!(definition["useDuration"], 72);
-        assert_eq!(definition["projectile"], "Arrow");
-        assert_eq!(definition["mojmodelbridge_source_projectile_class"], "CustomArrow");
-    }
-
-    #[test]
-    fn classifies_legacy_and_modern_tools() {
-        assert_eq!(classify_tool("ItemSword", "Example"), Some("Sword".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.PickaxeItem", "Custom"), Some("Pickaxe".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.Item", "ExampleBow"), Some("Bow".to_owned()));
-        assert_eq!(classify_tool("LivingEntity", "EntityDragon"), None);
-    }
-
-    #[test]
-    fn recovers_tool_durability_damage_enchantability_and_attack_speed() {
-        let source = r#"
-            public class TestSword extends ItemSword {
-                private static final float weaponDamage = 7.0F;
-                public int getEnchantmentValue() { return 14; }
-                public TestSword() { super(2, -2.4F, new Properties()); }
-            }
-            setMaxDamage(900);
-        "#;
-        let material = ToolMaterialStats { efficiency:Some(8.0), ..Default::default() };
-        let (element, warnings) = build_tool_element(
-            None,"TestSword","ItemSword",source,"test_sword","test_sword.png","Sword",Some(&material),89
-        );
-        assert_eq!(element["definition"]["toolType"], "Sword");
-        assert_eq!(element["definition"]["usageCount"], 900);
-        assert_eq!(element["definition"]["damageVsEntity"], 7.0);
-        assert_eq!(element["definition"]["efficiency"], 8.0);
-        assert_eq!(element["definition"]["enchantability"], 14);
-        assert_eq!(element["definition"]["attackSpeed"], 1.6);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["COMBAT"]));
-        assert!(warnings.iter().any(|warning| warning.contains("repair ingredient")));
-    }
-
-    #[test]
-    fn defaults_unrecovered_tool_stats_conservatively() {
-        let (element, warnings) = build_tool_element(
-            None,"UnknownPickaxe","Item","", "unknown_pickaxe", "", "Pickaxe", None,89
-        );
-        assert_eq!(element["definition"]["usageCount"], 250);
-        assert_eq!(element["definition"]["damageVsEntity"], 3.0);
-        assert_eq!(element["definition"]["efficiency"], 4.0);
-        assert_eq!(element["definition"]["enchantability"], 10);
-        assert_eq!(warnings.len(), 3);
-    }
-}
- {
+        if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' || bytes[index] == 36 {
             let start = index;
             index += 1;
             while index < bytes.len()
-                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_' || bytes[index] == b'
-    use super::*;
-
-    #[test]
-    fn builds_native_item_schema_with_stack_and_damage_recovery() {
-        let (element, warnings) = build_item_element(
-            None, "ItemCrystal", "Item", "setMaxStackSize(16); setMaxDamage(32);",
-            "crystal", "crystal.png", 89
-        );
-        assert!(warnings.is_empty());
-        assert_eq!(element["_type"], "item");
-        assert_eq!(element["_fv"], 89);
-        assert_eq!(element["definition"]["name"], "Crystal");
-        assert_eq!(element["definition"]["stackSize"], 16);
-        assert_eq!(element["definition"]["damageCount"], 32);
-        assert_eq!(element["definition"]["texture"], "crystal.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-    }
-
-    #[test]
-    fn caps_stack_size_and_preserves_template_specific_fields() {
-        let template = json!({
-            "_fv":88,"_type":"item",
-            "definition":{
-                "name":"Old","texture":"old.png","guiTexture":"old.png",
-                "renderType":7,"customModelName":"OldModel",
-                "creativeTabs":["BLOCKS"],"templateMarker":{"keep":true}
-            }
-        });
-        let (element, _) = build_item_element(Some(&template), "ItemBigStack", "Item",
-            "setMaxStackSize(128);", "big_stack", "new.png", 89);
-        assert_eq!(element["_fv"], 88);
-        assert_eq!(element["definition"]["stackSize"], 64);
-        assert_eq!(element["definition"]["texture"], "new.png");
-        assert_eq!(element["definition"]["guiTexture"], "new.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-        assert_eq!(element["definition"]["templateMarker"]["keep"], true);
-    }
-
-    #[test]
-    fn recognizes_modern_food_properties_and_food_creative_tab() {
-        let source = r#"
-            public class ExampleFood extends Item {
-                public ExampleFood() {
-                    super(new Item.Properties().food(new FoodProperties.Builder()
-                        .nutrition(6).saturationMod(0.8F).meat().alwaysEat().build()));
-                }
-            }
-        "#;
-        let (element, warnings) = build_item_element(None, "ExampleFood", "Item", source, "example_food", "food.png", 89);
-        assert!(warnings.is_empty());
-        assert_eq!(element["definition"]["isFood"], true);
-        assert_eq!(element["definition"]["nutritionalValue"], 6);
-        assert_eq!(element["definition"]["saturation"], 0.8);
-        assert_eq!(element["definition"]["isMeat"], true);
-        assert_eq!(element["definition"]["isAlwaysEdible"], true);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["FOOD"]));
-    }
-
-    #[test]
-    fn recognizes_native_bow_behavior_and_projectile_trace() {
-        let source = r#"
-            public class OldBow extends Item {
-                public UseAnim getUseAnimation() { return UseAnim.BOW; }
-                public int getUseDuration() { return 72; }
-                public void releaseUsing() { new CustomArrow(); }
-            }
-        "#;
-        let (element, _) = build_item_element(None, "OldBow", "Item", source, "old_bow", "bow.png", 89);
-        let definition = &element["definition"];
-        assert_eq!(definition["enableRanged"], true);
-        assert_eq!(definition["animation"], "bow");
-        assert_eq!(definition["useDuration"], 72);
-        assert_eq!(definition["projectile"], "Arrow");
-        assert_eq!(definition["mojmodelbridge_source_projectile_class"], "CustomArrow");
-    }
-
-    #[test]
-    fn classifies_legacy_and_modern_tools() {
-        assert_eq!(classify_tool("ItemSword", "Example"), Some("Sword".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.PickaxeItem", "Custom"), Some("Pickaxe".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.Item", "ExampleBow"), Some("Bow".to_owned()));
-        assert_eq!(classify_tool("LivingEntity", "EntityDragon"), None);
-    }
-
-    #[test]
-    fn recovers_tool_durability_damage_enchantability_and_attack_speed() {
-        let source = r#"
-            public class TestSword extends ItemSword {
-                private static final float weaponDamage = 7.0F;
-                public int getEnchantmentValue() { return 14; }
-                public TestSword() { super(2, -2.4F, new Properties()); }
-            }
-            setMaxDamage(900);
-        "#;
-        let material = ToolMaterialStats { efficiency:Some(8.0), ..Default::default() };
-        let (element, warnings) = build_tool_element(
-            None,"TestSword","ItemSword",source,"test_sword","test_sword.png","Sword",Some(&material),89
-        );
-        assert_eq!(element["definition"]["toolType"], "Sword");
-        assert_eq!(element["definition"]["usageCount"], 900);
-        assert_eq!(element["definition"]["damageVsEntity"], 7.0);
-        assert_eq!(element["definition"]["efficiency"], 8.0);
-        assert_eq!(element["definition"]["enchantability"], 14);
-        assert_eq!(element["definition"]["attackSpeed"], 1.6);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["COMBAT"]));
-        assert!(warnings.iter().any(|warning| warning.contains("repair ingredient")));
-    }
-
-    #[test]
-    fn defaults_unrecovered_tool_stats_conservatively() {
-        let (element, warnings) = build_tool_element(
-            None,"UnknownPickaxe","Item","", "unknown_pickaxe", "", "Pickaxe", None,89
-        );
-        assert_eq!(element["definition"]["usageCount"], 250);
-        assert_eq!(element["definition"]["damageVsEntity"], 3.0);
-        assert_eq!(element["definition"]["efficiency"], 4.0);
-        assert_eq!(element["definition"]["enchantability"], 10);
-        assert_eq!(warnings.len(), 3);
-    }
-}
-)
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_' || bytes[index] == 36)
             {
                 index += 1;
             }
@@ -959,130 +592,7 @@ fn java_call_arguments(source: &str, names: &[&str]) -> Vec<(String, String)> {
 fn terminal_field_name(value: &str) -> String {
     let value = value.trim();
     let tail = value.rsplit('.').next().unwrap_or(value).trim();
-    if tail.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '
-    use super::*;
-
-    #[test]
-    fn builds_native_item_schema_with_stack_and_damage_recovery() {
-        let (element, warnings) = build_item_element(
-            None, "ItemCrystal", "Item", "setMaxStackSize(16); setMaxDamage(32);",
-            "crystal", "crystal.png", 89
-        );
-        assert!(warnings.is_empty());
-        assert_eq!(element["_type"], "item");
-        assert_eq!(element["_fv"], 89);
-        assert_eq!(element["definition"]["name"], "Crystal");
-        assert_eq!(element["definition"]["stackSize"], 16);
-        assert_eq!(element["definition"]["damageCount"], 32);
-        assert_eq!(element["definition"]["texture"], "crystal.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-    }
-
-    #[test]
-    fn caps_stack_size_and_preserves_template_specific_fields() {
-        let template = json!({
-            "_fv":88,"_type":"item",
-            "definition":{
-                "name":"Old","texture":"old.png","guiTexture":"old.png",
-                "renderType":7,"customModelName":"OldModel",
-                "creativeTabs":["BLOCKS"],"templateMarker":{"keep":true}
-            }
-        });
-        let (element, _) = build_item_element(Some(&template), "ItemBigStack", "Item",
-            "setMaxStackSize(128);", "big_stack", "new.png", 89);
-        assert_eq!(element["_fv"], 88);
-        assert_eq!(element["definition"]["stackSize"], 64);
-        assert_eq!(element["definition"]["texture"], "new.png");
-        assert_eq!(element["definition"]["guiTexture"], "new.png");
-        assert_eq!(element["definition"]["renderType"], 0);
-        assert_eq!(element["definition"]["customModelName"], "Normal");
-        assert_eq!(element["definition"]["templateMarker"]["keep"], true);
-    }
-
-    #[test]
-    fn recognizes_modern_food_properties_and_food_creative_tab() {
-        let source = r#"
-            public class ExampleFood extends Item {
-                public ExampleFood() {
-                    super(new Item.Properties().food(new FoodProperties.Builder()
-                        .nutrition(6).saturationMod(0.8F).meat().alwaysEat().build()));
-                }
-            }
-        "#;
-        let (element, warnings) = build_item_element(None, "ExampleFood", "Item", source, "example_food", "food.png", 89);
-        assert!(warnings.is_empty());
-        assert_eq!(element["definition"]["isFood"], true);
-        assert_eq!(element["definition"]["nutritionalValue"], 6);
-        assert_eq!(element["definition"]["saturation"], 0.8);
-        assert_eq!(element["definition"]["isMeat"], true);
-        assert_eq!(element["definition"]["isAlwaysEdible"], true);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["FOOD"]));
-    }
-
-    #[test]
-    fn recognizes_native_bow_behavior_and_projectile_trace() {
-        let source = r#"
-            public class OldBow extends Item {
-                public UseAnim getUseAnimation() { return UseAnim.BOW; }
-                public int getUseDuration() { return 72; }
-                public void releaseUsing() { new CustomArrow(); }
-            }
-        "#;
-        let (element, _) = build_item_element(None, "OldBow", "Item", source, "old_bow", "bow.png", 89);
-        let definition = &element["definition"];
-        assert_eq!(definition["enableRanged"], true);
-        assert_eq!(definition["animation"], "bow");
-        assert_eq!(definition["useDuration"], 72);
-        assert_eq!(definition["projectile"], "Arrow");
-        assert_eq!(definition["mojmodelbridge_source_projectile_class"], "CustomArrow");
-    }
-
-    #[test]
-    fn classifies_legacy_and_modern_tools() {
-        assert_eq!(classify_tool("ItemSword", "Example"), Some("Sword".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.PickaxeItem", "Custom"), Some("Pickaxe".to_owned()));
-        assert_eq!(classify_tool("net.minecraft.world.item.Item", "ExampleBow"), Some("Bow".to_owned()));
-        assert_eq!(classify_tool("LivingEntity", "EntityDragon"), None);
-    }
-
-    #[test]
-    fn recovers_tool_durability_damage_enchantability_and_attack_speed() {
-        let source = r#"
-            public class TestSword extends ItemSword {
-                private static final float weaponDamage = 7.0F;
-                public int getEnchantmentValue() { return 14; }
-                public TestSword() { super(2, -2.4F, new Properties()); }
-            }
-            setMaxDamage(900);
-        "#;
-        let material = ToolMaterialStats { efficiency:Some(8.0), ..Default::default() };
-        let (element, warnings) = build_tool_element(
-            None,"TestSword","ItemSword",source,"test_sword","test_sword.png","Sword",Some(&material),89
-        );
-        assert_eq!(element["definition"]["toolType"], "Sword");
-        assert_eq!(element["definition"]["usageCount"], 900);
-        assert_eq!(element["definition"]["damageVsEntity"], 7.0);
-        assert_eq!(element["definition"]["efficiency"], 8.0);
-        assert_eq!(element["definition"]["enchantability"], 14);
-        assert_eq!(element["definition"]["attackSpeed"], 1.6);
-        assert_eq!(element["definition"]["creativeTabs"], json!(["COMBAT"]));
-        assert!(warnings.iter().any(|warning| warning.contains("repair ingredient")));
-    }
-
-    #[test]
-    fn defaults_unrecovered_tool_stats_conservatively() {
-        let (element, warnings) = build_tool_element(
-            None,"UnknownPickaxe","Item","", "unknown_pickaxe", "", "Pickaxe", None,89
-        );
-        assert_eq!(element["definition"]["usageCount"], 250);
-        assert_eq!(element["definition"]["damageVsEntity"], 3.0);
-        assert_eq!(element["definition"]["efficiency"], 4.0);
-        assert_eq!(element["definition"]["enchantability"], 10);
-        assert_eq!(warnings.len(), 3);
-    }
-}
-) {
+    if tail.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch as u32 == 36) {
         tail.to_owned()
     } else {
         String::new()
@@ -1099,9 +609,7 @@ fn registration_registry(args: &[String]) -> Option<String> {
     valid_registry(&registry).then_some(registry)
 }
 
-fn collect_source_registries(
-    texts: &[String],
-) -> BTreeMap<String, BTreeSet<String>> {
+fn collect_source_registries(texts: &[String]) -> BTreeMap<String, BTreeSet<String>> {
     use crate::source::java::split_top_level;
 
     let mut field_classes = BTreeMap::<String, String>::new();
@@ -1151,11 +659,7 @@ fn collect_source_registries(
     class_registries
 }
 
-fn superclass_is_item(
-    superclass: &str,
-    class_parents: &BTreeMap<String, String>,
-    depth: usize,
-) -> bool {
+fn superclass_is_item(superclass: &str, class_parents: &BTreeMap<String, String>, depth: usize) -> bool {
     if depth > 12 {
         return false;
     }
@@ -1167,23 +671,36 @@ fn superclass_is_item(
         .is_some_and(|next| superclass_is_item(next, class_parents, depth + 1))
 }
 
-fn equipment_kind(class: &str, superclass: &str, parents: &BTreeMap<String, String>) -> Option<String> {
+fn inherited_tool_type(class: &str, superclass: &str, parents: &BTreeMap<String, String>) -> Option<String> {
+    let mut current = superclass.to_owned();
+    for _ in 0..12 {
+        if let Some(kind) = classify_tool(&current, class) {
+            return Some(kind);
+        }
+        let simple = simple_java_name(&current);
+        let Some(next) = parents.get(&simple) else { break };
+        current = next.clone();
+    }
+    classify_tool(superclass, class)
+}
+
+fn equipment_kind(class: &str, superclass: &str, parents: &BTreeMap<String, String>) -> Option<(String, Option<String>)> {
     if superclass.to_ascii_lowercase().contains("itemarmor")
         || class.to_ascii_lowercase().ends_with("armor")
     {
         return None;
     }
-    if let Some(tool) = classify_tool(superclass, class) {
-        return Some("tool".to_owned() + "|" + &tool);
+    if let Some(tool) = inherited_tool_type(class, superclass, parents) {
+        return Some(("tool".to_owned(), Some(tool)));
     }
     if superclass_is_item(superclass, parents, 0) {
-        return Some("item".to_owned());
+        return Some(("item".to_owned(), None));
     }
     None
 }
 
 /// Discover concrete Java-registered item/tool subclasses. Compiled-only registrations
-/// are not yet inferred here; the bytecode registry scanner remains a follow-up.
+/// are not yet inferred here; bytecode registry scanning is a subsequent parity stage.
 pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<EquipmentSource>> {
     use crate::source::java::strip_java_comments;
 
@@ -1218,30 +735,20 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
         let Some(source_text) = class_texts.get(&class) else { continue };
         let Some(source_path) = class_paths.get(&class) else { continue };
         let Some(superclass) = class_parents.get(&class) else { continue };
-        let Some(kind) = equipment_kind(&class, superclass, &class_parents) else { continue };
-        let (element_type, tool_type) = if let Some(tool_type) = kind.strip_prefix("tool|") {
-            ("tool".to_owned(), Some(tool_type.to_owned()))
-        } else {
-            (kind, None)
-        };
+        let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents) else { continue };
 
         for registry in registries {
             if !seen.insert((class.clone(), registry.clone())) {
                 continue;
             }
-            let mut text = source_text.clone();
-            if let Some(tool_type) = &tool_type {
-                // The source superclass may be a custom base; the final type is
-                // already resolved from the class chain and passed explicitly.
-                let _ = tool_type;
-            }
             output.push(EquipmentSource {
                 class_name: class.clone(),
                 superclass: superclass.clone(),
                 registry_name: registry,
-                element_type,
+                element_type: element_type.clone(),
+                tool_type: tool_type.clone(),
                 source_path: source_path.to_string_lossy().replace('\\', "/"),
-                source_text: std::mem::take(&mut text),
+                source_text: source_text.clone(),
             });
         }
     }
@@ -1318,7 +825,7 @@ fn declared_equipment_texture_refs(source_text: &str) -> Vec<String> {
     refs
 }
 
-fn texture_candidates(source_roots: &[PathBuf], source_modid: &str, source: &EquipmentSource) -> Vec<PathBuf> {
+fn texture_candidates(source_roots: &[PathBuf], source: &EquipmentSource) -> Vec<PathBuf> {
     let mut stems = Vec::<String>::new();
     for reference in declared_equipment_texture_refs(&source.source_text) {
         if let Some(stem) = texture_stem_from_reference(&reference) {
@@ -1343,17 +850,6 @@ fn texture_candidates(source_roots: &[PathBuf], source_modid: &str, source: &Equ
             let Some(stem) = entry.path().file_stem().and_then(|value| value.to_str()) else { continue };
             if stems.contains(&stem.to_ascii_lowercase()) {
                 candidates.push(entry.into_path());
-            }
-        }
-        let namespace = root.join("assets").join(source_modid).join("textures");
-        if namespace.exists() {
-            for stem in &stems {
-                for folder in ["item", "items"] {
-                    let path = namespace.join(folder).join(format!("{stem}.png"));
-                    if path.is_file() {
-                        candidates.push(path);
-                    }
-                }
             }
         }
     }
@@ -1385,8 +881,8 @@ fn workspace_descriptor_file(root: &Path) -> Result<PathBuf> {
         if path.extension().and_then(|value| value.to_str()) != Some("mcreator") {
             continue;
         }
-        let Ok(bytes) = fs::read(&path) else { continue };
-        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else { continue };
+        let Ok(text) = fs::read_to_string(&path) else { continue };
+        let Ok(value) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else { continue };
         if !value.get("workspaceSettings").is_some_and(Value::is_object)
             || !value.get("mod_elements").is_some_and(Value::is_array)
         {
@@ -1425,7 +921,7 @@ fn load_equipment_template(root: &Path, element_type: &str) -> Result<Value> {
     serde_json::from_str(embedded).context("Parsing embedded MCreator equipment schema")
 }
 
-fn equipment_language_entry(workspace: &mut Value, modid: &str, kind: &str, registry: &str, element_name: &str, display_name: &str) {
+fn equipment_language_entry(workspace: &mut Value, modid: &str, registry: &str, element_name: &str, display_name: &str) {
     if !workspace.get("language_map").is_some_and(Value::is_object) {
         workspace["language_map"] = json!({});
     }
@@ -1433,23 +929,26 @@ fn equipment_language_entry(workspace: &mut Value, modid: &str, kind: &str, regi
         workspace["language_map"]["en_us"] = json!({});
     }
     let language = workspace["language_map"]["en_us"].as_object_mut().expect("language map initialized");
-    let prefix = if kind == "tool" { "item" } else { "item" };
     for key in [
-        format!("{prefix}.{modid}.{registry}"),
-        format!("{prefix}.{modid}.{registry}.name"),
-        format!("{prefix}.{modid}.{element_name}"),
-        format!("{prefix}.{modid}.{element_name}.name"),
+        format!("item.{modid}.{registry}"),
+        format!("item.{modid}.{registry}.name"),
+        format!("item.{modid}.{element_name}"),
+        format!("item.{modid}.{element_name}.name"),
     ] {
         language.insert(key, json!(display_name));
     }
 }
 
-fn equipment_source_modid(source_root: &Path, supplied: &str) -> String {
-    if !supplied.trim().is_empty() {
-        return supplied.trim().to_owned();
-    }
-    source_root.file_name().and_then(|value| value.to_str()).filter(|value| !value.is_empty())
-        .unwrap_or("converted_mod").to_owned()
+fn source_import_folder(modid: &str, kind: &str) -> String {
+    let normalized = modid.trim().replace('-', "_");
+    let root = if normalized.eq_ignore_ascii_case("lostinfinity") || normalized.eq_ignore_ascii_case("lost_infinity") {
+        "LostInfinity".to_owned()
+    } else if normalized.is_empty() {
+        "converted_mod".to_owned()
+    } else {
+        normalized
+    };
+    format!("~/{}/{}", root, if kind == "tool" { "Tools" } else { "Items" })
 }
 
 fn compact_name(value: &str) -> String {
@@ -1467,8 +966,8 @@ fn unique_name(base: &str, used: &mut HashSet<String>) -> String {
     name
 }
 
-/// Discover registered item/tool classes, copy source item textures and write
-/// native MCreator element JSON plus workspace descriptors/language entries.
+/// Discover registered Java Item/Tool subclasses, materialize their item textures,
+/// write element JSON and update the existing workspace descriptor/language map.
 pub fn export_equipment_to_workspace(
     source_roots: &[PathBuf],
     workspace_root: &Path,
@@ -1479,20 +978,25 @@ pub fn export_equipment_to_workspace(
     let workspace_file = workspace_descriptor_file(&workspace_root)?;
     let bytes = fs::read(&workspace_file).with_context(|| format!("Reading {}", workspace_file.display()))?;
     let mut workspace: Value = serde_json::from_slice(&bytes).context("Parsing MCreator workspace descriptor")?;
+    if !workspace.get("workspaceSettings").is_some_and(Value::is_object)
+        || !workspace.get("mod_elements").is_some_and(Value::is_array)
+    {
+        bail!("Workspace must contain object workspaceSettings and array mod_elements.");
+    }
     let target_modid = workspace.get("workspaceSettings").and_then(|settings| settings.get("modid"))
         .and_then(Value::as_str).filter(|value| !value.trim().is_empty()).unwrap_or("converted_mod").to_owned();
-    let import_modid = equipment_source_modid(source_roots.first().map(PathBuf::as_path).unwrap_or(Path::new(".")), source_modid);
+    let import_modid = if !source_modid.trim().is_empty() {
+        source_modid.trim().to_owned()
+    } else {
+        source_roots.first().and_then(|root| root.file_name()).and_then(|value| value.to_str())
+            .unwrap_or("converted_mod").to_owned()
+    };
 
     let discovered = discover_equipment_sources(source_roots)?;
     let mut report = EquipmentWorkspaceExportReport {
-        workspace_file:workspace_file.clone(),
-        discovered:discovered.len(),
-        exported:0,
-        skipped:0,
-        records:Vec::new(),
-        warnings:Vec::new(),
+        workspace_file:workspace_file.clone(), discovered:discovered.len(), exported:0, skipped:0,
+        records:Vec::new(), warnings:Vec::new(),
     };
-
     let mut used_names = HashSet::<String>::new();
     let mut existing_registry = HashSet::<(String,String)>::new();
     for descriptor in workspace.get("mod_elements").and_then(Value::as_array).into_iter().flatten() {
@@ -1512,7 +1016,6 @@ pub fn export_equipment_to_workspace(
     fs::create_dir_all(&texture_dir)?;
 
     let mut templates = BTreeMap::<String, Value>::new();
-    let mut copied_texture_names = BTreeSet::<String>::new();
     for source in &discovered {
         let kind = source.element_type.as_str();
         let registry = normalize_registry(&source.registry_name);
@@ -1528,7 +1031,7 @@ pub fn export_equipment_to_workspace(
             template
         };
 
-        let candidates = texture_candidates(source_roots, &import_modid, source);
+        let candidates = texture_candidates(source_roots, source);
         let texture_source = candidates.first().cloned();
         let mut texture_name = registry.clone();
         let target_texture = if let Some(path) = texture_source.as_ref() {
@@ -1555,23 +1058,15 @@ pub fn export_equipment_to_workspace(
             &unique_equipment_element_name(&source.class_name, &registry),
             &mut used_names
         );
-        let template_ref = Some(&template);
         let (element, mut warnings) = if kind == "tool" {
-            let tool_type = source.class_name.to_ascii_lowercase();
-            let tool_type = classify_tool(&source.superclass, &source.class_name)
-                .or_else(|| {
-                    ["Sword","Axe","Pickaxe","Shovel","Hoe","Bow","Fishing Rod","Shears"]
-                        .into_iter().find(|kind| tool_type.ends_with(&kind.to_ascii_lowercase()))
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "Sword".to_owned());
+            let tool_type = source.tool_type.as_deref().unwrap_or("Sword");
             build_tool_element(
-                template_ref,&source.class_name,&source.superclass,&source.source_text,
-                &registry,&texture_name,&tool_type,None,imported_fv
+                Some(&template),&source.class_name,&source.superclass,&source.source_text,
+                &registry,&texture_name,tool_type,None,imported_fv
             )
         } else {
             build_item_element(
-                template_ref,&source.class_name,&source.superclass,&source.source_text,
+                Some(&template),&source.class_name,&source.superclass,&source.source_text,
                 &registry,&texture_name,imported_fv
             )
         };
@@ -1589,7 +1084,6 @@ pub fn export_equipment_to_workspace(
         if meta.is_file() {
             metadata_files.push(meta.strip_prefix(&workspace_root).unwrap_or(&meta).to_string_lossy().replace('\\', "/"));
         }
-        let path_group = format!("~/{}/{}", import_modid.replace('-', "_"), if kind == "tool" { "Tools" } else { "Items" });
         let descriptor = json!({
             "name":element_name,
             "type":kind,
@@ -1597,7 +1091,7 @@ pub fn export_equipment_to_workspace(
             "locked_code":false,
             "registry_name":registry,
             "metadata":{"files":metadata_files},
-            "path":path_group,
+            "path":source_import_folder(&import_modid,kind),
             "mojmodelbridge_generated":true,
             "mojmodelbridge_source_modid":import_modid,
             "mojmodelbridge_source_class":source.class_name,
@@ -1605,25 +1099,136 @@ pub fn export_equipment_to_workspace(
         });
         workspace["mod_elements"].as_array_mut().expect("validated workspace mod_elements").push(descriptor);
         let display = item_display_name(&registry);
-        equipment_language_entry(&mut workspace,&target_modid,kind,&registry,&element_name,&display);
+        equipment_language_entry(&mut workspace,&target_modid,&registry,&element_name,&display);
 
         report.exported += 1;
         report.records.push(EquipmentExportRecord {
-            class_name:source.class_name.clone(),
-            element_name,
-            registry_name:registry,
-            element_type:kind.to_owned(),
-            texture:texture_name,
-            source_path:source.source_path.clone(),
-            warnings,
+            class_name:source.class_name.clone(),element_name,registry_name:registry.clone(),
+            element_type:kind.to_owned(),texture:texture_name,source_path:source.source_path.clone(),warnings
         });
-        existing_registry.insert((kind.to_owned(), source.registry_name.to_ascii_lowercase()));
+        existing_registry.insert((kind.to_owned(),registry));
     }
 
     fs::write(&workspace_file, format!("{}\n", serde_json::to_string_pretty(&workspace)?))
         .with_context(|| format!("Writing updated workspace {}", workspace_file.display()))?;
-    let _ = copied_texture_names;
     Ok(report)
+}
+
+#[cfg(test)]
+mod equipment_discovery_tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn discovers_legacy_registered_items_and_tools_from_public_java_classes() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final Item IRON_SWORD = new ExampleSword();
+                public static final Item CRYSTAL = new CrystalItem();
+                public static void register() {
+                    GameRegistry.registerItem(ModItems.IRON_SWORD, "iron_sword");
+                    GameRegistry.registerItem(ModItems.CRYSTAL, "crystal");
+                }
+            }
+            public class ExampleSword extends ItemSword { }
+            public class CrystalItem extends Item { }
+        "#).unwrap();
+
+        let found = discover_equipment_sources(&[root.to_path_buf()]).unwrap();
+        assert_eq!(found.len(),2);
+        assert!(found.iter().any(|source| source.class_name == "ExampleSword" && source.element_type == "tool" && source.tool_type.as_deref() == Some("Sword") && source.registry_name == "iron_sword"));
+        assert!(found.iter().any(|source| source.class_name == "CrystalItem" && source.element_type == "item" && source.registry_name == "crystal"));
+    }
+
+    #[test]
+    fn discovers_modern_deferred_register_item_factories() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final RegistryObject<Item> RUBY = ITEMS.register("ruby", () -> new RubyItem());
+            }
+            public class RubyItem extends Item { }
+        "#).unwrap();
+        let found = discover_equipment_sources(&[root.to_path_buf()]).unwrap();
+        assert_eq!(found.len(),1);
+        assert_eq!(found[0].registry_name,"ruby");
+        assert_eq!(found[0].class_name,"RubyItem");
+    }
+
+    #[test]
+    fn exports_registered_item_into_workspace_with_texture_and_manifest() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let workspace_root = temp.path().join("workspace");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&workspace_root).unwrap();
+        fs::create_dir_all(source.join("assets/demo/textures/items")).unwrap();
+        fs::write(source.join("assets/demo/textures/items/example.png"), b"test-png").unwrap();
+        fs::write(source.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final Item EXAMPLE = new ExampleItem();
+                public static void register() {
+                    GameRegistry.registerItem(ModItems.EXAMPLE, "example");
+                }
+            }
+            public class ExampleItem extends Item {
+                public ExampleItem() { setTextureName("demo:items/example"); setMaxStackSize(16); }
+            }
+        "#).unwrap();
+        let descriptor_path = workspace_root.join("test.mcreator");
+        fs::write(&descriptor_path, serde_json::to_vec(&json!({
+            "mcreatorVersion":202600,
+            "workspaceSettings":{"modid":"converted","modElementsPackage":"example.converted","currentGenerator":"neoforge-1.21.1"},
+            "mod_elements":[]
+        })).unwrap()).unwrap();
+
+        let report = export_equipment_to_workspace(&[source], &workspace_root, "demo", 89).unwrap();
+        assert_eq!(report.discovered,1);
+        assert_eq!(report.exported,1);
+        assert_eq!(report.records[0].element_name,"Example");
+        let element_path = workspace_root.join("elements/Example.mod.json");
+        let element: Value = serde_json::from_slice(&fs::read(element_path).unwrap()).unwrap();
+        assert_eq!(element["_type"],"item");
+        assert_eq!(element["definition"]["stackSize"],16);
+        assert_eq!(element["definition"]["texture"],"example");
+        assert!(workspace_root.join("src/main/resources/assets/converted/textures/item/example.png").is_file());
+        let updated: Value = serde_json::from_slice(&fs::read(descriptor_path).unwrap()).unwrap();
+        assert_eq!(updated["mod_elements"][0]["registry_name"],"example");
+        assert_eq!(updated["mod_elements"][0]["metadata"]["files"][0],"src/main/resources/assets/converted/textures/item/example.png");
+        assert_eq!(updated["language_map"]["en_us"]["item.converted.example.name"],"Example");
+    }
+
+    #[test]
+    fn existing_workspace_equipment_registry_is_not_duplicated() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let workspace_root = temp.path().join("workspace");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&workspace_root).unwrap();
+        fs::write(source.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final Item EXAMPLE = new ExampleItem();
+                public static void register() { GameRegistry.registerItem(EXAMPLE, "example"); }
+            }
+            public class ExampleItem extends Item { }
+        "#).unwrap();
+        let descriptor_path = workspace_root.join("test.mcreator");
+        fs::write(&descriptor_path, serde_json::to_vec(&json!({
+            "mcreatorVersion":202600,"workspaceSettings":{"modid":"converted"},
+            "mod_elements":[{"name":"ExistingExample","type":"item","registry_name":"example"}]
+        })).unwrap()).unwrap();
+
+        let report = export_equipment_to_workspace(&[source], &workspace_root, "demo", 89).unwrap();
+        assert_eq!(report.discovered,1);
+        assert_eq!(report.exported,0);
+        assert_eq!(report.skipped,1);
+        let updated: Value = serde_json::from_slice(&fs::read(descriptor_path).unwrap()).unwrap();
+        assert_eq!(updated["mod_elements"].as_array().unwrap().len(),1);
+    }
 }
 
 #[cfg(test)]
