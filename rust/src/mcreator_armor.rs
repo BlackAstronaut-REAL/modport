@@ -562,7 +562,7 @@ pub fn build_armor_element(
     definition.insert("enchantability".to_owned(), json!(stats.and_then(|s|s.get("enchantability")).copied().unwrap_or(10.0) as i64));
     definition.insert("toughness".to_owned(), json!(stats.and_then(|s|s.get("toughness")).copied().unwrap_or(0.0)));
     definition.insert("rarity".to_owned(), json!("COMMON"));
-    definition.insert("repairItems".to_owned(), json![]);
+    definition.insert("repairItems".to_owned(), Value::Array(Vec::new()));
     definition.insert("name".to_owned(), json!(display));
 
     for (part, aliases) in ARMOR_PARTS {
