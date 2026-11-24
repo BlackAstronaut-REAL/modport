@@ -294,6 +294,31 @@ fn png_refs(text: &str) -> Vec<String> {
     refs
 }
 
+fn source_texture_references(source: &str) -> Vec<String> {
+    let mut references = png_refs(source);
+    let two_args = Regex::new(
+        r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:fromNamespaceAndPath|tryParse))\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"#
+    ).unwrap();
+    for capture in two_args.captures_iter(source) {
+        references.push(format!("{}:{}", capture[1], capture[2]));
+    }
+    let one_arg = Regex::new(
+        r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:parse|withDefaultNamespace))\s*\(\s*"([^"]+)"#
+    ).unwrap();
+    for capture in one_arg.captures_iter(source) {
+        references.push(capture[1].replace('\\', "/"));
+    }
+    let texture_constants = Regex::new(
+        r#"(?i)["']((?:[A-Za-z0-9_.-]+:)?(?:textures/)?(?:entity|entities|mob|mobs|models)/[A-Za-z0-9_./-]{1,200})["']"#
+    ).unwrap();
+    for capture in texture_constants.captures_iter(source) {
+        references.push(capture[1].replace('\\', "/"));
+    }
+    references.sort_by_key(|value| value.to_ascii_lowercase());
+    references.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    references
+}
+
 fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>) -> (String, Vec<Value>, f64, f64, Vec<String>) {
     let Some(path) = renderer_sources(renderer, index) else { return (String::new(), Vec::new(), 0.5, 1.0, Vec::new()); };
     let Ok(text) = read_java(&path) else { return (String::new(), Vec::new(), 0.5, 1.0, Vec::new()); };
@@ -311,7 +336,7 @@ fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>) -> (Str
     let scale_regex = Regex::new(r"(?:GlStateManager\.[A-Za-z0-9_$]+|glScalef|scale)\s*\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?").unwrap();
     let visual_scale = scale_regex.captures(&text).and_then(|captures| captures.get(1))
         .and_then(|value| value.as_str().parse::<f64>().ok()).unwrap_or(1.0);
-    (model, args, shadow, visual_scale, png_refs(&text))
+    (model, args, shadow, visual_scale, source_texture_references(&text))
 }
 
 fn registry_field_entities(java_paths: &[PathBuf]) -> HashMap<String, String> {
@@ -373,7 +398,7 @@ fn parse_registration_call(
         shadow = numeric_args[numeric_args.len()-2];
         scale = numeric_args[numeric_args.len()-1];
     }
-    textures.extend(png_refs(raw_args));
+    textures.extend(source_texture_references(raw_args));
     textures.sort_by_key(|value| value.to_ascii_lowercase());
     textures.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
 
@@ -685,6 +710,12 @@ fn class_texture_references(class: &ClassFile) -> Vec<String> {
         };
         if let Some(text) = text {
             for found in pattern.find_iter(text) {
+                references.insert(found.as_str().replace('\\', "/"));
+            }
+            let resource_path = Regex::new(
+                r"(?i)(?:textures/)?(?:entity|entities|mob|mobs|models)/[A-Za-z0-9_./-]{1,200}"
+            ).unwrap();
+            for found in resource_path.find_iter(text) {
                 references.insert(found.as_str().replace('\\', "/"));
             }
         }
@@ -1406,6 +1437,23 @@ mod tests {
         assert!(metadata.fire_immune);
         assert!(metadata.flying_mob);
         assert!(metadata.ai_classes.contains(&"EntityAIAttackMelee".to_owned()));
+    }
+
+    #[test]
+    fn recovers_mob_texture_resource_locations_without_png_suffixes() {
+        let references = source_texture_references(r#"
+            public ResourceLocation getEntityTexture(Entity entity) {
+                return new ResourceLocation("examplemod", "textures/entity/storm_drake");
+            }
+        "#);
+        assert!(references.iter().any(|value| value == "examplemod:textures/entity/storm_drake"));
+
+        let references = source_texture_references(r#"
+            public ResourceLocation getTextureLocation(Entity entity) {
+                return ResourceLocation.fromNamespaceAndPath("examplemod", "entity/stone_golem");
+            }
+        "#);
+        assert!(references.iter().any(|value| value == "examplemod:entity/stone_golem"));
     }
 
     #[test]
