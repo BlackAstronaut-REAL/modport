@@ -209,13 +209,13 @@ fn source_index(paths: &[PathBuf]) -> BTreeMap<String, Vec<PathBuf>> {
 fn registry_names(java_paths: &[PathBuf]) -> BTreeMap<String, String> {
     let mut result = BTreeMap::new();
     let modern = Regex::new(
-        r"(?s)RegistryObject\s*<\s*EntityType\s*<\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*>\s*>\s*[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*[^;]{0,1200}?\.register\s*\(\s*\"([^\"]+)\""
+        r#"(?s)RegistryObject\s*<\s*EntityType\s*<\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*>\s*>\s*[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*[^;]{0,1200}?\.register\s*\(\s*"([^"]+)""#
     ).unwrap();
     let old_class_first = Regex::new(
-        r"(?i)\b[A-Za-z_$][A-Za-z0-9_$]*(?:Entry|Entity|Projectile|Mob|Eggless|Register)[A-Za-z0-9_$]*\s*\(\s*([A-Za-z_$][A-Za-z0-9_$.]*)\.class\s*,\s*\"([^\"]+)\""
+        r#"(?i)\b[A-Za-z_$][A-Za-z0-9_$]*(?:Entry|Entity|Projectile|Mob|Eggless|Register)[A-Za-z0-9_$]*\s*\(\s*([A-Za-z_$][A-Za-z0-9_$.]*)\.class\s*,\s*"([^"]+)""#
     ).unwrap();
     let old_string_first = Regex::new(
-        r"(?i)\b[A-Za-z_$][A-Za-z0-9_$]*(?:Entry|Entity|Projectile|Mob|Eggless|Register)[A-Za-z0-9_$]*\s*\(\s*\"([^\"]+)\"\s*,\s*([A-Za-z_$][A-Za-z0-9_$.]*)\.class"
+        r#"(?i)\b[A-Za-z_$][A-Za-z0-9_$]*(?:Entry|Entity|Projectile|Mob|Eggless|Register)[A-Za-z0-9_$]*\s*\(\s*"([^"]+)"\s*,\s*([A-Za-z_$][A-Za-z0-9_$.]*)\.class"#
     ).unwrap();
     for path in java_paths {
         let Ok(text) = read_java(path) else { continue; };
