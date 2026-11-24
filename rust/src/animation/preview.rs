@@ -123,7 +123,7 @@ fn runtime_samples(kind: &str, length: f64, count: usize) -> Vec<(f64, HashMap<S
     let mut samples = Vec::with_capacity(count + 1);
     for index in 0..=count {
         let elapsed = length * index as f64 / count as f64;
-        let phase = std::f64::consts::TAU * index as f64 / count as f64;
+        let limb_phase = 20.0 * elapsed;
         let mut variables = HashMap::from([
             ("limbSwing".to_owned(), 0.0),
             ("limbSwingAmount".to_owned(), 0.0),
@@ -134,7 +134,7 @@ fn runtime_samples(kind: &str, length: f64, count: usize) -> Vec<(f64, HashMap<S
         ]);
         match kind {
             "walk_cycle" => {
-                variables.insert("limbSwing".to_owned(), phase);
+                variables.insert("limbSwing".to_owned(), limb_phase);
                 variables.insert("limbSwingAmount".to_owned(), 1.0);
             }
             "idle" => {}
@@ -328,6 +328,36 @@ mod tests {
     use super::*;
     use crate::model::{ParsedModel, Part};
     use serde_json::Value;
+
+    #[test]
+    fn walk_clip_returns_to_its_first_pose_before_the_loop_restarts() {
+        let part = Part {
+            name: "wing".into(), variable: "wing".into(), parent_variable: "root".into(),
+            offset: [0.0; 3], rotation: [0.0; 3], cubes: Vec::new(), parent: None,
+            children: Vec::new(), source_index: 0, source_name: "wing".into(),
+            render_instance_index: 0, render_instance_spec: Value::Null,
+            origin: [0.0, 24.0, 0.0], group_uuid: String::new(),
+        };
+        let formulas = vec![
+            Formula {
+                bone: "wing".into(), channel: "rotation".into(), axis: "x".into(),
+                expression: "sin(limbSwing * 0.6662)".into(), class: "walk_cycle".into(),
+            },
+            Formula {
+                bone: "wing".into(), channel: "rotation".into(), axis: "z".into(),
+                expression: "cos(limbSwing * 0.3331)".into(), class: "walk_cycle".into(),
+            },
+        ];
+        let length = period_for(&formulas, "limbSwing");
+        let clip = sample_clip(&[part], &formulas, "walk_cycle", length);
+        let keys = &clip["wing"]["rotation"];
+        let start = keys["0.00000000"];
+        let end = keys[&format!("{length:.8}")];
+        assert_eq!(start, end, "the loop endpoint must match the first pose");
+        let recovery_start = keys[&format!("{:.8}", length * 0.875)];
+        assert_ne!(recovery_start, end, "the last interval should contain the reverse-to-start keyframes");
+        assert!(keys.len() >= 64);
+    }
 
     #[test]
     fn bakes_a_looping_walk_clip_as_bind_pose_deltas() {
