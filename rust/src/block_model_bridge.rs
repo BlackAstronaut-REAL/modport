@@ -300,11 +300,162 @@ pub fn copy_model_ref_texture_to_workspace(
     Ok(resolved_stem)
 }
 
+
+fn rewrite_model_namespace(value: Value, source_modid: &str, target_modid: &str) -> Value {
+    match value {
+        Value::String(text) => {
+            if let Some((namespace, path)) = text.split_once(':') {
+                if namespace.eq_ignore_ascii_case(source_modid) {
+                    return Value::String(format!("{target_modid}:{path}"));
+                }
+            }
+            Value::String(text)
+        }
+        Value::Array(values) => Value::Array(values.into_iter()
+            .map(|value| rewrite_model_namespace(value, source_modid, target_modid)).collect()),
+        Value::Object(values) => Value::Object(values.into_iter()
+            .map(|(key, value)| (key, rewrite_model_namespace(value, source_modid, target_modid))).collect()),
+        other => other,
+    }
+}
+
+fn safe_model_reference(reference: &str, source_modid: &str) -> Option<PathBuf> {
+    let reference = reference.trim().replace('\\', "/");
+    let (namespace, mut path) = reference.split_once(':')
+        .map(|(namespace, path)| (Some(namespace), path))
+        .unwrap_or((None, reference.as_str()));
+    if namespace.is_some_and(|namespace| !namespace.eq_ignore_ascii_case(source_modid)) {
+        return None;
+    }
+    path = path.trim_start_matches('/');
+    path = path.strip_prefix("models/").unwrap_or(path);
+    path = path.strip_prefix("block/").unwrap_or(path);
+    let path = PathBuf::from(path);
+    if path.components().any(|part| !matches!(part, Component::Normal(_))) {
+        return None;
+    }
+    Some(path.with_extension("json"))
+}
+
+/// Copy exact source blockstate and referenced block-model JSON into the target
+/// workspace resource tree while remapping only the imported mod namespace.
+pub fn copy_source_block_model_resources(
+    source_roots: &[PathBuf],
+    source_modid: &str,
+    target_modid: &str,
+    registry: &str,
+    workspace_root: &Path,
+) -> Result<Vec<PathBuf>> {
+    let registry = snake_case(registry);
+    let output_assets = workspace_root.join("src/main/resources/assets").join(target_modid);
+    let mut outputs = Vec::new();
+    let mut seen_outputs = BTreeSet::new();
+
+    for root in source_roots {
+        let bases = [
+            root.join("src/main/resources/assets").join(source_modid),
+            root.join("assets").join(source_modid),
+        ];
+        for base in bases {
+            if !base.is_dir() {
+                continue;
+            }
+            let blockstate = base.join("blockstates").join(format!("{registry}.json"));
+            let mut wanted_models = BTreeSet::new();
+            if let Some(payload) = read_json(&blockstate) {
+                for reference in collect_model_refs(&payload) {
+                    wanted_models.insert(reference);
+                }
+                let rewritten = rewrite_model_namespace(payload, source_modid, target_modid);
+                let destination = output_assets.join("blockstates").join(format!("{registry}.json"));
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&destination, format!("{}\n", serde_json::to_string_pretty(&rewritten)?))
+                    .with_context(|| format!("Writing copied blockstate {}", destination.display()))?;
+                let key = destination.to_string_lossy().to_ascii_lowercase();
+                if seen_outputs.insert(key) {
+                    outputs.push(destination);
+                }
+            }
+
+            wanted_models.insert(registry.clone());
+            let models_root = base.join("models/block");
+            for reference in wanted_models {
+                let Some(relative) = safe_model_reference(&reference, source_modid) else {
+                    continue;
+                };
+                let source = models_root.join(&relative);
+                if !source.is_file() {
+                    continue;
+                }
+                let Some(payload) = read_json(&source) else {
+                    continue;
+                };
+                let rewritten = rewrite_model_namespace(payload, source_modid, target_modid);
+                let destination = output_assets.join("models/block").join(&relative);
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&destination, format!("{}\n", serde_json::to_string_pretty(&rewritten)?))
+                    .with_context(|| format!("Writing copied block model {}", destination.display()))?;
+                let key = destination.to_string_lossy().to_ascii_lowercase();
+                if seen_outputs.insert(key) {
+                    outputs.push(destination);
+                }
+            }
+        }
+    }
+    Ok(outputs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
     use tempfile::tempdir;
+
+    #[test]
+    fn copies_blockstate_and_all_variant_multipart_models_with_namespace_remapping() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("src");
+        let assets = source.join("assets/demo");
+        let blockstate = assets.join("blockstates/duct.json");
+        fs::create_dir_all(blockstate.parent().unwrap()).unwrap();
+        let blockstate_json = json!({
+            "variants": {
+                "facing=north": {"model":"demo:block/duct"},
+                "facing=south": [{"model":"demo:block/duct_alt","y":180}]
+            },
+            "multipart": [{"apply":{"model":"demo:block/duct_joint"}}]
+        });
+        fs::write(&blockstate, serde_json::to_vec(&blockstate_json).unwrap()).unwrap();
+        for name in ["duct", "duct_alt", "duct_joint"] {
+            let path = assets.join(format!("models/block/{name}.json"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, serde_json::to_vec(&json!({
+                "parent":"minecraft:block/cube_all",
+                "textures":{"all":"demo:block/duct"}
+            })).unwrap()).unwrap();
+        }
+
+        let output = temp.path().join("workspace");
+        let copied = copy_source_block_model_resources(
+            &[source], "demo", "converted", "duct", &output
+        ).unwrap();
+        assert_eq!(copied.len(), 4);
+        let target_state = output.join("src/main/resources/assets/converted/blockstates/duct.json");
+        let state: Value = serde_json::from_slice(&fs::read(target_state).unwrap()).unwrap();
+        assert_eq!(state["variants"]["facing=north"]["model"], "converted:block/duct");
+        assert_eq!(state["variants"]["facing=south"][0]["model"], "converted:block/duct_alt");
+
+        let target_model = output.join("src/main/resources/assets/converted/models/block/duct.json");
+        let model: Value = serde_json::from_slice(&fs::read(target_model).unwrap()).unwrap();
+        assert_eq!(model["parent"], "minecraft:block/cube_all");
+        assert_eq!(model["textures"]["all"], "converted:block/duct");
+        assert!(output.join("src/main/resources/assets/converted/models/block/duct_alt.json").is_file());
+        assert!(output.join("src/main/resources/assets/converted/models/block/duct_joint.json").is_file());
+    }
 
     #[test]
     fn grass_block_parent_maps_to_native_render_type() {
