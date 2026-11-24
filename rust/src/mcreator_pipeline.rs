@@ -171,8 +171,22 @@ pub fn export_all_to_workspace(
         serde_json::to_value(&worldgen)?,
     ));
 
-    let entities = crate::mcreator_workspace::export_living_entities_to_workspace(
-        source_roots, &workspace_root, &import_modid, imported_fv
+    let graph_root = source_roots.first()
+        .ok_or_else(|| anyhow::anyhow!("export-all requires at least one source root"))?;
+    let graph = crate::mod_graph::scan_mod_graph(graph_root, source_roots)?;
+    let workspace_bytes = fs::read(&workspace_file)
+        .with_context(|| format!("Reading {}", workspace_file.display()))?;
+    let workspace_descriptor: Value = serde_json::from_slice(&workspace_bytes)
+        .context("Parsing workspace generator settings")?;
+    let target_generator = workspace_descriptor
+        .get("workspaceSettings")
+        .and_then(|settings| settings.get("currentGenerator"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("neoforge-1.21.1")
+        .to_owned();
+    let entities = crate::mcreator_workspace::export_living_entities_to_workspace_with_modid(
+        &graph, &workspace_root, &target_generator, false, Some(&import_modid)
     )?;
     let entity_details = serde_json::to_value(&entities)?;
     if let Some(items) = entity_details.get("warnings").and_then(Value::as_array) {
@@ -180,8 +194,8 @@ pub fn export_all_to_workspace(
     }
     stages.push(stage(
         "living_entities",
-        count_field(&entity_details, "exported"),
-        count_field(&entity_details, "skipped"),
+        count_field(&entity_details, "exported_entities"),
+        count_field(&entity_details, "skipped_entities"),
         entity_details,
     ));
 
