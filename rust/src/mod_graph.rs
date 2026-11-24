@@ -1116,6 +1116,12 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 
     let index = source_index(&java_paths);
     let mut registry = compiled_registry_names(&class_paths);
+    let compiled_content = crate::compiled_registry::scan_compiled_registrations(&roots)?;
+    for (class, names) in &compiled_content.registries {
+        if let Some(name) = names.iter().next() {
+            registry.entry(class.clone()).or_insert_with(|| name.clone());
+        }
+    }
     // Source registrations are more descriptive than the compact legacy
     // compiled call pattern, so explicit source IDs take precedence.
     for (entity, name) in registry_names(&java_paths) {
@@ -1123,7 +1129,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     }
     let field_entities = registry_field_entities(&java_paths);
     let mut registrations = Vec::new();
-    let mut warnings = Vec::new();
+    let mut warnings = compiled_content.warnings.clone();
     for path in &java_paths {
         let text = match read_java(path) { Ok(text) => text, Err(error) => {
             // Keep the scan alive when one source file is unreadable.
