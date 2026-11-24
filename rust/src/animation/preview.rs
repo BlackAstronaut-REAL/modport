@@ -60,7 +60,7 @@ fn gcd(mut left: u64, mut right: u64) -> u64 {
 }
 
 fn lcm(left: u64, right: u64) -> u64 {
-    left.saturating_div(gcd(left, right)).saturating_mul(right)
+    (left / gcd(left, right)).saturating_mul(right)
 }
 
 fn rational_period_ratio(value: f64) -> Option<(u64, u64)> {
