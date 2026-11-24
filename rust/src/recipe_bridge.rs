@@ -262,7 +262,7 @@ mod tests {
 
     fn item_map() -> BTreeMap<String, String> {
         BTreeMap::from([
-            ("iron_ingot".to_owned(), "IronIngot".to_owned()),
+            ("ironingot".to_owned(), "IronIngot".to_owned()),
             ("sword".to_owned(), "IronSword".to_owned()),
         ])
     }
