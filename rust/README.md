@@ -148,7 +148,7 @@ mojmodelbridge export-worldgen .\\MCreatorWorkspace .\\DecompiledMod --source-mo
 
 ### Complete native export pipeline
 
-The `export-all` command invokes the registered native exporters in dependency order: equipment, armor, blocks, plants, worldgen, living entities, projectiles, then recipes. The living-entity stage builds a merged ModGraph from the supplied source roots and honors `--source-modid` for generated source/resource paths. Recipe element references are built from the workspace after content exporters have run. Each stage reports exported/skipped counts and warnings; a hard stage error stops the pipeline so it does not silently report a complete conversion.
+The `export-all` command invokes the registered native exporters in dependency order: equipment, armor, blocks, plants, worldgen, living entities, projectiles, then recipes. The living-entity stage builds a merged ModGraph from the supplied source roots and honors `--source-modid` for generated source/resource paths. Recipe element references are built from the workspace after content exporters have run. Each stage reports exported/skipped counts and warnings; a hard stage error stops the pipeline, and a final workspace validation writes JSON/text reports and surfaces remaining errors.
 
 ```powershell
 mojmodelbridge export-all .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
