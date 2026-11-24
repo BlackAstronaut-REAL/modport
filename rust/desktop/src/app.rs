@@ -243,6 +243,30 @@ impl MojModelBridgeApp {
         }
     }
 
+    fn load_legacy_model_preview(&mut self, entry: &BrowserEntry, source: &Path) -> anyhow::Result<()> {
+        let asset = load_model_preview(source, &self.browser.texture_roots)?;
+        let scene = ViewerScene::from_parsed_model(&asset.model)?;
+        self.texture_paths = entry.texture_paths.clone();
+        for path in &asset.texture_paths {
+            if !self.texture_paths.contains(path) {
+                self.texture_paths.push(path.clone());
+            }
+        }
+        if self.texture_paths.is_empty() {
+            self.texture_paths = asset.texture_paths;
+        }
+        self.selected_texture = if !entry.texture_paths.is_empty() {
+            preferred_texture_index(entry, &self.texture_paths)
+        } else {
+            self.texture_paths.iter()
+                .position(|path| path.to_string_lossy() == asset.model.primary_texture)
+                .unwrap_or(0)
+        };
+        self.scene = Some(scene);
+        self.refresh_preview_image();
+        Ok(())
+    }
+
     fn activate_entry(&mut self, context: &egui::Context, index: usize) {
         let Some(entry) = self.browser.entries.get(index).cloned() else { return; };
         self.selected_entry = Some(index);
@@ -278,39 +302,34 @@ impl MojModelBridgeApp {
                     self.refresh_preview_image();
                 }
                 Err(error) => {
-                    self.selected_error = format!("Resource model preview could not be loaded: {error:#}");
-                    if let Some(path) = entry.icon_path.as_ref() {
-                        self.texture_paths.push(path.clone());
-                        self.refresh_preview_image();
+                    let resource_error = format!("{error:#}");
+                    if let Some(source) = entry.model_source.as_ref() {
+                        match self.load_legacy_model_preview(&entry, source) {
+                            Ok(()) => {
+                                self.selected_error = format!(
+                                    "Resource model was unsupported ({resource_error}); showing the linked legacy renderer model instead."
+                                );
+                            }
+                            Err(legacy_error) => {
+                                self.selected_error = format!(
+                                    "Resource model preview failed ({resource_error}); legacy model preview failed ({legacy_error:#})."
+                                );
+                            }
+                        }
+                    } else {
+                        self.selected_error = format!("Resource model preview could not be loaded: {resource_error}");
+                    }
+                    if self.scene.is_none() {
+                        if let Some(path) = entry.icon_path.as_ref() {
+                            self.texture_paths.push(path.clone());
+                            self.refresh_preview_image();
+                        }
                     }
                 }
             }
         } else if let Some(source) = entry.model_source.as_ref() {
-            match load_model_preview(source, &self.browser.texture_roots) {
-                Ok(asset) => match ViewerScene::from_parsed_model(&asset.model) {
-                    Ok(scene) => {
-                        self.texture_paths = entry.texture_paths.clone();
-                        for path in &asset.texture_paths {
-                            if !self.texture_paths.contains(path) {
-                                self.texture_paths.push(path.clone());
-                            }
-                        }
-                        if self.texture_paths.is_empty() {
-                            self.texture_paths = asset.texture_paths;
-                        }
-                        self.selected_texture = if !entry.texture_paths.is_empty() {
-                            preferred_texture_index(&entry, &self.texture_paths)
-                        } else {
-                            self.texture_paths.iter()
-                                .position(|path| path.to_string_lossy() == asset.model.primary_texture)
-                                .unwrap_or(0)
-                        };
-                        self.scene = Some(scene);
-                        self.refresh_preview_image();
-                    }
-                    Err(error) => self.selected_error = format!("Could not create model scene: {error:#}"),
-                },
-                Err(error) => self.selected_error = format!("Model preview could not be loaded: {error:#}"),
+            if let Err(error) = self.load_legacy_model_preview(&entry, source) {
+                self.selected_error = format!("Model preview could not be loaded: {error:#}");
             }
         } else if let Some(path) = entry.icon_path.as_ref().or_else(|| entry.texture_paths.first()) {
             self.texture_paths = if entry.texture_paths.is_empty() {
