@@ -855,14 +855,26 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
         texts.push(text);
     }
 
-    let registry_map = collect_source_registries(&texts);
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    for (class, info) in &compiled.classes {
+        class_paths.entry(class.clone()).or_insert_with(|| info.path.clone());
+        class_parents.entry(class.clone()).or_insert_with(|| info.superclass.clone());
+        if info.access_flags & 0x0400 != 0 {
+            abstract_classes.insert(class.clone());
+        }
+    }
+
+    let mut registry_map = collect_source_registries(&texts);
+    for (class, registries) in &compiled.registries {
+        registry_map.entry(class.clone()).or_default().extend(registries.iter().cloned());
+    }
     let mut output = Vec::new();
     let mut seen = BTreeSet::<(String, String)>::new();
     for (class, registries) in registry_map {
         if abstract_classes.contains(&class) {
             continue;
         }
-        let Some(source_text) = class_texts.get(&class) else { continue };
+        let source_text = class_texts.get(&class).cloned().unwrap_or_default();
         let Some(source_path) = class_paths.get(&class) else { continue };
         let Some(superclass) = class_parents.get(&class) else { continue };
         let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents) else { continue };
@@ -1201,6 +1213,9 @@ pub fn export_equipment_to_workspace(
                 &registry,&texture_name,imported_fv
             )
         };
+        if source.source_text.trim().is_empty() {
+            warnings.push("Registration and content class were recovered from compiled bytecode only; constructor stats, behaviors, and source-declared texture paths may need manual reconstruction.".to_owned());
+        }
         if texture_source.is_none() {
             warnings.push("Source texture could not be recovered; verify the generated placeholder before release.".to_owned());
         }
