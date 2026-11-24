@@ -1265,6 +1265,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use tempfile::tempdir;
 
     #[test]
@@ -1278,6 +1279,30 @@ mod tests {
 
         let graph = scan_mod_graph(root, &[]).unwrap();
         assert_eq!(graph.registry_names.get("EntityRedAnt").map(String::as_str), Some("red_ant"));
+    }
+
+    #[test]
+    fn discovers_renderer_registration_from_a_compiled_only_mod_jar() {
+        let temp = tempdir().unwrap();
+        let archive_path = temp.path().join("compiled-only.jar");
+        {
+            let file = fs::File::create(&archive_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            writer.start_file(
+                "example/LegacyRenderRegistry.class",
+                zip::write::FileOptions::default(),
+            ).unwrap();
+            writer.write_all(include_bytes!("../tests/fixtures/LegacyRenderRegistry.class")).unwrap();
+            writer.finish().unwrap();
+        }
+
+        let graph = scan_mod_graph(&archive_path, &[]).unwrap();
+        assert_eq!(graph.registrations.len(), 1);
+        assert_eq!(graph.registrations[0].entity_class, "EntityPig");
+        assert_eq!(graph.registrations[0].renderer_class, "RenderPig");
+        assert_eq!(graph.registrations[0].model_class, "ModelPig");
+        assert!(graph.class_files.contains_key("LegacyRenderRegistry"));
+        assert!(graph.class_files["LegacyRenderRegistry"].is_file());
     }
 
     #[test]
