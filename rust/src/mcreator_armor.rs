@@ -300,7 +300,7 @@ fn armor_group_registry(prefix: &str, fields: &BTreeMap<String, String>, ids: &B
     format!("{}_armor", snake(prefix))
 }
 
-fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource>> {
+pub fn discover_armor_sources(source_roots: &[PathBuf]) -> Result<Vec<ArmorSetSource>> {
     let files = java_files(source_roots);
     let mut groups = BTreeMap::<String, ArmorGroup>::new();
     let mut all_texts = Vec::<String>::new();
