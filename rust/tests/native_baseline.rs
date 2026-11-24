@@ -95,3 +95,23 @@ fn converts_legacy_modelrenderer_java_model_to_blockbench() {
     assert_eq!(project["elements"].as_array().unwrap().len(), 2);
     assert_eq!(project["resolution"]["height"], 32);
 }
+
+#[test]
+fn converts_compiled_legacy_model_class_without_javap() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("ModelDeviantPiglin.class");
+    let output = temp.path().join("compiled/ModelDeviantPiglin.bbmodel");
+    fs::write(
+        &source,
+        include_bytes!("../../oldVer/tests/fixtures/ModelDeviantPiglin.class"),
+    ).unwrap();
+
+    let converted = convert_model_source(&source, &output, &[], false).unwrap();
+    assert!(converted.part_count > 0);
+    assert!(converted.cube_count > 0);
+    assert_eq!(converted.source_format, "minecraft_1.7_1.8_modelbase_class");
+
+    let project: serde_json::Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(project["elements"].as_array().unwrap().len(), converted.cube_count);
+    assert!(!project["groups"].as_array().unwrap().is_empty());
+}
