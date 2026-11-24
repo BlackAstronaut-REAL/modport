@@ -1580,7 +1580,7 @@ mod tests {
                 public float getDamageVsEntity() { return 13.5F; }
             "#.to_owned(),
         };
-        let (properties, lore) = item_source_properties(&source);
+        let (properties, lore) = item_source_properties(&source, None);
         assert_eq!(properties["enchantability"], 15.0);
         assert_eq!(properties["max_damage"], 1800.0);
         assert_eq!(properties["max_stack_size"], 1.0);
