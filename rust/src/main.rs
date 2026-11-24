@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use mojmodelbridge::pipeline::convert_model_source;
+use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 
 #[derive(Debug, Parser)]
@@ -33,6 +34,16 @@ enum Command {
         /// Replace an existing output.
         #[arg(long)]
         overwrite: bool,
+    },
+    /// Build the native entity → renderer → model relationship graph from mixed source roots.
+    ModGraph {
+        root: PathBuf,
+        /// Additional decompiled source/resource roots to merge with the primary root.
+        #[arg(long = "source-root")]
+        source_roots: Vec<PathBuf>,
+        /// Write the graph as JSON instead of stdout.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
     /// Safely extract a JAR or ZIP archive.
     Extract {
@@ -67,6 +78,30 @@ fn main() -> Result<()> {
             );
             println!("Blockbench project: {}", result.output.display());
             for warning in result.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ModGraph { root, source_roots, output } => {
+            let graph = scan_mod_graph(&root, &source_roots)?;
+            let data = serde_json::to_string_pretty(&graph)?;
+            if let Some(path) = output {
+                if let Some(parent) = path.parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                }
+                std::fs::write(&path, format!("{data}\n"))?;
+                println!(
+                    "Wrote mod graph: {} renderer links, {} model classes, {} entities → {}",
+                    graph.registrations.len(),
+                    graph.registrations_by_model().len(),
+                    graph.entities.len(),
+                    path.display()
+                );
+            } else {
+                println!("{data}");
+            }
+            for warning in graph.warnings {
                 eprintln!("[WARN] {warning}");
             }
         }

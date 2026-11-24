@@ -25,6 +25,8 @@ the engine into the native executable.
   conversion, hierarchy, model bounds and embedded PNG textures.
 - Companion-aware texture indexing across Java and class sources, exact resource
   reference scoring, body-variant discovery and auxiliary eye/glow exclusion.
+- Initial source-driven mod graph connecting entity registrations, renderer classes,
+  model classes and constructor arguments, with source-derived entity metadata.
 - First-pass legacy JVM animation formula evaluation and additive walk/idle
   Blockbench preview clips, rebased to the converted bind pose.
 - The convert-model command writes .bbmodel files and preserves recognized
@@ -34,6 +36,7 @@ the engine into the native executable.
 
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
+    cargo run --manifest-path rust/Cargo.toml -- mod-graph path/to/mod --source-root path/to/decompiled-source --output output/mod-graph.json
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -44,9 +47,9 @@ the full texture-selection edge-case corpus remain in progress.
 ## Remaining major engine ports
 
 The bytecode interpreters and initial legacy animation/texture stages now exist,
-but still need wider parity coverage. Remaining major ports are modern compiled
-animation extraction, advanced animation control-flow and loop baking, the entity/
-renderer mod graph, MCreator workspace/content/source exporters, workspace
+but still need wider parity coverage. Remaining major ports are compiled JVM renderer-registration and full entity-stat
+reconstruction, modern compiled animation extraction, advanced animation control-
+flow and loop baking, MCreator workspace/content/source exporters, workspace
 validator and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
 
 ## Parity rules

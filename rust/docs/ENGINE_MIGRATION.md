@@ -18,7 +18,7 @@ The Rust implementation is independent under rust/ and must not invoke Python.
 | modern_bytecode_bridge.py::parse_modern_bytecode_class | bytecode/modern_model | Initial MeshDefinition/PartDefinition/CubeListBuilder factory interpreter |
 | legacy_bridge.py::_parse_animation | animation/legacy | Symbolic pose/formula extraction, runtime parameter mapping and helper inlining; first-pass evaluator and additive walk/idle preview baking |
 | texture_resolver.py::TextureIndex | texture | Initial Java/class reference indexing, model/renderer companion association, resource path/basename scoring, variant ranking and auxiliary exclusion; full edge-case parity pending |
-| legacy_mod_graph.py::scan_legacy_mod | graph | Not ported: registrations, constructor arguments, entity metadata and aliases |
+| legacy_mod_graph.py::scan_legacy_mod | mod_graph | Initial Java-source registrations, entity→renderer→model links, constructor args, registry names and source-based entity metadata; compiled registration bytecode and richer stat inference pending |
 | mcreator_export.py::export_mcreator_workspace | export/mcreator | Not ported |
 | mcreator_content_export.py | export/mcreator/content | Not ported |
 | mcreator_source_bridge.py | export/mcreator/source_bridge | Not ported |
