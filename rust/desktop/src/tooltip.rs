@@ -119,7 +119,19 @@ pub fn draw_formatted_text(
     default_color: Color32,
     use_minecraftia: bool,
 ) {
-    draw_runs(ui, &parse_minecraft_text(text, default_color), use_minecraftia);
+    draw_formatted_text_with_italic(ui, text, default_color, false, use_minecraftia);
+}
+
+pub fn draw_formatted_text_with_italic(
+    ui: &mut egui::Ui,
+    text: &str,
+    default_color: Color32,
+    default_italic: bool,
+    use_minecraftia: bool,
+) {
+    let mut style = TextStyle::new(default_color);
+    style.italic = default_italic;
+    draw_runs(ui, &parse_formatted(text, style), use_minecraftia);
 }
 
 /// Render a Java Edition text component or a component-shaped JSON value.
@@ -143,23 +155,27 @@ pub fn draw_component_json(
 
     if custom_name.is_some() || lore.is_some() {
         if let Some(name) = custom_name {
-            append_component(name, base, &mut runs);
+            append_component(name, TextStyle::new(Color32::WHITE), &mut runs);
         }
         if let Some(lines) = lore {
+            let mut lore_style = TextStyle::new(Color32::from_rgb(170, 170, 170));
+            lore_style.italic = true;
             if let Some(lines) = lines.as_array() {
-                for line in lines {
-                    runs.push(TextRun {
-                        text: "\n".to_owned(),
-                        color: default_color,
-                        bold: false,
-                        italic: false,
-                        underline: false,
-                        strikethrough: false,
-                    });
-                    append_component(line, base, &mut runs);
+                for (index, line) in lines.iter().enumerate() {
+                    if index > 0 {
+                        runs.push(TextRun {
+                            text: "\n".to_owned(),
+                            color: lore_style.color,
+                            bold: false,
+                            italic: true,
+                            underline: false,
+                            strikethrough: false,
+                        });
+                    }
+                    append_component(line, lore_style, &mut runs);
                 }
             } else {
-                append_component(lines, base, &mut runs);
+                append_component(lines, lore_style, &mut runs);
             }
         }
     } else {
