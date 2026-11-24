@@ -306,9 +306,7 @@ impl MojModelBridgeApp {
                     if let Some(source) = entry.model_source.as_ref() {
                         match self.load_legacy_model_preview(&entry, source) {
                             Ok(()) => {
-                                self.selected_error = format!(
-                                    "Resource model was unsupported ({resource_error}); showing the linked legacy renderer model instead."
-                                );
+                                self.selected_error.clear();
                             }
                             Err(legacy_error) => {
                                 self.selected_error = format!(
