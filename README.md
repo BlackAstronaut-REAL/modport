@@ -15,30 +15,30 @@ The files under oldVer/ are the known-working conversion baseline. The desktop s
 - **Build & Test:** opens the exported workspace and can run its Gradle wrapper when present.
 - **Projects:** remembers recent project/output folders in the user's application-data directory.
 
-The long-term plan for rewritten complex logic is to retain recoverable logic and translate/rebuild it using MCreator's procedure/text representation where appropriate. That work is not part of this baseline; no procedure rewriting is performed by the desktop shell.
+The long-term plan for complex logic is to retain recovered source/bytecode evidence, represent behavior independently of the target loader, and translate or rebuild it using MCreator's procedure/text representation where appropriate. Unsupported sections must remain attached to the project with provenance and conversion warnings rather than silently disappearing. Logic rewriting is not part of this baseline.
 
 ## Run from source
 
 Requirements: Python 3.10+ and a JDK with javap available on PATH for compiled .class analysis.
 
-\`\`\`bat
+```bat
 py -3 app.py
-\`\`\`
+```
 
 The app expects the oldVer/ folder beside app.py.
 
 ## Build the Windows EXE
 
-\`\`\`bat
+```bat
 build_windows.bat
-\`\`\`
+```
 
 Or:
 
-\`\`\`bat
+```bat
 py -3 -m pip install pyinstaller
 py -3 -m PyInstaller --noconfirm --clean MojModelBridge.spec
-\`\`\`
+```
 
 The executable is created at dist\MojModelBridge.exe. The original engine Python modules and MCreator schemas are bundled as data inside the one-file EXE. A JDK is still required at runtime when converting compiled Java classes; the EXE does not bundle a Java runtime.
 

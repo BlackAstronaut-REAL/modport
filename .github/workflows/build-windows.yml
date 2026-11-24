@@ -25,6 +25,11 @@ jobs:
           python-version: '3.12'
       - name: Install packager
         run: python -m pip install --upgrade pip pyinstaller
+      - name: Set up JDK for javap-backed tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Run original engine regression tests
         run: |
           python -m pip install pytest
