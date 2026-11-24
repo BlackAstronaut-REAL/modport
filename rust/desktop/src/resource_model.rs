@@ -286,10 +286,15 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
             .iter().any(|value| stem.contains(value))
     {
         Some("plant")
-    } else if ["block/torch", "block/template_torch", "block/template_torch_wall"]
+    } else if parent.ends_with("block/template_torch_wall") {
+        Some("wall_torch")
+    } else if ["block/torch", "block/template_torch"]
         .iter().any(|value| parent.ends_with(value))
-        || ["redstone", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
-            .iter().any(|value| stem.contains(value))
+        || stem.ends_with("torch")
+    {
+        Some("torch")
+    } else if ["redstone_dust", "redstone_wire", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
+        .iter().any(|value| stem.contains(value))
     {
         Some("floor")
     } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
@@ -360,6 +365,20 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             [-8.0, -8.0, -8.0],
             [8.0, -7.65, 8.0],
             [0.0; 3],
+            texture_size,
+        )],
+        "torch" => vec![builtin_cube(
+            "torch",
+            [-1.5, -8.0, -1.5],
+            [1.5, 3.0, 1.5],
+            [0.0; 3],
+            texture_size,
+        )],
+        "wall_torch" => vec![builtin_cube(
+            "wall_torch",
+            [-1.5, -7.0, -1.5],
+            [1.5, 4.0, 1.5],
+            [0.32, 0.0, 0.32],
             texture_size,
         )],
         "plant" => vec![
