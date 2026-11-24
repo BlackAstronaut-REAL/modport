@@ -63,6 +63,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- export-plants path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-worldgen path/to/MCreatorWorkspace path/to/source --source-modid oldmod
     cargo run --manifest-path rust/Cargo.toml -- export-projectiles path/to/MCreatorWorkspace path/to/source --source-modid oldmod
+    cargo run --manifest-path rust/Cargo.toml -- export-all path/to/MCreatorWorkspace path/to/source --source-modid oldmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -135,6 +136,14 @@ The `export-worldgen` command discovers resource-authored `data/<modid>/worldgen
 
 ```powershell
 mojmodelbridge export-worldgen .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
+```
+
+### Complete native export pipeline
+
+The `export-all` command invokes the registered native exporters in dependency order: equipment, armor, blocks, plants, worldgen, living entities, projectiles, then recipes. Recipe element references are built from the workspace after content exporters have run. Each stage reports exported/skipped counts and warnings; a hard stage error stops the pipeline so it does not silently report a complete conversion.
+
+```powershell
+mojmodelbridge export-all .\\MCreatorWorkspace .\\DecompiledMod --source-modid examplemod
 ```
 
 ### MCreator projectile export
