@@ -473,6 +473,18 @@ pub fn parse_legacy_java_model(
         "animation_port_status":"pending",
         "note":"The source model geometry is reconstructed. Procedural animation interpretation remains a separate parity stage."
     });
+    match crate::animation::source::extract_java_animation(text, &model.class_name, &model.parts) {
+        Ok(Some(recovered)) => {
+            model.animation_analysis = recovered.analysis;
+            model.baked_animation_json = model.animation_analysis.clone();
+            model.blockbench_animations = recovered.blockbench_animations;
+            model.animation_logic = recovered.logic;
+            model.animation_source = recovered.source;
+            model.warnings.extend(recovered.warnings);
+        }
+        Ok(None) => {}
+        Err(error) => model.warnings.push(format!("Source animation recovery was incomplete: {error}")),
+    }
     Ok(model)
 }
 

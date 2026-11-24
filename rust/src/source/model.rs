@@ -593,8 +593,26 @@ pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedMo
     }
     warnings.extend(render_warnings);
 
-    let (animation_analysis, animation_logic, animation_source, animation_warnings) = preserve_animation_methods(&clean, &class_name);
+    let (mut animation_analysis, mut animation_logic, mut animation_source, animation_warnings) = preserve_animation_methods(&clean, &class_name);
     warnings.extend(animation_warnings);
+    let preserved_method_analysis = animation_analysis.clone();
+    let mut baked_animation_json = json!({});
+    let mut blockbench_animations = Vec::new();
+    match crate::animation::source::extract_java_animation(&clean, &class_name, &parts) {
+        Ok(Some(recovered)) => {
+            animation_analysis = recovered.analysis;
+            animation_analysis["preserved_methods"] = preserved_method_analysis;
+            baked_animation_json = animation_analysis.clone();
+            blockbench_animations = recovered.blockbench_animations;
+            animation_source = recovered.source;
+            if animation_logic.is_empty() {
+                animation_logic = recovered.logic;
+            }
+            warnings.extend(recovered.warnings);
+        }
+        Ok(None) => {}
+        Err(error) => warnings.push(format!("Source animation recovery was incomplete: {error}")),
+    }
     if parts.iter().map(|part| part.cubes.len()).sum::<usize>() == 0 {
         warnings.push("Parts were found, but no CubeListBuilder.addBox calls were converted.".to_owned());
     }
@@ -608,6 +626,8 @@ pub fn parse_modern_java_model(text: &str, source_name: &str) -> Result<ParsedMo
     model.animation_analysis = animation_analysis;
     model.animation_logic = animation_logic;
     model.animation_source = animation_source;
+    model.baked_animation_json = baked_animation_json;
+    model.blockbench_animations = blockbench_animations;
     model.render_instances = render_instances;
     model.render_runtime_rotations = render_runtime_rotations;
     Ok(model)
