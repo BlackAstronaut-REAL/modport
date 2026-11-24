@@ -33,3 +33,5 @@ pub mod worldgen_bridge;
 pub mod mcreator_workspace;
 
 pub mod mcreator_equipment;
+
+pub mod mcreator_armor;
