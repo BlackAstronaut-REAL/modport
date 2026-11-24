@@ -111,14 +111,14 @@ Keep the existing `mojmodelbridge` library and CLI as the core. Add the desktop 
 
 This phase is intentionally scoped as a renderer, not a new parser.
 
-- [ ] Add `ParsedModel -> ViewerScene` conversion in a renderer-independent Rust module.
-- [ ] Generate cube faces with correct Minecraft/Blockbench coordinate conventions, pivots, parent transforms, inflate, mirror, and per-face UVs.
-- [ ] Resolve the primary texture and texture variants using the existing texture index; support missing-texture placeholders and transparency.
-- [ ] Render a single textured hierarchical model in a 3D viewport.
-- [ ] Add orbit, pan, zoom, reset-camera, fit-to-model, grid, axes, and basic lighting.
+- [x] Add `ParsedModel -> ViewerScene` conversion in a renderer-independent Rust module.
+- [x] Generate initial cube faces from Minecraft/Blockbench pivot coordinates, parent transforms, inflate, mirror, and per-face UV metadata; reference-model UV verification remains open.
+- [x] Resolve primary textures and texture variants using the existing texture index. Missing-texture placeholders and alpha-cutout verification remain open.
+- [x] Render a textured hierarchical cube model in the initial desktop viewport (CPU rasterization prototype).
+- [x] Add orbit, pan, zoom, reset-camera/initial fit-to-model, and basic face lighting. Grid, axes, and a final GPU mesh renderer remain open.
 - [ ] Add a model tree with part selection, visibility toggles, and pivot display.
-- [ ] Add clip selection, play/pause, looping, playback speed, timeline scrubbing, and a bind-pose reset.
-- [ ] Apply animated node transforms at the current time without rebuilding the mesh every frame.
+- [x] Add clip selection, play/pause, looping and timeline scrubbing. Playback speed and a dedicated bind-pose reset remain open.
+- [x] Sample the selected clip and apply animated node transforms to the scene hierarchy each frame; static GPU mesh caching remains open.
 - [ ] Verify the same model's proportions, UVs, hierarchy, and animation poses against its Blockbench export and reference screenshots.
 
 **Viewer MVP acceptance:** load a model from the existing Rust conversion pipeline, render it with its correct texture, select/hide parts, and play/scrub at least one parsed animation clip. This must work without launching Blockbench or requiring a separate model conversion step.
@@ -127,8 +127,8 @@ This phase is intentionally scoped as a renderer, not a new parser.
 
 **Goal:** replace the current Python/Tkinter shell with a Rust desktop app that calls the Rust library directly.
 
-- [ ] Add a Cargo workspace/package for the desktop application while keeping the core build usable headlessly.
-- [ ] Build the application shell: navigation, workspace/project view, settings, status bar, logs, and task progress.
+- [x] Add a separate Cargo package for the desktop application while keeping the engine/CLI headless.
+- [x] Build the initial application shell with persistent/collapsible navigation, content browser, viewer, and editor surfaces. Project management, settings, logs, and task progress remain open.
 - [ ] Port the useful existing pages: Dashboard, Porter, Projects, Compatibility, Build & Test, and Code/Output inspection.
 - [ ] Make the Porter workflow support raw JAR/ZIP, compiled class roots, decompiled source roots, and combined inputs.
 - [ ] Run long conversions and Gradle builds as background jobs; expose progress, cancellation, logs, and per-stage results without freezing the UI.
@@ -169,19 +169,22 @@ The first viewer should be a **previewer**, not a model editor.
 
 ### Main layout
 
-- **Viewport:** the model, lighting, camera controls, axes/grid, and selected-part highlight.
-- **Outliner:** hierarchical model parts/bones with visibility toggles and selection.
-- **Animation panel:** clip list, play/pause, loop, speed, current time, duration, and scrubber.
-- **Inspector:** selected part's parent, pivot/origin, offset, rotation, cube count, and source provenance.
-- **Asset strip (later):** alternate textures, linked entities/renderers, and related animations.
+The current desktop prototype follows this arrangement:
+
+- **Far-left app rail:** retain the global Dashboard, Porter, Mod Editor, Code Studio, Compatibility, Build & Test, and Projects navigation. It remains fixed at the far left and can collapse to an icon rail.
+- **Content browser:** immediately to its right, show category choices (mobs, blocks, weapons, tools, armor, items, food, models, and later discovered content). Selecting a category fills the adjacent item list.
+- **Asset rows:** show a compact item/block texture thumbnail or mob spawn-egg icon, with the content name beside it and a search filter above.
+- **Right detail column:** keep the model/animation viewer above the basic editor. The viewer can expand to occupy the detail column; animation selection and play/pause stay at the top of the viewport.
+- **Basic editor:** below the viewer, expose texture choice, display name, lore, and Minecraft component JSON. Preview the tooltip using Minecraft formatting colors/styles before adding actual workspace write-back.
+- **Later viewer panels:** hierarchical model parts/bones with visibility toggles, selected-part highlight, pivot inspector, axes/grid, source provenance and related assets.
 
 ### Runtime behavior
 
 1. Parse/convert using the existing engine path.
 2. Build a `ViewerScene` once from the canonical model representation.
-3. Upload static geometry and textures to the GPU.
+3. The current prototype rasterizes the scene on the CPU and displays the resulting image in the native eframe viewport. The target renderer will cache static GPU geometry and textures.
 4. On each frame, sample the selected animation at the current playback time, apply its transforms to the node hierarchy, and draw.
-5. Keep animation evaluation and hierarchy math testable on the CPU. The GPU should receive final transforms and draw data only.
+5. Keep animation evaluation and hierarchy math testable on the CPU. The final GPU backend should receive final transforms and draw data only.
 
 Start with the most common cube-based entity models and their parsed animation clips. Add special cases (translucent layers, emissive/eye overlays, multiple texture variants, unusual pivots, and non-cube geometry if encountered) as explicit renderer capabilities rather than hiding them in ad hoc UI code.
 
