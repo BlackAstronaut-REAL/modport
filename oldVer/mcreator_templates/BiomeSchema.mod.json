@@ -1,0 +1,76 @@
+{
+  "_fv": 89,
+  "_type": "biome",
+  "definition": {
+    "name": "Converted Biome",
+    "groundBlock": "Blocks.GRASS_BLOCK",
+    "undergroundBlock": "Blocks.DIRT",
+    "ambientSound": "",
+    "additionsSound": "",
+    "music": "",
+    "moodSound": "",
+    "moodSoundDelay": 6000,
+    "spawnParticles": false,
+    "particleToSpawn": "CLOUD",
+    "particlesProbability": 0.0,
+    "rainingPossibility": 0.5,
+    "temperature": 0.5,
+    "spawnBiome": false,
+    "spawnInCaves": false,
+    "spawnBiomeNether": false,
+    "genTemperature": {
+      "min": -0.2,
+      "max": 0.2
+    },
+    "genHumidity": {
+      "min": -0.2,
+      "max": 0.2
+    },
+    "genContinentalness": {
+      "min": 0.31,
+      "max": 0.71
+    },
+    "genErosion": {
+      "min": 0.6000000000000001,
+      "max": 1.0
+    },
+    "genWeirdness": {
+      "min": 0.014078102510051982,
+      "max": 0.414078102510052
+    },
+    "genDepth": {
+      "min": 0.2,
+      "max": 0.9
+    },
+    "treesPerChunk": 0,
+    "vanillaTreeType": "Default",
+    "treeType": 0,
+    "minHeight": 2,
+    "treeStem": "",
+    "treeBranch": "",
+    "treeVines": "",
+    "treeFruits": "",
+    "defaultFeatures": true,
+    "spawnStronghold": false,
+    "spawnMineshaft": false,
+    "spawnMineshaftMesa": false,
+    "spawnPillagerOutpost": false,
+    "villageType": "none",
+    "spawnWoodlandMansion": false,
+    "spawnJungleTemple": false,
+    "spawnDesertPyramid": false,
+    "spawnSwampHut": false,
+    "spawnIgloo": false,
+    "spawnOceanMonument": false,
+    "spawnShipwreck": false,
+    "spawnShipwreckBeached": false,
+    "spawnBuriedTreasure": false,
+    "oceanRuinType": "NONE",
+    "spawnNetherBridge": false,
+    "spawnNetherFossil": false,
+    "spawnBastionRemnant": false,
+    "spawnEndCity": false,
+    "spawnRuinedPortal": "NONE",
+    "spawnEntries": []
+  }
+}

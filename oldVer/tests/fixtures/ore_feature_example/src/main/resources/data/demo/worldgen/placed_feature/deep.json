@@ -1,0 +1,1 @@
+{"feature": "demo:deep", "placement": [{"type": "minecraft:count", "count": 2}, {"type": "minecraft:height_range", "height": {"type": "uniform", "min_inclusive": {"absolute": -64}, "max_inclusive": {"absolute": 0}}}]}
