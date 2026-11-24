@@ -252,6 +252,22 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
         if nodes.is_empty() {
             bail!("Block model {} has no explicit elements and uses an unsupported built-in parent.", path.display());
         }
+        if let Some(face_map) = builtin_face_texture_indices(
+            &shape, &textures, roots, &namespace, &texture_paths,
+        ) {
+            let face_uvs = std::array::from_fn(|face| {
+                let dimensions = texture_paths.get(face_map[face])
+                    .and_then(|path| image::image_dimensions(path).ok())
+                    .unwrap_or((texture_size[0], texture_size[1]));
+                [0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32]
+            });
+            for node in &mut nodes {
+                for cube in &mut node.cubes {
+                    cube.face_texture_indices = Some(face_map);
+                    cube.face_uvs = Some(face_uvs);
+                }
+            }
+        }
     }
 
     for (element_index, element) in elements.iter().enumerate() {
@@ -377,6 +393,63 @@ fn builtin_block_shape(path: &Path, roots: &[PathBuf]) -> String {
         current = next;
     }
     String::new()
+}
+
+fn texture_index_for_keys(
+    keys: &[&str],
+    textures: &Map<String, Value>,
+    roots: &[PathBuf],
+    namespace: &str,
+    texture_paths: &[PathBuf],
+) -> Option<usize> {
+    for key in keys {
+        let Some(reference) = textures.get(*key).and_then(Value::as_str) else { continue; };
+        let resolved = resolve_texture_alias(reference, textures, 0);
+        let Some(path) = resolve_texture_file(roots, namespace, &resolved) else { continue; };
+        if let Some(index) = texture_paths.iter().position(|candidate| candidate == &path) {
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn builtin_face_texture_indices(
+    shape: &str,
+    textures: &Map<String, Value>,
+    roots: &[PathBuf],
+    namespace: &str,
+    texture_paths: &[PathBuf],
+) -> Option<[usize; 6]> {
+    if texture_paths.is_empty() { return None; }
+    let side = match shape {
+        "plant" => &["cross", "all", "texture", "particle"][..],
+        "torch" | "wall_torch" => &["torch", "all", "texture", "particle"][..],
+        "floor" => &["rail", "texture", "all", "cross", "particle"][..],
+        _ => &["side", "all", "texture", "particle"][..],
+    };
+    let top = match shape {
+        "plant" => side,
+        "torch" | "wall_torch" => side,
+        "floor" => side,
+        _ => &["top", "end", "all", "side", "particle"][..],
+    };
+    let bottom = match shape {
+        "plant" => side,
+        "torch" | "wall_torch" => side,
+        "floor" => side,
+        _ => &["bottom", "end", "all", "side", "particle"][..],
+    };
+    let front = match shape {
+        "plant" => side,
+        "torch" | "wall_torch" => side,
+        "floor" => side,
+        _ => &["front", "side", "all", "texture", "particle"][..],
+    };
+    let side_index = texture_index_for_keys(side, textures, roots, namespace, texture_paths).unwrap_or(0);
+    let top_index = texture_index_for_keys(top, textures, roots, namespace, texture_paths).unwrap_or(side_index);
+    let bottom_index = texture_index_for_keys(bottom, textures, roots, namespace, texture_paths).unwrap_or(top_index);
+    let front_index = texture_index_for_keys(front, textures, roots, namespace, texture_paths).unwrap_or(side_index);
+    Some([side_index, side_index, top_index, bottom_index, front_index, side_index])
 }
 
 fn builtin_cube(
