@@ -203,7 +203,7 @@ fn finish_element(
     kind: &str,
     template: Option<&Value>,
     imported_fv: i64,
-    name: &str,
+    _name: &str,
     registry: &str,
     mut updates: Map<String, Value>,
 ) -> Value {
@@ -229,8 +229,7 @@ fn finish_element(
     json!({
         "_fv":template_version(template, imported_fv),
         "_type":kind,
-        "definition":definition,
-        "mojmodelbridge_element_name":name
+        "definition":definition
     })
 }
 
