@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, ConstantValue, Instruction};
 use crate::source::java::{extract_balanced, split_top_level, strip_java_comments, unquote_java_string};
 
 const FILE_LIMIT: usize = 250_000;
@@ -450,6 +451,397 @@ fn parse_entity_source_metadata(path: &Path, registry: Option<&str>) -> Result<E
 /// Scan mixed source/compiled roots and build the first native entity →
 /// renderer → model graph. Source registrations cover legacy FML calls,
 /// RegistryObject.get() lambdas and renderer constructor references.
+
+#[derive(Debug, Clone)]
+enum CompiledValue {
+    Class(String),
+    Number(f64),
+    Text(String),
+    Object(usize),
+    Field(String),
+    Null,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CompiledObject {
+    class_name: String,
+    arguments: Vec<CompiledValue>,
+}
+
+fn compiled_pop(stack: &mut Vec<CompiledValue>) -> CompiledValue {
+    stack.pop().unwrap_or(CompiledValue::Null)
+}
+
+fn compiled_pop_n(stack: &mut Vec<CompiledValue>, count: usize) -> Vec<CompiledValue> {
+    let missing = count.saturating_sub(stack.len());
+    let mut values = vec![CompiledValue::Null; missing];
+    let split = stack.len().saturating_sub(count);
+    values.extend(stack.drain(split..));
+    values
+}
+
+fn compiled_u16(bytes: &[u8], index: usize) -> Option<u16> {
+    Some(u16::from_be_bytes([*bytes.get(index)?, *bytes.get(index + 1)?]))
+}
+
+fn compiled_constant(class: &ClassFile, instruction: &Instruction) -> Option<CompiledValue> {
+    let op = instruction.opcode;
+    let number = match op {
+        0x02 => Some(-1.0),
+        0x03..=0x08 => Some((op - 0x03) as f64),
+        0x09..=0x0a => Some((op - 0x09) as f64),
+        0x0b..=0x0d => Some((op - 0x0b) as f64),
+        0x0e..=0x0f => Some((op - 0x0e) as f64),
+        0x10 => instruction.operands.first().map(|value| *value as i8 as f64),
+        0x11 => instruction.operands.get(0..2).map(|bytes| i16::from_be_bytes([bytes[0], bytes[1]]) as f64),
+        _ => None,
+    };
+    if let Some(value) = number { return Some(CompiledValue::Number(value)); }
+    let index = match op {
+        0x12 => *instruction.operands.first()? as u16,
+        0x13 | 0x14 => compiled_u16(&instruction.operands, 0)?,
+        _ => return None,
+    };
+    match class.constant(index)? {
+        ConstantValue::Integer(value) => Some(CompiledValue::Number(value as f64)),
+        ConstantValue::Float(value) => Some(CompiledValue::Number(value as f64)),
+        ConstantValue::Long(value) => Some(CompiledValue::Number(value as f64)),
+        ConstantValue::Double(value) => Some(CompiledValue::Number(value)),
+        ConstantValue::String(value) => Some(CompiledValue::Text(value)),
+        ConstantValue::Class(value) => Some(CompiledValue::Class(value)),
+    }
+}
+
+fn compiled_local(instruction: &Instruction) -> Option<(usize, bool)> {
+    let op = instruction.opcode;
+    let load = match op {
+        0x19 => instruction.operands.first().map(|value| *value as usize),
+        0x2a..=0x2d => Some((op - 0x2a) as usize),
+        _ => None,
+    };
+    if let Some(index) = load { return Some((index, true)); }
+    let store = match op {
+        0x3a => instruction.operands.first().map(|value| *value as usize),
+        0x4b..=0x4e => Some((op - 0x4b) as usize),
+        _ => None,
+    };
+    if let Some(index) = store { return Some((index, false)); }
+    if op == 0xc4 && instruction.operands.len() >= 3 {
+        let modified = instruction.operands[0];
+        let index = compiled_u16(&instruction.operands, 1)? as usize;
+        if modified == 0x19 { return Some((index, true)); }
+        if modified == 0x3a { return Some((index, false)); }
+    }
+    None
+}
+
+fn compiled_value_json(value: &CompiledValue, objects: &[CompiledObject], depth: usize) -> Value {
+    if depth > 8 { return Value::Null; }
+    match value {
+        CompiledValue::Class(name) => Value::String(simple_name(name).to_owned()),
+        CompiledValue::Number(number) => json_number(*number),
+        CompiledValue::Text(text) => Value::String(text.clone()),
+        CompiledValue::Field(field) => Value::String(field.clone()),
+        CompiledValue::Object(index) => {
+            let Some(object) = objects.get(*index) else { return Value::Null; };
+            serde_json::json!({
+                "class_name": simple_name(&object.class_name),
+                "args": object.arguments.iter()
+                    .map(|argument| compiled_value_json(argument, objects, depth + 1))
+                    .collect::<Vec<_>>()
+            })
+        }
+        CompiledValue::Null => Value::Null,
+    }
+}
+
+fn compiled_registration_from_call(
+    class_name: &str,
+    method_name: &str,
+    arguments: &[CompiledValue],
+    objects: &[CompiledObject],
+    source_class: &str,
+    offset: usize,
+    texture_refs: &[String],
+) -> Option<RendererRegistration> {
+    if !matches!(method_name,
+        "registerEntityRenderingHandler" | "registerRender" |
+        "registerRenderer" | "registerEntityRenderer"
+    ) {
+        return None;
+    }
+    let entity_class = match arguments.first()? {
+        CompiledValue::Class(name) => simple_name(name).to_owned(),
+        _ => return None,
+    };
+    let renderer_index = match arguments.get(1)? {
+        CompiledValue::Object(index) => *index,
+        _ => return None,
+    };
+    let renderer = objects.get(renderer_index)?;
+    let model = renderer.arguments.iter().find_map(|argument| {
+        let CompiledValue::Object(index) = argument else { return None; };
+        let object = objects.get(*index)?;
+        simple_name(&object.class_name).starts_with("Model").then_some((*index, object))
+    });
+    let (model_class, model_args) = if let Some((_index, model)) = model {
+        (
+            simple_name(&model.class_name).to_owned(),
+            model.arguments.iter()
+                .map(|argument| compiled_value_json(argument, objects, 0))
+                .collect(),
+        )
+    } else {
+        (String::new(), Vec::new())
+    };
+    let renderer_args: Vec<Value> = renderer.arguments.iter()
+        .map(|argument| compiled_value_json(argument, objects, 0))
+        .collect();
+    let numeric: Vec<f64> = renderer.arguments.iter().filter_map(|argument| {
+        if let CompiledValue::Number(value) = argument { Some(*value) } else { None }
+    }).collect();
+    let shadow_size = numeric.first().copied().unwrap_or(0.5);
+    let visual_scale = if numeric.len() >= 2 { *numeric.last().unwrap() } else { 1.0 };
+
+    Some(RendererRegistration {
+        entity_class,
+        renderer_class: simple_name(&renderer.class_name).to_owned(),
+        model_class,
+        model_args,
+        renderer_args,
+        shadow_size,
+        visual_scale,
+        texture_refs: texture_refs.to_vec(),
+        source_class: source_class.to_owned(),
+        source_offset: offset,
+    })
+}
+
+fn class_texture_references(class: &ClassFile) -> Vec<String> {
+    let pattern = Regex::new(r"(?i)[A-Za-z0-9_./\\-]{1,240}\.png").unwrap();
+    let mut references = HashSet::new();
+    for entry in &class.constant_pool {
+        let text = match entry.as_ref() {
+            Some(crate::bytecode::ConstantPoolEntry::Utf8(value)) => Some(value.as_str()),
+            _ => None,
+        };
+        if let Some(text) = text {
+            for found in pattern.find_iter(text) {
+                references.insert(found.as_str().replace('\\', "/"));
+            }
+        }
+    }
+    let mut output: Vec<String> = references.into_iter().collect();
+    output.sort_by_key(|value| value.to_ascii_lowercase());
+    output
+}
+
+fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistration>> {
+    let bytes = fs::read(path).with_context(|| format!("Reading compiled registry {}", path.display()))?;
+    let class = ClassFile::parse(&bytes)?;
+    let class_name = class.this_name()
+        .map(|name| simple_name(name).to_owned())
+        .unwrap_or_else(|| path.file_stem().and_then(|value| value.to_str()).unwrap_or("Unknown").to_owned());
+    let textures = class_texture_references(&class);
+    let mut registrations = Vec::new();
+
+    for method in &class.methods {
+        let Some(code) = method.code.as_ref() else { continue; };
+        let instructions = match decode_instructions(&code.code) {
+            Ok(instructions) => instructions,
+            Err(_) => continue,
+        };
+        if !instructions.iter().any(|instruction| {
+            matches!(instruction.opcode, 0xb6..=0xb9)
+                && compiled_u16(&instruction.operands, 0)
+                    .and_then(|index| class.member_reference(index))
+                    .map(|(_, name, _)| matches!(name.as_str(),
+                        "registerEntityRenderingHandler" | "registerRender" |
+                        "registerRenderer" | "registerEntityRenderer"
+                    ))
+                    .unwrap_or(false)
+        }) {
+            continue;
+        }
+
+        let descriptor = match parse_method_descriptor(&method.descriptor) {
+            Ok(descriptor) => descriptor,
+            Err(_) => continue,
+        };
+        let is_static = method.access_flags & 0x0008 != 0;
+        let mut locals = HashMap::<usize, CompiledValue>::new();
+        if !is_static { locals.insert(0, CompiledValue::Null); }
+        let mut slot = if is_static { 0 } else { 1 };
+        for parameter in &descriptor.parameters {
+            locals.insert(slot, CompiledValue::Null);
+            slot += parameter.slots();
+        }
+        let mut stack = Vec::<CompiledValue>::new();
+        let mut objects = Vec::<CompiledObject>::new();
+
+        for instruction in &instructions {
+            let op = instruction.opcode;
+            if op == 0x00 { continue; }
+
+            if let Some((index, load)) = compiled_local(instruction) {
+                if load {
+                    stack.push(locals.get(&index).cloned().unwrap_or(CompiledValue::Null));
+                } else {
+                    locals.insert(index, compiled_pop(&mut stack));
+                }
+                continue;
+            }
+
+            if (0x02..=0x14).contains(&op) {
+                if let Some(value) = compiled_constant(&class, instruction) {
+                    stack.push(value);
+                }
+                continue;
+            }
+
+            match op {
+                0x01 => stack.push(CompiledValue::Null),
+                0xbb => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let name = class.class_name(index).unwrap_or("java/lang/Object").to_owned();
+                    let object_index = objects.len();
+                    objects.push(CompiledObject { class_name: name, arguments: Vec::new() });
+                    stack.push(CompiledValue::Object(object_index));
+                }
+                0x57 => { let _ = compiled_pop(&mut stack); }
+                0x58 => { let _ = compiled_pop(&mut stack); let _ = compiled_pop(&mut stack); }
+                0x59 => {
+                    if let Some(value) = stack.last().cloned() { stack.push(value); }
+                }
+                0x5a => {
+                    if stack.len() >= 2 {
+                        let first = compiled_pop(&mut stack);
+                        let second = compiled_pop(&mut stack);
+                        stack.push(first.clone());
+                        stack.push(second);
+                        stack.push(first);
+                    }
+                }
+                0x5c => {
+                    if stack.len() >= 2 {
+                        let first = stack[stack.len() - 2].clone();
+                        let second = stack[stack.len() - 1].clone();
+                        stack.push(first);
+                        stack.push(second);
+                    } else if let Some(value) = stack.last().cloned() {
+                        stack.push(value);
+                    }
+                }
+                0x5f => {
+                    if stack.len() >= 2 {
+                        let len = stack.len();
+                        stack.swap(len - 1, len - 2);
+                    }
+                }
+                0xb2 => {
+                    let index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let field = class.member_reference(index)
+                        .map(|(owner, name, _)| format!("{}.{}", simple_name(&owner), name))
+                        .unwrap_or_default();
+                    stack.push(CompiledValue::Field(field));
+                }
+                0xb4 => {
+                    let _ = compiled_pop(&mut stack);
+                    stack.push(CompiledValue::Null);
+                }
+                0xb3 => { let _ = compiled_pop(&mut stack); }
+                0xb5 => { let _ = compiled_pop(&mut stack); let _ = compiled_pop(&mut stack); }
+                0xb6..=0xb9 => {
+                    let cp_index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let Some((owner, name, descriptor)) = class.member_reference(cp_index) else { continue; };
+                    let parsed = match parse_method_descriptor(&descriptor) {
+                        Ok(parsed) => parsed,
+                        Err(_) => continue,
+                    };
+                    let arguments = compiled_pop_n(&mut stack, parsed.parameters.len());
+                    let receiver = if op == 0xb8 { CompiledValue::Null } else { compiled_pop(&mut stack) };
+
+                    if name == "<init>" {
+                        if let CompiledValue::Object(index) = receiver {
+                            if let Some(object) = objects.get_mut(index) {
+                                object.class_name = owner;
+                                object.arguments = arguments;
+                            }
+                        }
+                    } else if let Some(registration) = compiled_registration_from_call(
+                        &class_name,
+                        &name,
+                        &arguments,
+                        &objects,
+                        &format!("{class_name}.class"),
+                        instruction.offset,
+                        &textures,
+                    ) {
+                        registrations.push(registration);
+                    } else if !matches!(parsed.return_type, crate::bytecode::JvmType::Void) {
+                        stack.push(CompiledValue::Null);
+                    }
+                }
+                0xba => {
+                    let cp_index = compiled_u16(&instruction.operands, 0).unwrap_or(0);
+                    let argument_count = class.invoke_dynamic(cp_index)
+                        .and_then(|(_, _, descriptor)| parse_method_descriptor(&descriptor).ok())
+                        .map(|descriptor| descriptor.parameters.len())
+                        .unwrap_or(0);
+                    let _ = compiled_pop_n(&mut stack, argument_count);
+                    stack.push(CompiledValue::Null);
+                }
+                0xc0 | 0xc1 => {}
+                0xac..=0xb1 | 0xbf => break,
+                _ => {}
+            }
+        }
+    }
+    Ok(registrations)
+}
+
+
+fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
+    let mut metadata = EntityMetadata {
+        class_name: class_name.to_owned(),
+        display_name: class_display_name(registry.unwrap_or(class_name)),
+        registry_name: registry.map(str::to_owned).unwrap_or_else(|| registry_slug(class_name)),
+        superclass: String::new(),
+        width: default_width(),
+        height: default_height(),
+        health: default_health(),
+        movement_speed: default_speed(),
+        attack_damage: default_attack(),
+        armor: 0.0,
+        follow_range: default_follow(),
+        xp: 0,
+        fire_immune: false,
+        water_mob: false,
+        flying_mob: false,
+        ai_classes: Vec::new(),
+        warnings: Vec::new(),
+    };
+    let parsed = fs::read(path).ok().and_then(|bytes| ClassFile::parse(&bytes).ok());
+    if let Some(class) = parsed {
+        metadata.superclass = class.super_name().map(simple_name).unwrap_or("").to_owned();
+        let superclass = metadata.superclass.to_ascii_lowercase();
+        metadata.water_mob = ["watermob", "squid", "fish"].iter().any(|token| superclass.contains(token));
+        metadata.flying_mob = ["flying", "ambient", "bat"].iter().any(|token| superclass.contains(token));
+        metadata.fire_immune = class.constant_pool.iter().filter_map(|entry| match entry.as_ref() {
+            Some(crate::bytecode::ConstantPoolEntry::Utf8(value)) => Some(value.as_str()),
+            _ => None,
+        }).any(|value| value.contains("fireImmune") || value.contains("field_70178_ae"));
+        metadata.warnings.push(
+            "Entity source was unavailable; only compiled class identity and superclass traits were recovered. Numeric attributes remain defaults.".to_owned()
+        );
+    } else {
+        metadata.warnings.push(
+            "Compiled entity class could not be parsed; numeric attributes and superclass traits remain defaults.".to_owned()
+        );
+    }
+    metadata
+}
+
 pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph> {
     let root = canonical_path(root);
     let roots = {
@@ -480,8 +872,8 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     let index = source_index(&java_paths);
     let registry = registry_names(&java_paths);
     let field_entities = registry_field_entities(&java_paths);
-    let registration_names = ["registerEntityRenderingHandler","registerRender","registerRenderer","registerEntityRenderer"];
     let mut registrations = Vec::new();
+    let mut warnings = Vec::new();
     for path in &java_paths {
         let text = match read_java(path) { Ok(text) => text, Err(error) => {
             // Keep the scan alive when one source file is unreadable.
@@ -499,14 +891,59 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
         }
     }
 
-    // Preserve exact entity class -> renderer links while removing repeated
-    // discovery of the same source registration.
+    // Decompiled source is not always available. Recover legacy class-literal
+    // registrations directly from JVM Code attributes when the class constant
+    // pool advertises one of the known renderer-registration methods.
+    let registration_markers = [
+        b"registerEntityRenderingHandler".as_slice(),
+        b"registerRender".as_slice(),
+        b"registerRenderer".as_slice(),
+        b"registerEntityRenderer".as_slice(),
+    ];
+    for path in &class_paths {
+        let Ok(bytes) = fs::read(path) else { continue; };
+        if !registration_markers.iter().any(|marker| bytes.windows(marker.len()).any(|window| window == *marker)) {
+            continue;
+        }
+        match parse_compiled_registration_class(path) {
+            Ok(found) => registrations.extend(found),
+            Err(error) => warnings.push(format!(
+                "Could not recover compiled renderer registrations from {}: {error}",
+                path.display()
+            )),
+        }
+    }
+
+    // Add texture constants from the renderer class itself as well as references
+    // that may live in the registration/bootstrap class.
+    for registration in &mut registrations {
+        if let Some(path) = class_files.get(&registration.renderer_class) {
+            if let Ok(bytes) = fs::read(path) {
+                if let Ok(class) = ClassFile::parse(&bytes) {
+                    registration.texture_refs.extend(class_texture_references(&class));
+                    registration.texture_refs.sort_by_key(|value| value.to_ascii_lowercase());
+                    registration.texture_refs.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+                }
+            }
+        }
+    }
+
+    // Merge bytecode/source duplicates without collapsing genuine constructor
+    // variants that use different model arguments, shadow sizes or visual scales.
     let mut seen = HashSet::new();
     registrations.retain(|reg| seen.insert((
-        reg.entity_class.clone(), reg.renderer_class.clone(), reg.model_class.clone(),
-        format!("{:?}", reg.model_args), reg.source_class.clone(), reg.source_offset,
+        reg.entity_class.clone(),
+        reg.renderer_class.clone(),
+        reg.model_class.clone(),
+        format!("{:?}", reg.model_args),
+        reg.shadow_size.to_bits(),
+        reg.visual_scale.to_bits(),
     )));
-    registrations.sort_by_key(|reg| (reg.entity_class.to_ascii_lowercase(), reg.renderer_class.to_ascii_lowercase(), reg.source_offset));
+    registrations.sort_by_key(|reg| (
+        reg.entity_class.to_ascii_lowercase(),
+        reg.renderer_class.to_ascii_lowercase(),
+        reg.source_offset
+    ));
 
     let mut entities = BTreeMap::new();
     for registration in &registrations {
@@ -525,6 +962,12 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
                     flying_mob: false, ai_classes: Vec::new(),
                     warnings: vec!["Entity source metadata was not fully parsed; defaults remain in use.".to_owned()]
                 })
+        } else if let Some(path) = class_files.get(&registration.entity_class) {
+            parse_entity_class_metadata(
+                path,
+                &registration.entity_class,
+                registry.get(&registration.entity_class).map(String::as_str)
+            )
         } else {
             EntityMetadata {
                 class_name: registration.entity_class.clone(),
@@ -534,15 +977,14 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
                 health: default_health(), movement_speed: default_speed(), attack_damage: default_attack(),
                 armor: 0.0, follow_range: default_follow(), xp: 0, fire_immune: false, water_mob: false,
                 flying_mob: false, ai_classes: Vec::new(),
-                warnings: vec!["Entity class source was not found; metadata defaults remain in use.".to_owned()]
+                warnings: vec!["Entity class source and compiled class were not found; metadata defaults remain in use.".to_owned()]
             }
         };
         entities.insert(registration.entity_class.clone(), metadata);
     }
 
-    let mut warnings = Vec::new();
     if registrations.is_empty() {
-        warnings.push("No supported source renderer registrations were found. Compiled class registration interpretation is not yet wired into this graph stage.".to_owned());
+        warnings.push("No supported source or compiled renderer registrations were found in the supplied roots.".to_owned());
     }
 
     Ok(ModGraph {
@@ -561,6 +1003,27 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn connects_compiled_entity_class_literal_to_renderer_and_model_constructors() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::write(
+            root.join("LegacyRenderRegistry.class"),
+            include_bytes!("../tests/fixtures/LegacyRenderRegistry.class")
+        ).unwrap();
+
+        let graph = scan_mod_graph(root, &[]).unwrap();
+        assert_eq!(graph.registrations.len(), 1);
+        let registration = &graph.registrations[0];
+        assert_eq!(registration.entity_class, "EntityPig");
+        assert_eq!(registration.renderer_class, "RenderPig");
+        assert_eq!(registration.model_class, "ModelPig");
+        assert_eq!(registration.model_args, vec![json_number(0.25)]);
+        assert!((registration.shadow_size - 0.4).abs() < 1e-6);
+        assert_eq!(registration.visual_scale, 1.0);
+        assert_eq!(graph.entities["EntityPig"].class_name, "EntityPig");
+    }
 
     #[test]
     fn connects_registry_entity_renderer_and_model_constructor() {
