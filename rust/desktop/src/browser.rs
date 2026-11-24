@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use mojmodelbridge::metadata::infer_mod_metadata;
-use mojmodelbridge::mod_graph::scan_mod_graph;
+use mojmodelbridge::mod_graph::{scan_mod_graph, EntityMetadata};
 use mojmodelbridge::mcreator_armor::discover_armor_sources;
 use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
 use mojmodelbridge::mcreator_equipment::discover_equipment_sources;
@@ -116,8 +116,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let icon_path = registration.and_then(|registration| {
             find_texture_reference(&all_files, &registration.texture_refs)
         });
-        let model_path = registration.and_then(|registration| {
-            let model = registration.model_class.rsplit(['.', '/', '
+        let entity_source_path = graph.java_files.get(entity_name)
+            .or_else(|| graph.class_files.get(entity_name)).cloned();
+        let (mob_lore, mob_components) = mob_component_metadata(entity, entity_source_path.as_deref());
         add(BrowserEntry {
             category: "Mobs".to_owned(),
             name: if entity.display_name.is_empty() { humanize(entity_name) } else { entity.display_name.clone() },
@@ -381,6 +382,98 @@ impl LanguageData {
         }
         result
     }
+}
+
+fn format_stat(value: f64) -> String {
+    if value.fract().abs() < 0.0001 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.3}").trim_end_matches('0').trim_end_matches('.').to_owned()
+    }
+}
+
+fn has_special_ability_evidence(source: &str, ai_classes: &[String]) -> bool {
+    const TOKENS: &[&str] = &[
+        "specialability", "special_attack", "specialattack", "performrangedattack",
+        "rangedattack", "launchprojectile", "fireball", "breathattack", "dragonbreath",
+        "teleport", "summon", "transform", "regenerate", "regeneration", "shield",
+        "healself", "chargeattack", "roar", "stomp", "freeze", "lightning",
+        "poison", "sonic", "laser", "beamattack", "dashattack", "explosionattack",
+    ];
+    let lowered = source.to_ascii_lowercase();
+    if TOKENS.iter().any(|token| lowered.contains(token)) {
+        return true;
+    }
+    const VANILLA_GOALS: &[&str] = &[
+        "entityaimeleeattack", "entityairangedattack", "entityaifollowowner",
+        "entityaifollowparent", "entityaipanic", "entityaiwander", "entityaiwatchclosest",
+        "entityailookidle", "entityaiswimming", "entityaisit", "entityaieatgrass",
+        "entityaitempt", "entityaimate", "entityaibeg", "entityaidefendvillage",
+        "entityaidefendmob", "entityaicreeperswell", "entityaiswell",
+        "entityairunaroundlikecrazy",
+    ];
+    ai_classes.iter().any(|goal| {
+        let name = compact(goal);
+        !VANILLA_GOALS.iter().any(|vanilla| name == *vanilla)
+            && (name.contains("attack") || name.contains("ability")
+                || name.contains("projectile") || name.contains("special")
+                || name.contains("breath") || name.contains("teleport")
+                || name.contains("summon") || name.contains("charge"))
+    })
+}
+
+fn mob_component_metadata(entity: &EntityMetadata, source_path: Option<&Path>) -> (Vec<String>, String) {
+    let source = source_path.and_then(|path| {
+        if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java")) {
+            fs::read_to_string(path).ok()
+        } else {
+            fs::read(path).ok().map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        }
+    }).unwrap_or_default();
+    let special = has_special_ability_evidence(&source, &entity.ai_classes);
+    let mut lore = vec![
+        format!("Health: {}", format_stat(entity.health)),
+        format!("Attack damage: {}", format_stat(entity.attack_damage)),
+        format!("Armor: {}", format_stat(entity.armor)),
+        format!("Movement speed: {}", format_stat(entity.movement_speed)),
+        format!("Follow range: {}", format_stat(entity.follow_range)),
+        format!("Size: {} × {}", format_stat(entity.width), format_stat(entity.height)),
+        format!("Experience: {}", entity.xp),
+        format!("Special abilities: {}", if special { "true" } else { "false" }),
+    ];
+    if entity.fire_immune { lore.push("Fire immune: true".to_owned()); }
+    if entity.water_mob { lore.push("Water mob: true".to_owned()); }
+    if entity.flying_mob { lore.push("Flying mob: true".to_owned()); }
+    if !entity.ai_classes.is_empty() {
+        lore.push(format!("AI goals: {}", entity.ai_classes.join(", ")));
+    }
+    let components = serde_json::json!({
+        "entity": {
+            "registry": entity.registry_name,
+            "class": entity.class_name,
+            "superclass": entity.superclass,
+        },
+        "attributes": {
+            "max_health": entity.health,
+            "attack_damage": entity.attack_damage,
+            "armor": entity.armor,
+            "movement_speed": entity.movement_speed,
+            "follow_range": entity.follow_range,
+        },
+        "dimensions": {
+            "width": entity.width,
+            "height": entity.height,
+        },
+        "experience": entity.xp,
+        "flags": {
+            "fire_immune": entity.fire_immune,
+            "water_mob": entity.water_mob,
+            "flying_mob": entity.flying_mob,
+        },
+        "ai_goals": entity.ai_classes,
+        "special_abilities": special,
+    });
+    (lore, serde_json::to_string_pretty(&components).unwrap_or_else(|_| "{}".to_owned()))
 }
 
 fn load_language_data(files: &[PathBuf], modid: &str) -> LanguageData {
