@@ -673,8 +673,6 @@ impl MojModelBridgeApp {
                 self.preview_texture = Some(context.load_texture("asset_preview", color, TextureOptions::NEAREST));
             }
             if let Some(handle) = self.preview_texture.as_ref() {
-                let desired = egui::vec2((height * 0.75).min(width * 0.7), (height * 0.75).min(width * 0.7));
-                let image_rect = egui::Rect::from_center_size(rect.center(), desired);
                 let source_size = handle.size_vec2();
                 let contain_scale = (width * 0.85 / source_size.x.max(1.0))
                     .min(height * 0.85 / source_size.y.max(1.0));
