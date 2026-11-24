@@ -100,14 +100,14 @@ impl ViewerScene {
             );
 
             let parent = part.parent.as_deref().and_then(|name| by_name.get(name).copied());
-            let local_translation = if let Some(parent_index) = parent {
+            let local_translation: [f32; 3] = if let Some(parent_index) = parent {
                 [
-                    origins[index][0] - origins[parent_index][0],
-                    origins[index][1] - origins[parent_index][1],
-                    origins[index][2] - origins[parent_index][2],
+                    (origins[index][0] - origins[parent_index][0]) as f32,
+                    (origins[index][1] - origins[parent_index][1]) as f32,
+                    (origins[index][2] - origins[parent_index][2]) as f32,
                 ]
             } else {
-                origins[index]
+                origins[index].map(|value| value as f32)
             };
 
             let cubes = part.cubes.iter().map(|cube| {
