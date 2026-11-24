@@ -1,10 +1,12 @@
-# MojModelBridge Desktop
+# MojModelBridge
 
-This is the first desktop application shell around the working MojModelBridge 3.4.0 Beta 12 engine preserved in [oldVer/](oldVer/).
+**Project roadmap:** [ROADMAP.md](ROADMAP.md) — Rust engine parity, the standalone desktop application, and the integrated model/animation viewer.
+
+This repository currently contains the transitional Python/Tkinter desktop shell and the independent native Rust rewrite under [rust/](rust/). The Rust CLI and library are being developed as the future primary engine; the target desktop application will call that same Rust library directly and will not require the Python engine.
 
 ## Preservation rule
 
-The files under oldVer/ are the known-working conversion baseline. The desktop shell imports and calls oldVer/model_bridge.py directly, including its existing full-port pipeline and exporters. It does not replace the model parser, mob geometry handling, animation recovery, texture resolution, MCreator element generation, or report generation. Engine changes are intentionally deferred.
+The files under [oldVer/](oldVer/) are the known-working MojModelBridge 3.4.0 Beta 12 conversion baseline and remain the behavioral reference while Rust parity is established. The current transitional desktop shell still imports and calls `oldVer/model_bridge.py`; it has not yet been migrated to the Rust engine. Keep the legacy engine unchanged unless a separately reviewed reference fix is required. The Rust implementation and promotion gates are tracked in [ROADMAP.md](ROADMAP.md) and [rust/docs/ENGINE_MIGRATION.md](rust/docs/ENGINE_MIGRATION.md).
 
 ## Current application pages
 
