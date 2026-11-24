@@ -5,6 +5,7 @@
 //! this crate or required at runtime.
 
 pub mod archive;
+pub mod bytecode;
 pub mod discovery;
 pub mod metadata;
 pub mod model;
