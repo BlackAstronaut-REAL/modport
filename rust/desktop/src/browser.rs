@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::scan_mod_graph;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
