@@ -497,6 +497,60 @@ mod tests {
     use image::RgbaImage;
 
     #[test]
+    fn maps_each_custom_block_face_to_its_own_texture_and_uv_scale() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model_dir = root.join("assets/demo/models/block");
+        let texture_dir = root.join("assets/demo/textures/block");
+        fs::create_dir_all(&model_dir).unwrap();
+        fs::create_dir_all(&texture_dir).unwrap();
+
+        let top = texture_dir.join("top.png");
+        let side = texture_dir.join("side.png");
+        let bottom = texture_dir.join("bottom.png");
+        RgbaImage::new(32, 16).save(&top).unwrap();
+        RgbaImage::new(16, 16).save(&side).unwrap();
+        RgbaImage::new(16, 16).save(&bottom).unwrap();
+
+        let model = model_dir.join("custom_pillar.json");
+        fs::write(&model, r##"{
+            "textures": {
+                "top": "demo:block/top",
+                "side": "demo:block/side",
+                "bottom": "demo:block/bottom"
+            },
+            "elements": [{
+                "from": [0,0,0],
+                "to": [16,16,16],
+                "faces": {
+                    "up": {"uv":[0,0,16,16],"texture":"#top"},
+                    "down": {"uv":[0,0,16,16],"texture":"#bottom"},
+                    "north": {"uv":[0,0,16,16],"texture":"#side"},
+                    "south": {"uv":[0,0,16,16],"texture":"#side"},
+                    "east": {"uv":[0,0,16,16],"texture":"#side"},
+                    "west": {"uv":[0,0,16,16],"texture":"#side"}
+                }
+            }]
+        }"##).unwrap();
+
+        let (scene, paths) = load_block_model(&model, &[root.to_path_buf()]).unwrap();
+        let cube = &scene.nodes[0].cubes[0];
+        let map = cube.face_texture_indices.unwrap();
+        let index = |path: &Path| paths.iter().position(|candidate| candidate == path).unwrap();
+        assert_eq!(map[2], index(&top));
+        assert_eq!(map[3], index(&bottom));
+        assert_eq!(map[0], index(&side));
+        assert_eq!(map[1], index(&side));
+        assert_eq!(map[4], index(&side));
+        assert_eq!(map[5], index(&side));
+
+        let uv = cube.face_uvs.unwrap();
+        assert_eq!(uv[2], [0.0, 0.0, 32.0, 16.0]);
+        assert_eq!(uv[3], [0.0, 0.0, 16.0, 16.0]);
+        assert_eq!(uv[4], [0.0, 0.0, 16.0, 16.0]);
+    }
+
+    #[test]
     fn renders_torch_and_wall_torch_as_vertical_models() {
         let (torch, _) = synthetic_block_preview("Torch", "torch", None).unwrap();
         let torch_cube = &torch.nodes[0].cubes[0];
