@@ -32,6 +32,7 @@ the engine into the native executable.
 - Repeated-render source detection for modern Mojmap models, including rotation
   loops and helper-call position variants, expanded into actual Blockbench parts.
 - Native MCreator workspace validation, including duplicate registry/name checks, element schema checks, dimension/biome integrity, copied-resource references, automatic BlockItem collisions and machine-readable/text reports.
+- Native source resource bridge for namespace-aware assets/data import, sound path canonicalization, generated-worldgen exclusions and Forge-to-NeoForge biome modifier migration.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -41,6 +42,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
     cargo run --manifest-path rust/Cargo.toml -- mod-graph path/to/mod --source-root path/to/decompiled-source --output output/mod-graph.json
     cargo run --manifest-path rust/Cargo.toml -- validate-workspace path/to/MCreatorWorkspace
+    cargo run --manifest-path rust/Cargo.toml -- copy-resources path/to/source path/to/workspace/src/main/resources --source-modid oldmod --target-modid newmod
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -53,8 +55,7 @@ the full texture-selection edge-case corpus remain in progress.
 The bytecode interpreters and initial legacy animation/texture stages now exist,
 but still need wider parity coverage. Remaining major ports are compiled JVM renderer-registration and full entity-stat
 reconstruction, modern compiled animation extraction, advanced animation control-
-flow and loop baking, MCreator workspace/content/source exporters, workspace
-validator and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
+flow and loop baking, MCreator workspace/content/source exporters and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
 
 ## Parity rules
 
