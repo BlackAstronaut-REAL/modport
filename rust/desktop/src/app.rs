@@ -287,7 +287,7 @@ impl MojModelBridgeApp {
         if entry.category == "Blocks"
             && entry.resource_model_source.is_none()
             && entry.model_source.is_none()
-            && matches!(entry.render_shape.as_deref(), Some("cube" | "plant" | "floor"))
+            && matches!(entry.render_shape.as_deref(), Some("cube" | "plant" | "floor" | "torch" | "wall_torch"))
         {
             let shape = entry.render_shape.as_deref().unwrap_or("cube");
             match crate::resource_model::synthetic_block_preview(
