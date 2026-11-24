@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::mcreator_model::export_model_sources;
 use mojmodelbridge::mod_graph::scan_mod_graph;
+use mojmodelbridge::mcreator_model::export_model_sources;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
 use mojmodelbridge::resource_bridge::copy_source_resources;
@@ -48,6 +49,19 @@ enum Command {
         /// Write the graph as JSON instead of stdout.
         #[arg(short, long)]
         output: Option<PathBuf>,
+    },
+    /// Generate MCreator Mojmap model and AnimationDefinition Java staging files.
+    ExportModel {
+        source: PathBuf,
+        output_root: PathBuf,
+        #[arg(long)]
+        modid: String,
+        #[arg(long)]
+        class_name: Option<String>,
+        #[arg(long, default_value = "neoforge-1.21.1")]
+        target_generator: String,
+        #[arg(long)]
+        overwrite: bool,
     },
     /// Validate an exported MCreator workspace and write parity diagnostics.
     ValidateWorkspace {
@@ -145,6 +159,30 @@ fn main() -> Result<()> {
                 println!("{data}");
             }
             for warning in graph.warnings {
+                eprintln!("[WARN] {warning}");
+            }
+        }
+        Command::ExportModel { source, output_root, modid, class_name, target_generator, overwrite } => {
+            let result = export_model_sources(
+                &source,
+                &output_root,
+                &modid,
+                class_name.as_deref(),
+                &target_generator,
+                overwrite,
+            )?;
+            println!(
+                "Exported MCreator model {}: {} parts, {} cubes, {} animation(s).",
+                result.class_name,
+                result.part_count,
+                result.cube_count,
+                result.animations.len()
+            );
+            println!("Model source: {}", result.model_path.display());
+            if let Some(path) = result.animation_path {
+                println!("Animation source: {}", path.display());
+            }
+            for warning in result.warnings {
                 eprintln!("[WARN] {warning}");
             }
         }
