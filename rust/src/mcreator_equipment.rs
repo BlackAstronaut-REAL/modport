@@ -55,12 +55,6 @@ fn template_version(template: Option<&Value>, fallback: i64) -> i64 {
         .unwrap_or(fallback).clamp(0, 89)
 }
 
-fn set_if_present(definition: &mut Map<String, Value>, key: &str, value: Value) {
-    if definition.contains_key(key) {
-        definition.insert(key.to_owned(), value);
-    }
-}
-
 fn sanitize_item_template(definition: &mut Map<String, Value>, kind: &str) {
     definition.insert("renderType".to_owned(), json!(0));
     definition.insert("customModelName".to_owned(), json!("Normal"));
@@ -216,13 +210,16 @@ fn finish_element(
     let mut definition = template_definition(template);
     let display = item_display_name(registry);
     updates.insert("name".to_owned(), json!(display));
-    updates.entry("creativeTabs".to_owned()).or_insert_with(|| {
-        json!(if kind == "tool" {
-            if matches!(updates.get("toolType").and_then(Value::as_str), Some("Sword" | "Bow")) { ["COMBAT"] } else { ["TOOLS"] }
+    let default_tabs = if kind == "tool" {
+        if matches!(updates.get("toolType").and_then(Value::as_str), Some("Sword" | "Bow")) {
+            json!(["COMBAT"])
         } else {
-            ["MISC"]
-        })
-    });
+            json!(["TOOLS"])
+        }
+    } else {
+        json!(["MISC"])
+    };
+    updates.entry("creativeTabs".to_owned()).or_insert(default_tabs);
     for (key, value) in updates {
         if key == "name" && !definition.contains_key("name") {
             continue;
@@ -240,7 +237,7 @@ fn finish_element(
 /// Build an MCreator item element from recovered source facts and a template element.
 pub fn build_item_element(
     template: Option<&Value>,
-    simple_class: &str,
+    _simple_class: &str,
     superclass: &str,
     source_text: &str,
     registry: &str,
