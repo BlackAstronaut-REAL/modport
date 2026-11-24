@@ -62,6 +62,16 @@ fn registry_element_map(workspace_file: &Path) -> Result<BTreeMap<String,String>
         if !compact.is_empty() && !name.is_empty() {
             map.insert(compact, name.to_owned());
         }
+        if kind == "armor" {
+            if let Some(piece_ids) = descriptor.get("mojmodelbridge_source_piece_ids").and_then(Value::as_object) {
+                for piece_registry in piece_ids.values().filter_map(Value::as_str) {
+                    let compact_piece = compact_registry(piece_registry);
+                    if !compact_piece.is_empty() {
+                        map.insert(compact_piece, name.to_owned());
+                    }
+                }
+            }
+        }
     }
     Ok(map)
 }
@@ -284,6 +294,8 @@ mod tests {
             "mod_elements":[
                 {"name":"RubyIngot","type":"item","registry_name":"ruby_ingot"},
                 {"name":"RubyPickaxe","type":"tool","registry_name":"ruby_pickaxe"},
+                {"name":"RubyArmor","type":"armor","registry_name":"ruby_armor",
+                 "mojmodelbridge_source_piece_ids":{"helmet":"ruby_helmet","body":"ruby_chestplate","leggings":"ruby_leggings","boots":"ruby_boots"}},
                 {"name":"OtherElement","type":"procedure","registry_name":"other"}
             ]
         })).unwrap()).unwrap();
@@ -291,6 +303,10 @@ mod tests {
         let map = registry_element_map(&descriptor).unwrap();
         assert_eq!(map["rubyingot"], "RubyIngot");
         assert_eq!(map["rubypickaxe"], "RubyPickaxe");
+        assert_eq!(map["rubyhelmet"], "RubyArmor");
+        assert_eq!(map["rubychestplate"], "RubyArmor");
+        assert_eq!(map["rubyleggings"], "RubyArmor");
+        assert_eq!(map["rubyboots"], "RubyArmor");
         assert!(!map.contains_key("other"));
     }
 
