@@ -1296,7 +1296,7 @@ mod tests {
             "first explicit source reference should determine the item texture"
         );
         assert_eq!(
-            find_texture_reference(&files, &references[1..]),
+            find_texture_reference(&files, &["demo:textures/entity/ancient_blade.png".to_owned()]),
             Some(entity)
         );
     }
