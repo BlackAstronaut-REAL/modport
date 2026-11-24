@@ -566,3 +566,88 @@ pub fn copy_recipe_resources(
     }
     Ok(outputs)
 }
+
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn emits_recipe_element_and_appends_workspace_descriptor() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let recipe = source.join("data/demo/recipes/tools/sword.json");
+        fs::create_dir_all(recipe.parent().unwrap()).unwrap();
+        fs::write(&recipe, serde_json::to_vec(&json!({
+            "type":"minecraft:crafting_shaped",
+            "pattern":[" I "," I "," S "],
+            "key":{"I":{"item":"demo:iron_ingot"},"S":{"item":"minecraft:stick"}},
+            "result":{"item":"demo:sword","count":1}
+        })).unwrap()).unwrap();
+
+        let mut workspace = json!({
+            "mod_elements":[{"name":"ExistingItem","type":"item","registry_name":"existing"}]
+        });
+        let map = BTreeMap::from([
+            ("ironingot".to_owned(),"IronIngot".to_owned()),
+            ("sword".to_owned(),"IronSword".to_owned())
+        ]);
+        let output = temp.path().join("workspace/elements");
+        let report = emit_recipe_elements(
+            &[source], &output, &mut workspace, "demo", &map, 89
+        ).unwrap();
+
+        assert_eq!(report.exported.len(), 1);
+        assert!(report.warnings.is_empty());
+        assert_eq!(report.exported[0].element_name, "SwordRecipe");
+        assert_eq!(workspace["mod_elements"].as_array().unwrap().len(), 2);
+        let descriptor = &workspace["mod_elements"][1];
+        assert_eq!(descriptor["type"], "recipe");
+        assert_eq!(descriptor["path"], "~/demo/Recipes");
+        assert_eq!(descriptor["mojmodelbridge_source_registry"], "sword");
+
+        let element_path = output.join("SwordRecipe.mod.json");
+        let element: Value = serde_json::from_slice(&fs::read(element_path).unwrap()).unwrap();
+        assert_eq!(element["_fv"], 89);
+        assert_eq!(element["_type"], "recipe");
+        assert_eq!(element["definition"]["recipeReturnStack"], "CUSTOM:IronSword");
+        assert_eq!(element["definition"]["recipeSlots"][1], "CUSTOM:IronIngot");
+    }
+
+    #[test]
+    fn preserves_recipe_subfolders_and_normalizes_copied_json() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let recipe = source.join("assets/demo/recipes/tools/sword.json");
+        fs::create_dir_all(recipe.parent().unwrap()).unwrap();
+        fs::write(&recipe, br#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:stick"],"result":{"item":"minecraft:stone"}}"#).unwrap();
+        let workspace = temp.path().join("workspace");
+
+        let outputs = copy_recipe_resources(&[source], &workspace, "converted").unwrap();
+        assert_eq!(outputs.len(), 1);
+        let target = workspace.join("src/main/resources/data/converted/recipes/tools/sword.json");
+        assert!(target.is_file());
+        let copied: Value = serde_json::from_slice(&fs::read(target).unwrap()).unwrap();
+        assert_eq!(copied["result"]["item"], "minecraft:stone");
+        assert_eq!(copied["type"], "minecraft:crafting_shapeless");
+    }
+
+    #[test]
+    fn emitted_names_are_unique_against_existing_workspace_elements() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let recipe = source.join("data/demo/recipes/sword.json");
+        fs::create_dir_all(recipe.parent().unwrap()).unwrap();
+        fs::write(&recipe, br#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:stick"],"result":{"item":"minecraft:stone"}}"#).unwrap();
+        let mut workspace = json!({"mod_elements":[{"name":"SwordRecipe"}]});
+        let report = emit_recipe_elements(
+            &[source], &temp.path().join("elements"), &mut workspace, "demo", &BTreeMap::new(), 100
+        ).unwrap();
+        assert_eq!(report.exported[0].element_name, "SwordRecipe2");
+        let path = temp.path().join("elements/SwordRecipe2.mod.json");
+        let element: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(element["_fv"], 89);
+    }
+}
