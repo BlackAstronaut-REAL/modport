@@ -677,11 +677,33 @@ fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource
 
 fn numeric_source_call(source: &str, methods: &[&str]) -> Option<f64> {
     let alternatives = methods.iter().map(|name| regex::escape(name)).collect::<Vec<_>>().join("|");
-    let pattern = Regex::new(&format!(
-        r"(?is)(?:\b(?:{alternatives})\s*\(\s*|\b(?:{alternatives})\s*=\s*)([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?"
+    let number = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?";
+    let direct = Regex::new(&format!(
+        r"(?is)(?:\b(?:{alternatives})\s*\(\s*|\b(?:{alternatives})\s*=\s*){number}"
     )).ok()?;
-    pattern.captures(source).and_then(|capture| capture.get(1))
-        .and_then(|value| value.as_str().parse::<f64>().ok())
+    if let Some(value) = direct.captures(source).and_then(|capture| capture.get(1)) {
+        if let Ok(value) = value.as_str().parse::<f64>() {
+            return Some(value);
+        }
+    }
+
+    // Legacy item stats such as getItemEnchantability() are often implemented
+    // as a no-argument method returning a constant rather than a field/setter.
+    for method in methods {
+        let declaration = Regex::new(&format!(
+            r"(?is)\b(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?(?:int|float|double|long)\s+{}\s*\([^)]*\)\s*\{{",
+            regex::escape(method)
+        )).ok()?;
+        let Some(found) = declaration.find(source) else { continue; };
+        let Some(body) = method_body(source, found.start()) else { continue; };
+        let returned = Regex::new(&format!(r"(?is)\breturn\s+{number}\s*;")).ok()?;
+        if let Some(value) = returned.captures(body).and_then(|capture| capture.get(1)) {
+            if let Ok(value) = value.as_str().parse::<f64>() {
+                return Some(value);
+            }
+        }
+    }
+    None
 }
 
 fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> (Value, Vec<String>) {
@@ -1397,6 +1419,31 @@ mod tests {
         assert_eq!(model, Some(model_path));
         let textures = find_armor_layer_textures(&files, "Dragon", "");
         assert_eq!(textures, vec![layer_one, layer_two]);
+    }
+
+    #[test]
+    fn extracts_legacy_item_method_return_properties() {
+        let source = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemAncientBlade".to_owned(),
+            superclass: "ItemSword".to_owned(),
+            registry_name: "ancient_blade".to_owned(),
+            element_type: "tool".to_owned(),
+            tool_type: Some("Sword".to_owned()),
+            source_path: String::new(),
+            source_text: r#"
+                public int getItemEnchantability() { return 15; }
+                public int getMaxDamage() { return 1800; }
+                public int getItemStackLimit() { return 1; }
+                public float getDamageVsEntity() { return 13.5F; }
+            "#.to_owned(),
+        };
+        let (properties, lore) = item_source_properties(&source);
+        assert_eq!(properties["enchantability"], 15.0);
+        assert_eq!(properties["max_damage"], 1800.0);
+        assert_eq!(properties["max_stack_size"], 1.0);
+        assert_eq!(properties["attack_damage"], 13.5);
+        assert!(lore.iter().any(|line| line == "Enchantability: 15"));
+        assert!(lore.iter().any(|line| line == "Durability: 1800"));
     }
 
     #[test]
