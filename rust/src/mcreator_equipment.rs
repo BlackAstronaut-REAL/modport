@@ -236,7 +236,7 @@ fn finish_element(
 /// Build an MCreator item element from recovered source facts and a template element.
 pub fn build_item_element(
     template: Option<&Value>,
-    _simple_class: &str,
+    simple_class: &str,
     superclass: &str,
     source_text: &str,
     registry: &str,
@@ -806,7 +806,7 @@ fn declared_equipment_texture_refs(source_text: &str) -> Vec<String> {
         r#"\b(?:setTextureName|func_111206_d|registerIcon|func_94245_a)\s*\(\s*"([^"]+)""#,
         r#"new\s+ResourceLocation\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)""#,
     ];
-    let mut refs = Vec::new();
+    let mut refs: Vec<String> = Vec::new();
     for (index, pattern) in patterns.iter().enumerate() {
         let Ok(regex) = Regex::new(pattern) else { continue };
         for capture in regex.captures_iter(source_text) {
