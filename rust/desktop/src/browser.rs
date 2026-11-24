@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::mcreator_armor::discover_armor_sources;
-use mojmodelbridge::mcreator_block::{discover_block_sources};
+use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
 use mojmodelbridge::mcreator_equipment::discover_equipment_sources;
 use regex::Regex;
 use serde_json::Value;
@@ -35,6 +35,8 @@ pub struct BrowserEntry {
     pub resource_model_source: Option<PathBuf>,
     /// Additional source textures referenced by a linked resource model.
     pub texture_paths: Vec<PathBuf>,
+    /// In-game block render archetype inferred from blockstate/model JSON.
+    pub render_shape: Option<String>,
     pub lore: Vec<String>,
     pub components_json: String,
 }
@@ -114,6 +116,1049 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let icon_path = registration.and_then(|registration| {
             find_texture_reference(&all_files, &registration.texture_refs)
         });
+        let model_path = registration.and_then(|registration| {
+            let model = registration.model_class.rsplit(['.', '/', '
+        add(BrowserEntry {
+            category: "Mobs".to_owned(),
+            name: if entity.display_name.is_empty() { humanize(entity_name) } else { entity.display_name.clone() },
+            detail: if let Some(registration) = registration {
+                if registration.model_class.is_empty() { entity.registry_name.clone() }
+                else { format!("{} · {}", entity.registry_name, registration.model_class) }
+            } else { entity.registry_name.clone() },
+            icon_kind: IconKind::MobEgg,
+            icon_path: icon_path.clone(),
+            model_source,
+            resource_model_source: None,
+            texture_paths: icon_path.into_iter().collect(),
+            render_shape: None,
+            lore: mob_lore,
+            components_json: mob_components,
+        });
+    }
+
+    // Registered items/tools are classified from superclass and constructor
+    // evidence, never from texture filename substrings.
+    for source in &equipment {
+        let registry = normalize_registry(&source.registry_name);
+        let category = if is_weapon_source(source) {
+            "Weapons"
+        } else if is_food_source(&source.source_text, &source.superclass) {
+            "Food"
+        } else if source.element_type == "tool" {
+            "Tools"
+        } else {
+            "Items"
+        };
+        let texture_refs = equipment_texture_refs(&source.source_text);
+        let icon_path = find_texture_reference(&all_files, &texture_refs)
+            .or_else(|| renderer_textures.first().cloned())
+            .or_else(|| resource_model_source.as_ref()
+                .and_then(|path| resource_model_texture_paths(&all_files, path).first().cloned()));
+        let resource_model_source = find_item_model_json(&all_files, &registry);
+        let (renderer_model, renderer_textures) = find_held_renderer_model(&all_files, &registry);
+        let model_source = renderer_model
+            .or_else(|| find_linked_java_model(&all_files, &source.source_text, false));
+        let mut lore = extract_tooltip_lines(&source.source_text);
+        append_unique(&mut lore, &languages.descriptions_for(&registry));
+        let components_json = find_item_components(&all_files, &registry)
+            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
+            .unwrap_or_else(|| "{}".to_owned());
+        let mut texture_paths = renderer_textures;
+        if let Some(path) = resource_model_source.as_ref() {
+            append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
+        }
+        add(BrowserEntry {
+            category: category.to_owned(),
+            name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
+            detail: format!("{} · {}", registry, source.class_name),
+            icon_kind: IconKind::Texture,
+            icon_path,
+            model_source,
+            resource_model_source,
+            texture_paths,
+            render_shape: None,
+            lore,
+            components_json,
+        });
+    }
+
+    // Armor pieces come from the armor set/registry parser. A Java getArmorModel
+    // override can link the legacy model that should appear when the piece is selected.
+    for set in &armor_sets {
+        let armor_model = find_linked_armor_model(&all_files, &set.source_text, &set.prefix);
+        for (part, field) in &set.fields {
+            let registry = set.registered_piece_ids.get(field)
+                .cloned().unwrap_or_else(|| format!("{}_{}", normalize_registry(&set.prefix), part));
+            let registry = normalize_registry(&registry);
+            let source_text = all_files.iter()
+                .find(|path| path.file_stem().and_then(|value| value.to_str())
+                    .map(|stem| stem.eq_ignore_ascii_case(field)).unwrap_or(false)
+                    && path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java")))
+                .and_then(|path| fs::read_to_string(path).ok())
+                .unwrap_or_default();
+            let texture_stems = [registry.as_str(), field.as_str(), set.prefix.as_str()];
+            let icon_path = find_texture_by_stems(&all_files, &texture_stems);
+            let mut lore = extract_tooltip_lines(&set.source_text);
+            append_unique(&mut lore, &extract_tooltip_lines(&source_text));
+            append_unique(&mut lore, &languages.descriptions_for(&registry));
+            let resource_model_source = find_item_model_json(&all_files, &registry);
+            let model_source = armor_model.clone()
+                .or_else(|| find_linked_java_model(&all_files, &source_text, true));
+            let components_json = find_item_components(&all_files, &registry)
+                .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
+                .unwrap_or_else(|| "{}".to_owned());
+            let mut texture_paths = find_armor_layer_textures(&all_files, &set.prefix, &set.source_text);
+            if let Some(model_path) = resource_model_source.as_ref() {
+                append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, model_path));
+            }
+            add(BrowserEntry {
+                category: "Armor".to_owned(),
+                name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
+                detail: format!("{} · {} armor set", registry, set.prefix),
+                icon_kind: IconKind::Texture,
+                icon_path,
+                model_source,
+                resource_model_source,
+                texture_paths,
+                render_shape: None,
+                lore,
+                components_json,
+            });
+        }
+    }
+
+    // Registered blocks and plants are discovered from class ancestry/registry
+    // declarations. Their block model JSON is linked for 3D preview when present.
+    for source in &blocks {
+        let registry = normalize_registry(&source.registry_name);
+        let (resource_model_source, blockstate_shape) = find_block_model_json(&all_files, &registry);
+        let texture_refs = block_texture_refs(&source.source_text);
+        let icon_path = find_texture_reference(&all_files, &texture_refs)
+            .or_else(|| resource_model_source.as_ref()
+                .and_then(|path| resource_model_texture_paths(&all_files, path).first().cloned()));
+        let render_shape = resource_model_source.as_ref()
+            .map(|path| block_render_shape(path, source))
+            .or(blockstate_shape)
+            .or_else(|| is_plant_source(source).then(|| "plant".to_owned()))
+            .unwrap_or_else(|| "custom".to_owned());
+        let mut lore = extract_tooltip_lines(&source.source_text);
+        append_unique(&mut lore, &languages.descriptions_for(&registry));
+        let components_json = find_item_components(&all_files, &registry)
+            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
+            .unwrap_or_else(|| "{}".to_owned());
+        let texture_paths = resource_model_source.as_ref()
+            .map(|path| resource_model_texture_paths(&all_files, path))
+            .unwrap_or_default();
+        add(BrowserEntry {
+            category: "Blocks".to_owned(),
+            name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
+            detail: format!("{} · {}", registry, source.class_name),
+            icon_kind: IconKind::Texture,
+            icon_path,
+            model_source: None,
+            resource_model_source,
+            texture_paths,
+            render_shape: Some(render_shape),
+            lore,
+            components_json,
+        });
+    }
+
+    // Orphaned texture assets remain visible, but are placed in neutral Items
+    // / Blocks buckets instead of guessed tool/weapon/food buckets.
+    for path in &all_files {
+        if !path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("png")) { continue; }
+        let components: Vec<String> = path.components()
+            .map(|component| component.as_os_str().to_string_lossy().to_ascii_lowercase())
+            .collect();
+        let Some(texture_index) = components.iter().position(|part| part == "textures") else { continue; };
+        let Some(kind) = components.get(texture_index + 1).map(String::as_str) else { continue; };
+        let category = match kind {
+            "block" | "blocks" => "Blocks",
+            "item" | "items" => "Items",
+            _ => continue,
+        };
+        let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("texture");
+        let registry = normalize_registry(stem);
+        let lore = languages.descriptions_for(&registry);
+        let components_json = find_item_components(&all_files, &registry)
+            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
+            .unwrap_or_else(|| "{}".to_owned());
+        add(BrowserEntry {
+            category: category.to_owned(),
+            name: languages.name_for(&registry).unwrap_or_else(|| humanize(stem)),
+            detail: path.strip_prefix(&root).unwrap_or(path).to_string_lossy().to_string(),
+            icon_kind: IconKind::Texture,
+            icon_path: Some(path.clone()),
+            model_source: None,
+            resource_model_source: if category == "Items" {
+                find_item_model_json(&all_files, &registry)
+            } else {
+                find_block_model_json(&all_files, &registry).0
+            },
+            texture_paths: Vec::new(),
+            render_shape: if category == "Blocks" { Some("orphan texture".to_owned()) } else { None },
+            lore,
+            components_json,
+        });
+    }
+
+    for path in &all_files {
+        let Some(extension) = path.extension().and_then(|value| value.to_str()) else { continue; };
+        if !extension.eq_ignore_ascii_case("java") && !extension.eq_ignore_ascii_case("class") { continue; }
+        let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("");
+        if !stem.to_ascii_lowercase().starts_with("model") { continue; }
+        let linked = graph.registrations.iter().any(|registration| {
+            registration.model_class.rsplit(['.', '/', '$']).next()
+                .map(|name| name.eq_ignore_ascii_case(stem)).unwrap_or(false)
+        });
+        if linked { continue; }
+        add(BrowserEntry {
+            category: "Models".to_owned(),
+            name: humanize(stem.strip_prefix("Model").unwrap_or(stem)),
+            detail: path.strip_prefix(&root).unwrap_or(path).to_string_lossy().to_string(),
+            icon_kind: IconKind::Model,
+            icon_path: None,
+            model_source: Some(path.clone()),
+            resource_model_source: None,
+            texture_paths: Vec::new(),
+            render_shape: None,
+            lore: Vec::new(),
+            components_json: "{}".to_owned(),
+        });
+    }
+
+    drop(add);
+    entries.sort_by(|a, b| {
+        category_order(&a.category).cmp(&category_order(&b.category))
+            .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+    });
+
+    let mut warnings = graph.warnings;
+    if all_files.len() >= 250_000 {
+        warnings.push("The browser scan reached its 250,000-file safety limit; some assets may not be listed.".to_owned());
+    }
+    if entries.is_empty() {
+        warnings.push("No supported entity registrations, item/block textures, or model source files were found.".to_owned());
+    }
+
+    Ok(BrowserIndex {
+        root: Some(root.clone()),
+        display_name,
+        entries,
+        texture_roots: vec![root],
+        warnings,
+    })
+}
+
+#[derive(Debug, Default)]
+struct LanguageData {
+    names: BTreeMap<String, String>,
+    descriptions: BTreeMap<String, Vec<String>>,
+}
+
+impl LanguageData {
+    fn name_for(&self, registry: &str) -> Option<String> {
+        self.names.get(&compact(registry)).cloned()
+    }
+
+    fn descriptions_for(&self, registry: &str) -> Vec<String> {
+        let compact_registry = compact(registry);
+        let mut variants = vec![compact_registry.clone()];
+        for suffix in [
+            "ingot", "ore", "block", "item", "tool", "sword", "staff", "bow",
+            "helmet", "chestplate", "leggings", "boots",
+        ] {
+            if compact_registry.ends_with(suffix) && compact_registry.len() > suffix.len() {
+                variants.push(compact_registry[..compact_registry.len() - suffix.len()].to_owned());
+            }
+        }
+        let mut result = Vec::new();
+        for variant in variants {
+            if let Some(values) = self.descriptions.get(&variant) {
+                append_unique(&mut result, values);
+            }
+        }
+        result
+    }
+}
+
+fn load_language_data(files: &[PathBuf], modid: &str) -> LanguageData {
+    let mut result = LanguageData::default();
+    for path in files {
+        let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("");
+        if extension.eq_ignore_ascii_case("lang") {
+            if !path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase().contains("en_us") {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(path) else { continue; };
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                let Some((key, value)) = line.split_once('=') else { continue; };
+                add_language_value(&mut result, key, value);
+            }
+        } else if path.file_name().and_then(|value| value.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("en_us.json"))
+        {
+            let Ok(bytes) = fs::read(path) else { continue; };
+            let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { continue; };
+            if let Some(object) = payload.as_object() {
+                for (key, value) in object {
+                    if let Some(value) = value.as_str() {
+                        add_language_value(&mut result, key, value);
+                    }
+                }
+            }
+        }
+    }
+
+    // Older Forge mods often provide no en_US resource and call the language
+    // registry directly from Java source.
+    let field_registry = source_field_registry_names(files);
+    for path in files.iter().filter(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))) {
+        let Ok(text) = fs::read_to_string(path) else { continue; };
+        let name_call = Regex::new(r#"addNameForObject\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*["'](?:en_US|en_us)["']\s*,\s*["']((?:\\.|[^"'\\])*)["']\s*\)"#).unwrap();
+        for capture in name_call.captures_iter(&text) {
+            let field = &capture[1];
+            let display = decode_java_string(&capture[2]);
+            if let Some(registries) = field_registry.get(field) {
+                for registry in registries {
+                    result.names.entry(compact(registry)).or_insert_with(|| display.clone());
+                }
+            }
+        }
+        let localization = Regex::new(r#"addStringLocalization\s*\(\s*["']([^"']+)["']\s*,\s*["'](?:en_US|en_us)["']\s*,\s*["']((?:\\.|[^"'\\])*)["']\s*\)"#).unwrap();
+        for capture in localization.captures_iter(&text) {
+            add_language_value(&mut result, &capture[1], &decode_java_string(&capture[2]));
+        }
+    }
+
+    if !modid.is_empty() {
+        let _ = modid;
+    }
+    result
+}
+
+fn add_language_value(target: &mut LanguageData, key: &str, value: &str) {
+    if value.trim().is_empty() { return; }
+    let normalized = key.to_ascii_lowercase();
+    let compact_key = compact(&normalized);
+    let tokens = normalized.split(['.', ':']).collect::<Vec<_>>();
+    let is_description = tokens.iter().any(|token| {
+        matches!(*token, "desc" | "description" | "tooltip" | "info" | "lore")
+    });
+    let suffix = tokens.last().copied().unwrap_or("");
+    let stem = if matches!(suffix, "name" | "desc" | "description" | "tooltip" | "info" | "lore") {
+        tokens.get(tokens.len().saturating_sub(2)).copied().unwrap_or("")
+    } else {
+        suffix
+    };
+    if is_description {
+        let key = compact(stem);
+        if !key.is_empty() {
+            let values = target.descriptions.entry(key).or_default();
+            if !values.iter().any(|old| old == value.trim()) {
+                values.push(value.trim().to_owned());
+            }
+        }
+    } else {
+        for token in tokens.iter().rev().take(3) {
+            let key = compact(token);
+            if !key.is_empty() {
+                target.names.entry(key).or_insert_with(|| value.trim().to_owned());
+            }
+        }
+        if !compact_key.is_empty() {
+            target.names.entry(compact_key).or_insert_with(|| value.trim().to_owned());
+        }
+    }
+}
+
+fn source_field_registry_names(files: &[PathBuf]) -> BTreeMap<String, Vec<String>> {
+    let mut fields = BTreeMap::<String, Vec<String>>::new();
+    let assign = Regex::new(r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*new\s+[A-Za-z_$][A-Za-z0-9_$.]*\s*\([^;]*?\)").unwrap();
+    let registration = Regex::new(r#"(?:registerItem|registerBlock)\s*\(\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*,\s*"([^"]+)""#).unwrap();
+    for path in files.iter().filter(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))) {
+        let Ok(text) = fs::read_to_string(path) else { continue; };
+        let known = assign.captures_iter(&text).filter_map(|capture| capture.get(1).map(|value| value.as_str().to_owned())).collect::<HashSet<_>>();
+        for capture in registration.captures_iter(&text) {
+            let field = capture[1].rsplit('.').next().unwrap_or(&capture[1]);
+            if known.contains(field) {
+                fields.entry(field.to_owned()).or_default().push(normalize_registry(&capture[2]));
+            }
+        }
+    }
+    fields
+}
+
+fn extract_tooltip_lines(source: &str) -> Vec<String> {
+    const FORMAT_CODES: &[(&str, &str)] = &[
+        ("BLACK", "§0"), ("DARK_BLUE", "§1"), ("DARK_GREEN", "§2"),
+        ("DARK_AQUA", "§3"), ("DARK_RED", "§4"), ("DARK_PURPLE", "§5"),
+        ("GOLD", "§6"), ("GRAY", "§7"), ("DARK_GRAY", "§8"),
+        ("BLUE", "§9"), ("GREEN", "§a"), ("AQUA", "§b"), ("RED", "§c"),
+        ("LIGHT_PURPLE", "§d"), ("YELLOW", "§e"), ("WHITE", "§f"),
+        ("BOLD", "§l"), ("STRIKETHROUGH", "§m"), ("UNDERLINE", "§n"),
+        ("ITALIC", "§o"), ("RESET", "§r"),
+    ];
+    let calls = Regex::new(r"(?s)\b(?:tooltip|list|par\d+List)\s*\.\s*add\s*\((.*?)\)\s*;").unwrap();
+    let literals = Regex::new(r#""((?:\\.|[^"\\])*)""#).unwrap();
+    let mut result = Vec::new();
+    for capture in calls.captures_iter(source) {
+        let mut expression = capture[1].to_owned();
+        for (name, code) in FORMAT_CODES {
+            for class in ["TextFormatting", "EnumChatFormatting", "ChatFormatting", "Formatting"] {
+                expression = expression.replace(&format!("{class}.{name}"), &format!("\"{code}\""));
+            }
+        }
+        let mut value = String::new();
+        for literal in literals.captures_iter(&expression) {
+            value.push_str(&decode_java_string(&literal[1]));
+        }
+        let value = value.trim().to_owned();
+        if !value.is_empty() && !result.contains(&value) { result.push(value); }
+    }
+    result
+}
+
+fn decode_java_string(value: &str) -> String {
+    let mut result = String::new();
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            result.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => result.push('\n'),
+            Some('r') => result.push('\r'),
+            Some('t') => result.push('\t'),
+            Some('b') => result.push('\u{0008}'),
+            Some('f') => result.push('\u{000c}'),
+            Some('"') => result.push('"'),
+            Some('\'') => result.push('\''),
+            Some('\\') => result.push('\\'),
+            Some('u') => {
+                let digits = chars.by_ref().take(4).collect::<String>();
+                if let Ok(code) = u32::from_str_radix(&digits, 16) {
+                    if let Some(decoded) = char::from_u32(code) { result.push(decoded); }
+                }
+            }
+            Some(other) => result.push(other),
+            None => result.push('\\'),
+        }
+    }
+    result
+}
+
+fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
+    if matches!(source.tool_type.as_deref(), Some("Sword" | "Bow" | "Crossbow" | "Trident" | "Staff" | "Dagger" | "Spear" | "Mace")) {
+        return true;
+    }
+    let evidence = format!(
+        "{} {} {}",
+        source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(),
+        source.registry_name.to_ascii_lowercase(),
+    );
+    [
+        "itemsword", "itembow", "itemcrossbow", "itemtrident",
+        "sword", "bow", "crossbow", "trident", "dagger", "spear",
+        "weapon", "battleaxe", "waraxe", "mace",
+    ].iter().any(|token| evidence.contains(token))
+}
+
+fn is_food_source(source: &str, superclass: &str) -> bool {
+    let parent = superclass.to_ascii_lowercase();
+    parent.contains("itemfood") || parent.contains("itemseedfood")
+        || source.contains("FoodProperties.Builder")
+        || source.contains(".food(")
+        || source.contains("setAlwaysEdible")
+        || source.contains("setHealAmount")
+        || source.contains("setPotionEffect")
+}
+
+fn declared_texture_refs(source: &str) -> Vec<String> {
+    let mut refs = Vec::new();
+    let png = Regex::new(r#"(?i)"([^"\n]{1,240}\.png)""#).unwrap();
+    for capture in png.captures_iter(source) {
+        refs.push(capture[1].replace('\\', "/"));
+    }
+    let single = Regex::new(r#"(?i)\b(?:setTextureName|func_111206_d|setBlockTextureName|func_149658_d|registerIcon|func_94245_a|registerBlockIcons)\s*\([^)]*?["']([^"']+)["']"#).unwrap();
+    for capture in single.captures_iter(source) {
+        refs.push(capture[1].replace('\\', "/"));
+    }
+    let location = Regex::new(r#"new\s+ResourceLocation\s*\(\s*"([^"]+)"\s*(?:,\s*"([^"]+)")?"#).unwrap();
+    for capture in location.captures_iter(source) {
+        refs.push(if let Some(path) = capture.get(2) {
+            format!("{}:{}", &capture[1], path.as_str())
+        } else {
+            capture[1].to_owned()
+        });
+    }
+    let declared = Regex::new(r#"(?i)\b(?:texture|textureName|icon|iconName|sprite|spriteName)\s*(?:=|:)\s*"([^"]+)""#).unwrap();
+    for capture in declared.captures_iter(source) {
+        refs.push(capture[1].replace('\\', "/"));
+    }
+    refs.sort_by_key(|value| value.to_ascii_lowercase());
+    refs.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    refs
+}
+
+fn equipment_texture_refs(source: &str) -> Vec<String> {
+    declared_texture_refs(source)
+}
+
+fn block_texture_refs(source: &str) -> Vec<String> {
+    declared_texture_refs(source)
+}
+
+fn find_texture_by_stems(files: &[PathBuf], stems: &[&str]) -> Option<PathBuf> {
+    let wanted = stems.iter().filter(|stem| !stem.is_empty()).map(|stem| compact(stem)).collect::<HashSet<_>>();
+    files.iter().find(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+            && path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/textures/")
+            && path.file_stem().and_then(|value| value.to_str())
+                .map(|stem| wanted.contains(&compact(stem))).unwrap_or(false)
+    }).cloned()
+}
+
+fn find_texture_reference(files: &[PathBuf], references: &[String]) -> Option<PathBuf> {
+    for reference in references {
+        let cleaned = reference.replace('\\', "/");
+        let suffix = cleaned.rsplit(':').next().unwrap_or(&cleaned).trim_start_matches('/');
+        let suffix = if suffix.to_ascii_lowercase().ends_with(".png") { suffix.to_owned() }
+            else { format!("{suffix}.png") };
+        if let Some(found) = files.iter().find(|path| {
+            path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().ends_with(&suffix.to_ascii_lowercase())
+        }) {
+            return Some(found.clone());
+        }
+        if let Some(found) = find_texture_by_stems(files, &[Path::new(&suffix).file_stem().and_then(|value| value.to_str()).unwrap_or("")]) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn find_item_model_json(files: &[PathBuf], registry: &str) -> Option<PathBuf> {
+    let wanted = compact(registry);
+    let mut candidates = files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            && path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/models/item/")
+    }).collect::<Vec<_>>();
+    candidates.sort_by_key(|path| {
+        let stem = compact(path.file_stem().and_then(|value| value.to_str()).unwrap_or(""));
+        (if stem == wanted { 0 } else { 1 }, path.to_string_lossy().to_ascii_lowercase())
+    });
+    for path in candidates {
+        let stem = compact(path.file_stem().and_then(|value| value.to_str()).unwrap_or(""));
+        if stem != wanted { continue; }
+        let Ok(bytes) = fs::read(path) else { continue; };
+        let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { continue; };
+        let parent = payload.get("parent").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+        let standard = ["item/generated", "item/handheld", "builtin/generated", "builtin/handheld"];
+        let custom = payload.get("elements").and_then(Value::as_array).is_some_and(|elements| !elements.is_empty())
+            || payload.get("display").is_some_and(Value::is_object)
+            || (!parent.is_empty() && !standard.iter().any(|value| parent.ends_with(value)));
+        if custom { return Some(path.clone()); }
+    }
+    None
+}
+
+fn resolve_blockstate_model(files: &[PathBuf], state_path: &Path) -> Option<PathBuf> {
+    let payload = fs::read(state_path).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())?;
+    let mut references = Vec::<String>::new();
+    if let Some(variants) = payload.get("variants").and_then(Value::as_object) {
+        for variant in variants.values() {
+            if let Some(reference) = variant.get("model").and_then(Value::as_str) {
+                references.push(reference.to_owned());
+            } else if let Some(array) = variant.as_array() {
+                for choice in array {
+                    if let Some(reference) = choice.get("model").and_then(Value::as_str) {
+                        references.push(reference.to_owned());
+                    }
+                }
+            }
+        }
+    }
+    if let Some(parts) = payload.get("multipart").and_then(Value::as_array) {
+        for part in parts {
+            let apply = part.get("apply").unwrap_or(part);
+            if let Some(reference) = apply.get("model").and_then(Value::as_str) {
+                references.push(reference.to_owned());
+            } else if let Some(array) = apply.as_array() {
+                for choice in array {
+                    if let Some(reference) = choice.get("model").and_then(Value::as_str) {
+                        references.push(reference.to_owned());
+                    }
+                }
+            }
+        }
+    }
+    references.sort();
+    references.dedup();
+    let namespace = asset_namespace(state_path);
+    for reference in references {
+        let (model_namespace, model) = reference.split_once(':')
+            .map(|(namespace, model)| (namespace, model))
+            .unwrap_or((namespace.as_str(), reference.as_str()));
+        let model = model.trim_start_matches('/').trim_start_matches("block/").trim_end_matches(".json");
+        let suffix = format!("/assets/{model_namespace}/models/block/{model}.json").to_ascii_lowercase();
+        if let Some(found) = files.iter().find(|path| {
+            path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().ends_with(&suffix)
+        }) {
+            return Some(found.clone());
+        }
+    }
+    None
+}
+
+fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>, Option<String>) {
+    let wanted = compact(registry);
+    let mut state_files = files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            && path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/blockstates/")
+            && path.file_stem().and_then(|value| value.to_str())
+                .is_some_and(|stem| compact(stem) == wanted)
+    }).cloned().collect::<Vec<_>>();
+    state_files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    for state_path in state_files {
+        if let Some(model_path) = resolve_blockstate_model(files, &state_path) {
+            let shape = block_render_shape_from_model(&model_path);
+            return (Some(model_path), Some(shape));
+        }
+    }
+
+    let mut candidates = files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            && path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/models/block/")
+            && path.file_stem().and_then(|value| value.to_str())
+                .is_some_and(|stem| compact(stem) == wanted)
+    }).cloned().collect::<Vec<_>>();
+    candidates.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    let model = candidates.into_iter().next();
+    let shape = model.as_deref().map(block_render_shape_from_model);
+    (model, shape)
+}
+
+fn block_render_shape_from_model(path: &Path) -> String {
+    let payload = fs::read(path).ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .unwrap_or(Value::Null);
+    let parent = payload.get("parent").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+
+    if ["block/cross", "block/tinted_cross", "block/crop", "block/flower"]
+        .iter().any(|candidate| parent.ends_with(candidate))
+        || ["flower", "sapling", "crop", "tall_grass", "fern", "cross"]
+            .iter().any(|candidate| stem.contains(candidate))
+    {
+        return "plant".to_owned();
+    }
+    if ["block/torch", "block/template_torch", "block/template_torch_wall"]
+        .iter().any(|candidate| parent.ends_with(candidate))
+        || ["redstone_dust", "wire", "carpet", "rail", "repeater", "comparator", "pressure_plate"]
+            .iter().any(|candidate| stem.contains(candidate))
+    {
+        return "floor".to_owned();
+    }
+    let elements = payload.get("elements").and_then(Value::as_array);
+    if let Some(elements) = elements.filter(|elements| !elements.is_empty()) {
+        let mut low = f64::INFINITY;
+        let mut high = f64::NEG_INFINITY;
+        for element in elements {
+            if let Some(from) = element.get("from").and_then(Value::as_array) {
+                if let Some(value) = from.get(1).and_then(Value::as_f64) { low = low.min(value); }
+            }
+            if let Some(to) = element.get("to").and_then(Value::as_array) {
+                if let Some(value) = to.get(1).and_then(Value::as_f64) { high = high.max(value); }
+            }
+        }
+        if low.is_finite() && high.is_finite() && high - low <= 1.25 {
+            return "floor".to_owned();
+        }
+        return "custom".to_owned();
+    }
+    if parent.ends_with("block/cube") || parent.ends_with("block/cube_all")
+        || parent.ends_with("block/cube_column") || parent.ends_with("block/orientable")
+    {
+        return "cube".to_owned();
+    }
+    "custom".to_owned()
+}
+
+fn block_render_shape(path: &Path, source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
+    let shape = block_render_shape_from_model(path);
+    if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
+}
+
+fn resource_model_texture_paths(files: &[PathBuf], model: &Path) -> Vec<PathBuf> {
+    let Ok(bytes) = fs::read(model) else { return Vec::new(); };
+    let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { return Vec::new(); };
+    let Some(textures) = payload.get("textures").and_then(Value::as_object) else { return Vec::new(); };
+    let mut paths = Vec::new();
+    for reference in textures.values().filter_map(Value::as_str) {
+        if reference.starts_with('#') { continue; }
+        let suffix = reference.split_once(':').map(|(_, path)| path).unwrap_or(reference);
+        let suffix = suffix.trim_start_matches("textures/").trim_start_matches('/');
+        let suffix = if suffix.to_ascii_lowercase().ends_with(".png") { suffix.to_owned() }
+            else { format!("{suffix}.png") };
+        if let Some(found) = files.iter().find(|path| {
+            path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().ends_with(&suffix.to_ascii_lowercase())
+        }) {
+            if !paths.contains(found) { paths.push(found.clone()); }
+        }
+    }
+    paths
+}
+
+fn find_model_source_by_class(files: &[PathBuf], class_name: &str) -> Option<PathBuf> {
+    let simple = class_name.rsplit(['.', '/', '$']).next().unwrap_or(class_name);
+    files.iter().filter(|path| {
+        path.file_stem().and_then(|value| value.to_str()).is_some_and(|stem| stem.eq_ignore_ascii_case(simple))
+            && path.extension().is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("java") || extension.eq_ignore_ascii_case("class")
+            })
+    }).min_by_key(|path| {
+        let priority = if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java")) { 0 } else { 1 };
+        (priority, path.to_string_lossy().to_ascii_lowercase())
+    }).cloned()
+}
+
+fn find_held_renderer_model(files: &[PathBuf], registry: &str) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let field_registries = source_field_registry_names(files);
+    let mut source_by_class = BTreeMap::<String, String>::new();
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        let Some(class_name) = path.file_stem().and_then(|value| value.to_str()) else { continue; };
+        if let Ok(text) = fs::read_to_string(path) {
+            source_by_class.entry(class_name.to_owned()).or_insert(text);
+        }
+    }
+
+    let target = compact(registry);
+    let registration = Regex::new(
+        r#"(?s)(?:MinecraftForgeClient\s*\.\s*)?registerItemRenderer\s*\(\s*(?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*new\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*\("#
+    ).unwrap();
+    let model_pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    let texture_pattern = Regex::new(r#"(?i)["']([^"'\s]+(?:\.png|/textures/[^"'\s]+))["']"#).unwrap();
+    let mut model_source = None;
+    let mut textures = Vec::new();
+
+    for text in source_by_class.values() {
+        for capture in registration.captures_iter(text) {
+            let field = &capture[1];
+            let renderer_class = capture[2].rsplit('.').next().unwrap_or(&capture[2]);
+            let registry_match = field_registries.get(field).is_some_and(|registries| {
+                registries.iter().any(|name| compact(name) == target)
+            });
+            if !registry_match { continue; }
+
+            let Some(renderer_text) = source_by_class.get(renderer_class) else { continue; };
+            if model_source.is_none() {
+                if let Some(model) = model_pattern.captures(renderer_text).and_then(|capture| {
+                    find_model_source_by_class(files, &capture[1])
+                }) {
+                    model_source = Some(model);
+                }
+            }
+            for texture in texture_pattern.captures_iter(renderer_text) {
+                let reference = texture[1].replace('\\', "/");
+                if let Some(path) = find_texture_reference(files, std::slice::from_ref(&reference)) {
+                    if !textures.contains(&path) { textures.push(path); }
+                }
+            }
+        }
+    }
+    (model_source, textures)
+}
+
+fn find_linked_java_model(files: &[PathBuf], source: &str, armor: bool) -> Option<PathBuf> {
+    if source.is_empty() { return None; }
+    if armor && !source.contains("getArmorModel") { return None; }
+    if !armor && !source.contains("IItemRenderer") && !source.contains("renderItem") && !source.contains("getArmorModel") {
+        return None;
+    }
+    let pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    for capture in pattern.captures_iter(source) {
+        if let Some(path) = find_model_source_by_class(files, &capture[1]) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn armor_model_owner_key(path: &Path) -> String {
+    let mut stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_owned();
+    if stem.to_ascii_lowercase().starts_with("item") {
+        stem = stem[4..].to_owned();
+    }
+    for suffix in ["helmet", "chestplate", "leggings", "boots", "armor"] {
+        if stem.to_ascii_lowercase().ends_with(suffix) {
+            stem.truncate(stem.len() - suffix.len());
+            break;
+        }
+    }
+    compact(&stem)
+}
+
+fn method_body(text: &str, method_start: usize) -> Option<&str> {
+    let open = text[method_start..].find('{')? + method_start;
+    let bytes = text.as_bytes();
+    let mut depth = 0_i32;
+    let mut quote = 0_u8;
+    let mut escaped = false;
+    for index in open..bytes.len() {
+        let ch = bytes[index];
+        if quote != 0 {
+            if escaped {
+                escaped = false;
+            } else if ch == b'\\' {
+                escaped = true;
+            } else if ch == quote {
+                quote = 0;
+            }
+            continue;
+        }
+        if ch == b'"' || ch == b'\'' {
+            quote = ch;
+        } else if ch == b'{' {
+            depth += 1;
+        } else if ch == b'}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(&text[open + 1..index]);
+            }
+        }
+    }
+    None
+}
+
+fn find_linked_armor_model(files: &[PathBuf], source: &str, prefix: &str) -> Option<PathBuf> {
+    let target = compact(prefix);
+    let method_pattern = Regex::new(r"\bgetArmorModel\s*\([^)]*\)\s*\{").unwrap();
+    let model_pattern = Regex::new(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(").unwrap();
+    let mut candidates = Vec::<String>::new();
+    if !source.is_empty() {
+        candidates.push(source.to_owned());
+    }
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        if armor_model_owner_key(path) != target { continue; }
+        let Ok(text) = fs::read_to_string(path) else { continue; };
+        if text.contains("getArmorModel") {
+            candidates.push(text);
+        }
+    }
+
+    for text in candidates {
+        let Some(method) = method_pattern.find(&text) else { continue; };
+        let body = method_body(&text, method.start()).unwrap_or("");
+        let model = model_pattern.captures(body)
+            .or_else(|| model_pattern.captures(&text));
+        if let Some(model) = model {
+            if let Some(path) = find_model_source_by_class(files, &model[1]) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn find_item_components(files: &[PathBuf], registry: &str) -> Option<Value> {
+    let wanted = compact(registry);
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            && (path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/items/")
+                || path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/item_components/"))
+    }) {
+        if !path.file_stem().and_then(|value| value.to_str()).map(|stem| compact(stem) == wanted).unwrap_or(false) {
+            continue;
+        }
+        let Ok(bytes) = fs::read(path) else { continue; };
+        let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { continue; };
+        if let Some(components) = payload.get("components") {
+            return Some(components.clone());
+        }
+        if payload.as_object().is_some_and(|object| object.keys().any(|key| key.starts_with("minecraft:"))) {
+            return Some(payload);
+        }
+    }
+    None
+}
+
+fn append_unique(target: &mut Vec<String>, values: &[String]) {
+    for value in values {
+        if !target.contains(value) { target.push(value.clone()); }
+    }
+}
+
+fn normalize_registry(value: &str) -> String {
+    let mut value = value.trim().trim_matches('"').trim_matches('\'').to_owned();
+    if let Some((_, path)) = value.split_once(':') { value = path.to_owned(); }
+    value.trim_matches('/').replace('-', "_").replace('/', "_").to_ascii_lowercase()
+}
+
+fn compact(value: &str) -> String {
+    value.chars().filter(|character| character.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+fn category_order(category: &str) -> usize {
+    CATEGORIES.iter().position(|candidate| *candidate == category).unwrap_or(usize::MAX)
+}
+
+fn humanize(value: &str) -> String {
+    let chars: Vec<char> = value.replace('_', " ").replace('-', " ").chars().collect();
+    let mut output = String::with_capacity(chars.len() + 8);
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if index > 0 && ch.is_ascii_uppercase() && chars[index - 1].is_ascii_lowercase() {
+            output.push(' ');
+        }
+        output.push(ch);
+    }
+    output.split_whitespace().map(|word| {
+        let mut chars = word.chars();
+        chars.next().map(|first| first.to_uppercase().to_string() + chars.as_str()).unwrap_or_default()
+    }).collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tooltip_extraction_preserves_legacy_formatting_and_unicode_literals() {
+        let lines = extract_tooltip_lines(r#"
+            tooltip.add(TextFormatting.GOLD + "A golden blade");
+            par1List.add(EnumChatFormatting.ITALIC + "Forged\nbright");
+        "#);
+        assert_eq!(lines[0], "§6A golden blade");
+        assert_eq!(lines[1], "§oForged\nbright");
+    }
+
+    #[test]
+    fn registry_category_logic_does_not_use_texture_filename_guesses() {
+        assert_eq!(category_order("Weapons"), 2);
+        assert_eq!(category_order("Items"), 5);
+        assert_eq!(compact("red_ant"), "redant");
+    }
+
+    #[test]
+    fn discovers_registered_custom_item_renderer_model_and_texture() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("src/main/java/demo")).unwrap();
+        fs::create_dir_all(root.join("src/main/resources/assets/demo/textures/items")).unwrap();
+        fs::write(root.join("src/main/java/demo/ModItems.java"), r#"
+            class ModItems {
+                static Item BIG_BLADE = new Item();
+                void register() { GameRegistry.registerItem(BIG_BLADE, "big_blade"); }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/ClientProxy.java"), r#"
+            class ClientProxy {
+                void register() { MinecraftForgeClient.registerItemRenderer(ModItems.BIG_BLADE, new BigBladeRenderer()); }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/BigBladeRenderer.java"), r#"
+            class BigBladeRenderer implements IItemRenderer {
+                ModelBigBlade model = new ModelBigBlade();
+                String texture = "demo:textures/items/big_blade.png";
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/ModelBigBlade.java"), "class ModelBigBlade {}").unwrap();
+        let skin = root.join("src/main/resources/assets/demo/textures/items/big_blade.png");
+        fs::write(&skin, b"png").unwrap();
+
+        let files = vec![
+            root.join("src/main/java/demo/ModItems.java"),
+            root.join("src/main/java/demo/ClientProxy.java"),
+            root.join("src/main/java/demo/BigBladeRenderer.java"),
+            root.join("src/main/java/demo/ModelBigBlade.java"),
+            skin.clone(),
+        ];
+        let (model, textures) = find_held_renderer_model(&files, "big_blade");
+        assert_eq!(model.and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().to_string())).as_deref(), Some("ModelBigBlade"));
+        assert!(textures.contains(&skin));
+    }
+
+    #[test]
+    fn discovers_armor_model_and_both_armor_layer_textures() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let armor_source = root.join("ItemDragonArmor.java");
+        fs::write(&armor_source, r#"
+            class ItemDragonArmor {
+                ModelDragonArmor model = new ModelDragonArmor();
+                ModelBiped getArmorModel() { return model; }
+            }
+        "#).unwrap();
+        let model_path = root.join("ModelDragonArmor.java");
+        fs::write(&model_path, "class ModelDragonArmor {}").unwrap();
+        let texture_dir = root.join("assets/demo/textures/models/armor");
+        fs::create_dir_all(&texture_dir).unwrap();
+        let layer_one = texture_dir.join("dragon_layer_1.png");
+        let layer_two = texture_dir.join("dragon_layer_2.png");
+        fs::write(&layer_one, b"png").unwrap();
+        fs::write(&layer_two, b"png").unwrap();
+        let files = vec![armor_source, model_path.clone(), layer_one.clone(), layer_two.clone()];
+
+        let model = find_linked_armor_model(&files, "", "Dragon");
+        assert_eq!(model, Some(model_path));
+        let textures = find_armor_layer_textures(&files, "Dragon", "");
+        assert_eq!(textures, vec![layer_one, layer_two]);
+    }
+
+    #[test]
+    fn reads_item_components_from_resource_item_definition() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("assets/demo/items/ancient_sword.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, r#"{"components":{"minecraft:custom_name":{"text":"Ancient Sword","color":"gold"},"minecraft:lore":[{"text":"Old magic","italic":true}]}}"#).unwrap();
+        let components = find_item_components(&[path], "ancient_sword").unwrap();
+        assert_eq!(components["minecraft:custom_name"]["text"], "Ancient Sword");
+        assert_eq!(components["minecraft:lore"][0]["text"], "Old magic");
+    }
+
+    #[test]
+    fn classifies_weapons_from_registered_type_and_superclass_evidence() {
+        let mut source = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "CustomBlade".to_owned(),
+            registry_name: "ancient_blade".to_owned(),
+            superclass: "net.minecraft.item.ItemSword".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert!(is_weapon_source(&source));
+
+        source.superclass = "net.minecraft.item.ItemAxe".to_owned();
+        source.class_name = "CustomAxe".to_owned();
+        source.registry_name = "iron_axe".to_owned();
+        source.element_type = "tool".to_owned();
+        assert!(!is_weapon_source(&source));
+
+        source.class_name = "ItemBattleAxe".to_owned();
+        source.registry_name = "battle_axe".to_owned();
+        assert!(is_weapon_source(&source));
+    }
+
+    #[test]
+    fn humanizes_registry_and_model_names() {
+        assert_eq!(humanize("red_ant"), "Red Ant");
+        assert_eq!(humanize("FireBeetle"), "Fire Beetle");
+        assert_eq!(humanize("ModelTriffid"), "Model Triffid");
+    }
+}
+]).next().unwrap_or("");
+            graph.java_files.get(model).or_else(|| graph.class_files.get(model)).cloned()
+        });
+        let (mob_lore, mob_components) = mob_component_metadata(entity, model_path.as_deref(), &all_files);
         add(BrowserEntry {
             category: "Mobs".to_owned(),
             name: if entity.display_name.is_empty() { humanize(entity_name) } else { entity.display_name.clone() },
