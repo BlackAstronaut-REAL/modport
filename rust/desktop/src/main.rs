@@ -1,6 +1,7 @@
 mod app;
 mod browser;
 mod renderer;
+mod resource_model;
 mod tooltip;
 
 fn main() -> eframe::Result {
