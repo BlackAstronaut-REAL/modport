@@ -1147,6 +1147,32 @@ fn block_render_shape(
     if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
 }
 
+fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource) -> String {
+    if is_plant_source(source) {
+        return "plant".to_owned();
+    }
+
+    let evidence = format!(
+        "{} {} {}",
+        source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(),
+        source.source_text.to_ascii_lowercase(),
+    );
+    if evidence.contains("blockwalltorch") || evidence.contains("wall_torch") {
+        "wall_torch".to_owned()
+    } else if evidence.contains("blocktorch") || evidence.contains("redstone_torch") {
+        "torch".to_owned()
+    } else if [
+        "blockredstonewire", "blockcarpet", "blockpressureplate", "blockrail",
+        "blockrepeater", "blockredstonecomparator", "redstone_dust", "redstonewire",
+        "pressure_plate", "repeater", "comparator", "carpet", "rail",
+    ].iter().any(|token| evidence.contains(token)) {
+        "floor".to_owned()
+    } else {
+        "cube".to_owned()
+    }
+}
+
 fn append_paths(target: &mut Vec<PathBuf>, values: &[PathBuf]) {
     for value in values {
         if !target.contains(value) { target.push(value.clone()); }
