@@ -23,6 +23,10 @@ the engine into the native executable.
   geometry reconstruction.
 - Blockbench 5.x serialization with the Beta 12 UUID namespace, coordinate
   conversion, hierarchy, model bounds and embedded PNG textures.
+- Companion-aware texture indexing across Java and class sources, exact resource
+  reference scoring, body-variant discovery and auxiliary eye/glow exclusion.
+- First-pass legacy JVM animation formula evaluation and additive walk/idle
+  Blockbench preview clips, rebased to the converted bind pose.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -31,17 +35,19 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel
     cargo run --manifest-path rust/Cargo.toml -- convert-model ModelExample.java output/ModelExample.bbmodel --texture-root path/to/assets
 
-It currently converts decompiled .java model source. Compiled .class input,
-bytecode interpretation, texture-reference scoring/variant classification, numeric formula sampling,
-loop-period inference and Blockbench keyframe baking remain in progress.
+It currently converts decompiled .java and supported legacy/modern Mojmap .class
+models. The legacy compiled animation preview sampler handles a constrained math
+subset and the common walk/idle channels; exact loop-period parity, complex control
+flow, modern compiled animation extraction, render-loop instance expansion and
+the full texture-selection edge-case corpus remain in progress.
 
 ## Remaining major engine ports
 
-The legacy compiled-class ModelRenderer interpreter, modern compiled-model
-interpreter, symbolic animation interpreter and preview baker, full texture
-resolver, entity/renderer mod graph, MCreator workspace/content/source exporters,
-workspace validator and complete batch/resume/report pipeline remain to be
-ported. The app UI is not considered complete until these use the native engine.
+The bytecode interpreters and initial legacy animation/texture stages now exist,
+but still need wider parity coverage. Remaining major ports are modern compiled
+animation extraction, advanced animation control-flow and loop baking, the entity/
+renderer mod graph, MCreator workspace/content/source exporters, workspace
+validator and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
 
 ## Parity rules
 

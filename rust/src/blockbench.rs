@@ -248,6 +248,7 @@ pub fn model_to_bbmodel(model: &mut ParsedModel, source_file: &str, texture_path
         "source_format": model.source_format,
         "primary_texture": if model.primary_texture.is_empty() { Value::Null } else { json!(model.primary_texture) },
         "texture_variants": model.texture_variants,
+        "texture_evidence": model.texture_evidence,
         "auxiliary_textures_skipped": model.auxiliary_textures,
         "variant_model_outputs": model.variant_model_outputs,
         "constructor_args": model.constructor_args,
@@ -255,7 +256,7 @@ pub fn model_to_bbmodel(model: &mut ParsedModel, source_file: &str, texture_path
         "model_bounds": model.model_bounds,
         "linked_entities": model.linked_entities,
         "linked_renderers": model.linked_renderers,
-        "notes": "Native Rust model serializer. Procedural animation source and analysis are preserved in sidecar files; Blockbench keyframe sampling is pending."
+        "notes": "Native Rust model serializer. Recovered legacy JVM walk/idle formulas are sampled into additive Blockbench clips; source animation analysis and Java runtime logic remain in sidecars."
     });
 
     Ok(json!({

@@ -2,63 +2,38 @@ use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 use crate::blockbench::model_to_bbmodel;
 use crate::bytecode::parse_any_model_class;
 use crate::discovery::discover_mod_layout;
 use crate::source::parse_java_model;
+use crate::texture::TextureIndex;
 
-fn normalize_stem(value: &str) -> String {
-    value.to_ascii_lowercase().chars().filter(|ch| ch.is_ascii_alphanumeric()).collect()
-}
+fn resolve_texture_set(source: &Path, model_name: &str, supplied_roots: &[PathBuf]) -> Result<crate::texture::TextureSetResolution> {
+    let mut roots = crate::texture::infer_search_roots(source, supplied_roots);
+    let mut shallow_roots = Vec::new();
+    if let Some(parent) = source.parent() {
+        roots.push(parent.to_path_buf());
+        shallow_roots.push(parent.to_path_buf());
 
-fn discover_textures(source: &Path, class_name: &str, supplied_roots: &[PathBuf]) -> Vec<PathBuf> {
-    let mut roots = supplied_roots.to_vec();
-    if roots.is_empty() {
-        if let Some(parent) = source.parent() {
-            roots.push(parent.to_path_buf());
-            // Search nearby project roots, not the entire filesystem. A source
-            // file commonly lives several packages below src/main/java.
-            for ancestor in parent.ancestors().take(7) {
-                if ancestor.is_dir() {
-                    if let Ok(layout) = discover_mod_layout(ancestor) {
-                        roots.extend(layout.texture_roots);
-                        roots.extend(layout.resource_roots);
-                        if !roots.is_empty() { break; }
-                    }
-                }
+        // Decompiled mods often split model and renderer packages beside each
+        // other. Inspect the nearest ancestor that actually contains a resource
+        // root, and avoid repeatedly walking the same source tree.
+        let resource_root = parent.ancestors().take(8).find(|ancestor| {
+            ["assets", "resources", "textures", "src/main/resources"]
+                .iter().any(|name| ancestor.join(name).is_dir())
+        });
+        if let Some(search_root) = resource_root {
+            if let Ok(layout) = discover_mod_layout(search_root) {
+                roots.extend(layout.model_roots);
+                roots.extend(layout.render_roots);
+                roots.extend(layout.texture_roots);
+                roots.extend(layout.resource_roots);
             }
         }
     }
-
-    let class_key = normalize_stem(class_name);
-    let shortened_key = normalize_stem(class_name.strip_prefix("Model").unwrap_or(class_name));
-    let mut candidates = Vec::<(u8, String, PathBuf)>::new();
-    for root in roots {
-        if !root.exists() { continue; }
-        for entry in WalkDir::new(&root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
-            if !entry.file_type().is_file() { continue; }
-            if !entry.path().extension().and_then(|v| v.to_str()).map(|v| v.eq_ignore_ascii_case("png")).unwrap_or(false) { continue; }
-
-            let filename = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            if ["glow", "overlay", "eyes", "eye_", "emissive", "armor"].iter().any(|word| filename.contains(word)) { continue; }
-
-            let stem = normalize_stem(entry.path().file_stem().and_then(|v| v.to_str()).unwrap_or(""));
-            let score = if stem == class_key { 0 }
-                else if !shortened_key.is_empty() && stem == shortened_key { 1 }
-                else if stem.starts_with(&class_key) && !class_key.is_empty() { 2 }
-                else { continue };
-            let display = entry.path().to_string_lossy().to_ascii_lowercase().to_string();
-            candidates.push((score, display, entry.path().to_path_buf()));
-        }
-    }
-    candidates.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-    let mut result = Vec::new();
-    for (_, _, path) in candidates {
-        if !result.contains(&path) { result.push(path); }
-    }
-    result
+    let index = TextureIndex::new(&roots, &shallow_roots)?;
+    index.resolve_set(source, model_name, None, 32)
 }
 
 #[derive(Debug, Serialize)]
@@ -96,14 +71,35 @@ pub fn convert_model_source(
         "class" => parse_any_model_class(source, &[])?,
         _ => bail!("This stage accepts decompiled .java or compiled legacy .class model files."),
     };
-    let resolved_textures = discover_textures(source, &model.class_name, texture_roots);
-    if let Some(primary) = resolved_textures.first() {
-        model.primary_texture = primary.to_string_lossy().to_string();
-        model.texture_evidence.push(format!("Native filename match for {}", model.class_name));
-    } else {
-        model.warnings.push("No matching body PNG was found for automatic embedding.".to_owned());
-    }
+    let texture_resolution = resolve_texture_set(source, &model.class_name, texture_roots)?;
+    let resolved_textures = texture_resolution.variants.clone();
+    model.texture_evidence = texture_resolution.evidence.clone();
+    model.texture_evidence.extend(texture_resolution.candidate_details.iter().map(|(path, score, reason)| {
+        format!("{} [{score:.3}]: {reason}", path.display())
+    }));
     model.texture_variants = resolved_textures.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    model.auxiliary_textures = texture_resolution.auxiliaries.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    if let Some(primary) = texture_resolution.primary.as_ref() {
+        model.primary_texture = primary.to_string_lossy().to_string();
+        model.warnings.push(format!(
+            "Primary texture resolved to '{}' ({})",
+            primary.display(),
+            texture_resolution.evidence.join("; ")
+        ));
+        if resolved_textures.len() > 1 {
+            model.warnings.push(format!(
+                "Embedded {} compatible body/color textures; the alternate texture candidates are retained in the project metadata.",
+                resolved_textures.len()
+            ));
+        }
+    } else if !texture_resolution.auxiliaries.is_empty() {
+        model.warnings.push(format!(
+            "Only auxiliary textures matched; no eye/glow/overlay texture was selected as the body skin. Skipped: {}",
+            texture_resolution.auxiliaries.iter().map(|path| path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_owned()).collect::<Vec<_>>().join(", ")
+        ));
+    } else {
+        model.warnings.push("No body PNG could be resolved from model/renderer references or conservative texture-family matching.".to_owned());
+    }
 
     let part_count = model.parts.len();
     let cube_count = model.cube_count();
