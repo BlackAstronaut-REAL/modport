@@ -6,6 +6,7 @@ use mojmodelbridge::pipeline::convert_model_source;
 use mojmodelbridge::mod_graph::scan_mod_graph;
 use mojmodelbridge::scan::scan_project;
 use mojmodelbridge::workspace_validation::validate_workspace;
+use mojmodelbridge::resource_bridge::copy_source_resources;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -53,6 +54,15 @@ enum Command {
         /// Skip writing the JSON and text validation report files.
         #[arg(long)]
         no_reports: bool,
+    },
+    /// Copy imported mod assets/data while remapping namespaces for the target workspace.
+    CopyResources {
+        source_root: PathBuf,
+        output_resources: PathBuf,
+        #[arg(long)]
+        source_modid: Option<String>,
+        #[arg(long)]
+        target_modid: Option<String>,
     },
     /// Safely extract a JAR or ZIP archive.
     Extract {
@@ -131,6 +141,15 @@ fn main() -> Result<()> {
             if !report.ok {
                 std::process::exit(2);
             }
+        }
+        Command::CopyResources { source_root, output_resources, source_modid, target_modid } => {
+            let copied = copy_source_resources(
+                &source_root,
+                &output_resources,
+                source_modid.as_deref(),
+                target_modid.as_deref(),
+            )?;
+            println!("Copied {copied} source resource/data file(s) into {}.", output_resources.display());
         }
         Command::Extract { archive, destination } => {
             let path = mojmodelbridge::archive::extract_archive(&archive, &destination)?;
