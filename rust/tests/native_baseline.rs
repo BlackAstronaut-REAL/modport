@@ -115,3 +115,25 @@ fn converts_compiled_legacy_model_class_without_javap() {
     assert_eq!(project["elements"].as_array().unwrap().len(), converted.cube_count);
     assert!(!project["groups"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn converts_compiled_modern_mojmap_model_without_jdk() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("ModelModernBytecode.class");
+    let output = temp.path().join("compiled-modern/ModelModernBytecode.bbmodel");
+    fs::write(
+        &source,
+        include_bytes!("fixtures/ModelModernBytecode.class"),
+    ).unwrap();
+
+    let converted = convert_model_source(&source, &output, &[], false).unwrap();
+    assert_eq!(converted.source_format, "modern_mojmap_bytecode");
+    assert_eq!(converted.part_count, 2);
+    assert_eq!(converted.cube_count, 2);
+
+    let project: serde_json::Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(project["resolution"]["width"], 64);
+    assert_eq!(project["resolution"]["height"], 64);
+    assert_eq!(project["elements"].as_array().unwrap().len(), 2);
+    assert_eq!(project["outliner"][0]["children"].as_array().unwrap().len(), 2);
+}
