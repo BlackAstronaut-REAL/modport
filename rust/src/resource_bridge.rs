@@ -1,0 +1,315 @@
+use anyhow::{Context, Result};
+use serde_json::Value;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+use walkdir::WalkDir;
+
+fn files_under(root: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = WalkDir::new(root).follow_links(false).into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path()).collect();
+    files.sort();
+    files
+}
+
+fn named_directories(root: &Path, name: &str) -> Vec<PathBuf> {
+    WalkDir::new(root).follow_links(false).into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_dir() && entry.file_name().to_string_lossy().eq_ignore_ascii_case(name))
+        .map(|entry| entry.into_path()).collect()
+}
+
+fn resource_roots(root: &Path, name: &str) -> Vec<PathBuf> {
+    let candidates = if name == "assets" {
+        vec![root.join("src/main/resources/assets"), root.join("assets"), root.join("src/main/resources")]
+    } else {
+        vec![root.join("src/main/resources/data"), root.join("data")]
+    };
+    let mut roots: Vec<PathBuf> = candidates.into_iter().filter(|p| p.exists()).collect();
+    roots.extend(named_directories(root, name));
+    roots
+}
+
+fn relative_components(path: &Path) -> Vec<String> {
+    path.components().filter_map(|component| match component {
+        Component::Normal(value) => Some(value.to_string_lossy().into_owned()),
+        _ => None,
+    }).collect()
+}
+
+fn relative_key(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/").to_lowercase()
+}
+
+fn rewrite_namespace_string(value: &str, source_modid: &str, target_modid: &str) -> String {
+    let source = source_modid.trim().to_lowercase();
+    let target = target_modid.trim().to_lowercase();
+    if source.is_empty() || target.is_empty() || source == target { return value.to_owned(); }
+    let prefix = format!("{source}:");
+    if value.to_lowercase().starts_with(&prefix) {
+        return format!("{target}{}", &value[source.len()..]);
+    }
+    let tag_prefix = format!("#{source}:");
+    if value.to_lowercase().starts_with(&tag_prefix) {
+        return format!("#{target}{}", &value[source.len() + 1..]);
+    }
+    value.to_owned()
+}
+
+fn rewrite_namespace(value: Value, source_modid: &str, target_modid: &str) -> Value {
+    match value {
+        Value::String(text) => Value::String(rewrite_namespace_string(&text, source_modid, target_modid)),
+        Value::Array(values) => Value::Array(values.into_iter().map(|v| rewrite_namespace(v, source_modid, target_modid)).collect()),
+        Value::Object(values) => Value::Object(values.into_iter().map(|(k, v)| (k, rewrite_namespace(v, source_modid, target_modid))).collect()),
+        other => other,
+    }
+}
+
+fn rewrite_sound_json(value: Value, source_modid: &str, target_modid: &str) -> Value {
+    match value {
+        Value::String(text) => {
+            let mut output = text;
+            if let Some((namespace, path)) = output.split_once(':') {
+                if namespace.eq_ignore_ascii_case(source_modid.trim()) {
+                    output = format!("{}:{path}", target_modid.trim().to_lowercase());
+                }
+            }
+            if let Some(path) = output.strip_prefix("sounds/") {
+                output = format!("sounds/{}", path.to_lowercase());
+            } else if let Some((namespace, path)) = output.split_once(':') {
+                if namespace.eq_ignore_ascii_case(target_modid.trim()) && path.starts_with("sounds/") {
+                    output = format!("{namespace}:sounds/{}", &path[7..].to_lowercase());
+                }
+            }
+            Value::String(output)
+        }
+        Value::Array(values) => Value::Array(values.into_iter().map(|v| rewrite_sound_json(v, source_modid, target_modid)).collect()),
+        Value::Object(values) => Value::Object(values.into_iter().map(|(k, v)| (k, rewrite_sound_json(v, source_modid, target_modid))).collect()),
+        other => other,
+    }
+}
+
+fn rewrite_biome_modifier_type(value: Value) -> Value {
+    match value {
+        Value::String(text) if text.eq_ignore_ascii_case("forge:add_features") => Value::String("neoforge:add_features".to_owned()),
+        Value::Array(values) => Value::Array(values.into_iter().map(rewrite_biome_modifier_type).collect()),
+        Value::Object(values) => Value::Object(values.into_iter().map(|(k, v)| (k, rewrite_biome_modifier_type(v))).collect()),
+        other => other,
+    }
+}
+
+fn read_json(path: &Path) -> Option<Value> {
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()
+}
+
+fn write_json(path: &Path, value: &Value) -> Result<()> {
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+    fs::write(path, format!("{}\n", serde_json::to_string_pretty(value)?))
+        .with_context(|| format!("Writing imported resource {}", path.display()))
+}
+
+fn copy_if_missing(source: &Path, destination: &Path) -> Result<bool> {
+    if !source.is_file() || destination.exists() { return Ok(false); }
+    if let Some(parent) = destination.parent() { fs::create_dir_all(parent)?; }
+    fs::copy(source, destination)
+        .with_context(|| format!("Copying {} to {}", source.display(), destination.display()))?;
+    Ok(true)
+}
+
+fn remap_first_component(relative: &Path, source_modid: &str, target_modid: &str) -> PathBuf {
+    let parts = relative_components(relative);
+    if parts.len() < 2 || !parts[0].eq_ignore_ascii_case(source_modid.trim()) {
+        return relative.to_path_buf();
+    }
+    let mut output = PathBuf::from(target_modid.trim());
+    for part in parts.iter().skip(1) { output.push(part); }
+    output
+}
+
+fn lowercase_sound_path(relative: &Path) -> PathBuf {
+    let parts = relative_components(relative);
+    if parts.len() < 3 || !parts[1].eq_ignore_ascii_case("sounds") { return relative.to_path_buf(); }
+    let mut output = PathBuf::new();
+    for part in &parts[..parts.len() - 1] { output.push(part); }
+    output.push(parts.last().unwrap().to_lowercase());
+    output
+}
+
+fn contains_generated_data_directory(relative: &Path) -> bool {
+    let generated = ["dimension", "dimension_type", "biome", "biomes", "recipes"];
+    relative_components(relative).iter().skip(1)
+        .any(|part| generated.contains(&part.to_lowercase().as_str()))
+}
+
+/// Native port of oldVer/mcreator_source_bridge.py::_copy_source_resources.
+pub fn copy_source_resources(
+    source_root: &Path,
+    output_resources: &Path,
+    source_modid: Option<&str>,
+    target_modid: Option<&str>,
+) -> Result<usize> {
+    let source_modid = source_modid.unwrap_or("").trim();
+    let target_modid = target_modid.unwrap_or("").trim();
+    let mut copied = 0usize;
+    let mut seen = HashSet::<String>::new();
+
+    for assets_root in resource_roots(source_root, "assets") {
+        for source in files_under(&assets_root) {
+            let Ok(relative) = source.strip_prefix(&assets_root) else { continue };
+            if !seen.insert(relative_key(relative)) { continue; }
+            let mut relative = relative.to_path_buf();
+            if !source_modid.is_empty() && !target_modid.is_empty() {
+                relative = remap_first_component(&relative, source_modid, target_modid);
+            }
+            let mut destination = output_resources.join("assets").join(&relative);
+            if source.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("json"))
+                && !source_modid.is_empty() && !target_modid.is_empty() {
+                if let Some(mut payload) = read_json(&source) {
+                    payload = rewrite_namespace(payload, source_modid, target_modid);
+                    if relative.file_name().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("sounds.json"))
+                        && payload.is_object() {
+                        payload = rewrite_sound_json(payload, source_modid, target_modid);
+                    }
+                    write_json(&destination, &payload)?;
+                    copied += 1;
+                    continue;
+                }
+            }
+            let parts = relative_components(&relative);
+            if parts.len() >= 3 && parts[1].eq_ignore_ascii_case("sounds")
+                && source.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("ogg")) {
+                relative = lowercase_sound_path(&relative);
+                destination = output_resources.join("assets").join(&relative);
+            }
+            if copy_if_missing(&source, &destination)? { copied += 1; }
+        }
+    }
+
+    seen.clear();
+    for data_root in resource_roots(source_root, "data") {
+        for source in files_under(&data_root) {
+            let Ok(relative) = source.strip_prefix(&data_root) else { continue };
+            if !seen.insert(relative_key(relative)) || contains_generated_data_directory(relative) { continue; }
+            let mut relative = relative.to_path_buf();
+            let parts = relative_components(&relative);
+            if !source_modid.is_empty() && !target_modid.is_empty()
+                && parts.first().is_some_and(|part| part.eq_ignore_ascii_case(source_modid)) {
+                relative = remap_first_component(&relative, source_modid, target_modid);
+            }
+            let parts = relative_components(&relative);
+            if !target_modid.is_empty() && parts.len() >= 3
+                && parts[1].eq_ignore_ascii_case("forge") && parts[2].eq_ignore_ascii_case("biome_modifier") {
+                let mut migrated = PathBuf::from(target_modid);
+                migrated.push("neoforge");
+                migrated.push("biome_modifier");
+                for part in parts.iter().skip(3) { migrated.push(part); }
+                relative = migrated;
+            }
+            let destination = output_resources.join("data").join(&relative);
+            if source.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("json"))
+                && !source_modid.is_empty() && !target_modid.is_empty() {
+                if let Some(payload) = read_json(&source) {
+                    let payload = rewrite_biome_modifier_type(rewrite_namespace(payload, source_modid, target_modid));
+                    write_json(&destination, &payload)?;
+                    copied += 1;
+                    continue;
+                }
+            }
+            if copy_if_missing(&source, &destination)? { copied += 1; }
+        }
+    }
+    Ok(copied)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn remaps_asset_namespaces_and_sound_sample_paths() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let output = temp.path().join("out");
+        let namespace = source.join("assets/chaospersists");
+        fs::create_dir_all(namespace.join("sounds/entity")).unwrap();
+        fs::create_dir_all(namespace.join("models/item")).unwrap();
+        fs::write(namespace.join("sounds/entity/ROAR.OGG"), b"OggS").unwrap();
+        fs::write(namespace.join("models/item/ore.json"), serde_json::to_vec(&json!({
+            "parent":"chaospersists:item/generated",
+            "texture":"#chaospersists:items/ore",
+            "vanilla":"minecraft:item/generated"
+        })).unwrap()).unwrap();
+        fs::write(namespace.join("sounds.json"), serde_json::to_vec(&json!({
+            "chaospersists.entity.roar":{"sounds":[{"name":"chaospersists:sounds/Entity/ROAR"}]}
+        })).unwrap()).unwrap();
+
+        let copied = copy_source_resources(&source, &output, Some("chaospersists"), Some("targetmod")).unwrap();
+        assert!(copied >= 3);
+        assert!(output.join("assets/targetmod/sounds/entity/roar.ogg").is_file());
+        let model: Value = serde_json::from_slice(&fs::read(output.join("assets/targetmod/models/item/ore.json")).unwrap()).unwrap();
+        assert_eq!(model["parent"], "targetmod:item/generated");
+        assert_eq!(model["texture"], "#targetmod:items/ore");
+        assert_eq!(model["vanilla"], "minecraft:item/generated");
+        let sounds: Value = serde_json::from_slice(&fs::read(output.join("assets/targetmod/sounds.json")).unwrap()).unwrap();
+        assert_eq!(sounds["chaospersists.entity.roar"]["sounds"][0]["name"], "targetmod:sounds/entity/roar");
+    }
+
+    #[test]
+    fn skips_generated_data_and_migrates_forge_biome_modifiers() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let output = temp.path().join("out");
+        let generated = source.join("data/demo/dimension_type");
+        let modifier = source.join("data/demo/forge/biome_modifier");
+        let feature = source.join("data/demo/worldgen/placed_feature");
+        fs::create_dir_all(&generated).unwrap();
+        fs::create_dir_all(&modifier).unwrap();
+        fs::create_dir_all(&feature).unwrap();
+        fs::write(generated.join("dimension.json"), b"{\"ignored\":true}").unwrap();
+        fs::write(modifier.join("add_ore.json"), serde_json::to_vec(&json!({
+            "type":"forge:add_features","features":["demo:ore"]
+        })).unwrap()).unwrap();
+        fs::write(feature.join("ore.json"), serde_json::to_vec(&json!({"feature":"demo:ore"})).unwrap()).unwrap();
+
+        let copied = copy_source_resources(&source, &output, Some("demo"), Some("newmod")).unwrap();
+        assert_eq!(copied, 2);
+        assert!(!output.join("data/newmod/dimension_type/dimension.json").exists());
+        let migrated: Value = serde_json::from_slice(&fs::read(output.join("data/newmod/neoforge/biome_modifier/add_ore.json")).unwrap()).unwrap();
+        assert_eq!(migrated["type"], "neoforge:add_features");
+        assert_eq!(migrated["features"][0], "newmod:ore");
+        let worldgen: Value = serde_json::from_slice(&fs::read(output.join("data/newmod/worldgen/placed_feature/ore.json")).unwrap()).unwrap();
+        assert_eq!(worldgen["feature"], "newmod:ore");
+    }
+
+    #[test]
+    fn preserves_existing_plain_files_and_copies_animated_texture_metadata() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let output = temp.path().join("out");
+        let src_assets = source.join("assets/demo/textures/item");
+        let dst_assets = output.join("assets/demo/textures/item");
+        fs::create_dir_all(&src_assets).unwrap();
+        fs::create_dir_all(&dst_assets).unwrap();
+        fs::write(src_assets.join("icon.png"), b"new-png").unwrap();
+        fs::write(src_assets.join("icon.png.mcmeta"), b"{\"animation\":{}}").unwrap();
+        fs::write(dst_assets.join("icon.png"), b"existing-png").unwrap();
+
+        copy_source_resources(&source, &output, Some("demo"), Some("demo")).unwrap();
+        assert_eq!(fs::read(dst_assets.join("icon.png")).unwrap(), b"existing-png");
+        assert_eq!(fs::read(dst_assets.join("icon.png.mcmeta")).unwrap(), b"{\"animation\":{}}");
+    }
+
+    #[test]
+    fn rewrites_resource_location_values_but_not_object_keys() {
+        let value = json!({"#demo:old_tag":"demo:item/a","unchanged":"minecraft:stone"});
+        let result = rewrite_namespace(value, "demo", "other");
+        assert_eq!(result["#demo:old_tag"], "other:item/a");
+        assert_eq!(rewrite_namespace_string("#demo:old_tag", "demo", "other"), "#other:old_tag");
+        assert_eq!(result["unchanged"], "minecraft:stone");
+    }
+}
