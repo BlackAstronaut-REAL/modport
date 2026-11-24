@@ -18,6 +18,7 @@ pub mod mcreator_entity;
 pub mod mod_graph;
 pub mod model;
 pub mod pipeline;
+pub mod recipe_bridge;
 pub mod resource_bridge;
 pub mod source_bridge;
 pub mod scan;
