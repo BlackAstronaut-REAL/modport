@@ -46,7 +46,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- validate-workspace path/to/MCreatorWorkspace
     cargo run --manifest-path rust/Cargo.toml -- copy-resources path/to/source path/to/workspace/src/main/resources --source-modid oldmod --target-modid newmod
     cargo run --manifest-path rust/Cargo.toml -- copy-model-sources path/to/workspace com.example.mod --model path/to/Model.java --animation path/to/ModelAnimation.java
-    cargo run --manifest-path rust/Cargo.toml -- export-model path/to/Model.java path/to/MCreatorWorkspace --modid demo
+    cargo run --manifest-path rust/Cargo.toml -- export-model-sources path/to/Model.java path/to/MCreatorWorkspace --modid demo
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
