@@ -37,7 +37,7 @@ the engine into the native executable.
 - MCreator Mojmap model Java generation and sampled AnimationDefinition export, with helper splitting for large clips and repeated-render instance support.
 - Resource-only biome/dimension discovery and conversion of dimension-type flags, biome effects and spawn tables into MCreator definition fields.
 - Native block model/blockstate inference for MCreator render types, plus referenced texture materialization with animation sidecars and collision-safe names.
-- Native Minecraft recipe discovery and conversion helpers for shaped/shapeless crafting, cooking, stonecutting and smithing; item/block/tag references are mapped to MCreator tokens.
+- Native Minecraft recipe discovery, MCreator element emission, workspace descriptor updates and data-pack copying for shaped/shapeless crafting, cooking, stonecutting and smithing; item/block/tag references are mapped to MCreator tokens.
 - The convert-model command writes .bbmodel files and preserves recognized
   procedural animation methods into Java/JSON sidecars.
 
@@ -50,6 +50,7 @@ the engine into the native executable.
     cargo run --manifest-path rust/Cargo.toml -- copy-resources path/to/source path/to/workspace/src/main/resources --source-modid oldmod --target-modid newmod
     cargo run --manifest-path rust/Cargo.toml -- copy-model-sources path/to/workspace com.example.mod --model path/to/Model.java --animation path/to/ModelAnimation.java
     cargo run --manifest-path rust/Cargo.toml -- export-model-sources path/to/Model.java path/to/MCreatorWorkspace --modid demo
+    cargo run --manifest-path rust/Cargo.toml -- export-recipes path/to/MCreatorWorkspace path/to/source --source-modid oldmod --registry-map path/to/registry-map.json
 
 It currently converts decompiled .java and supported legacy/modern Mojmap .class
 models. The legacy compiled animation preview sampler handles a constrained math
@@ -62,7 +63,7 @@ the full texture-selection edge-case corpus remain in progress.
 The bytecode interpreters and initial legacy animation/texture stages now exist,
 but still need wider parity coverage. Remaining major ports are compiled JVM renderer-registration and full entity-stat
 reconstruction, modern compiled animation extraction, advanced animation control-
-flow and loop baking, MCreator workspace/content/source exporters and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
+flow and loop baking, Remaining MCreator item/tool/armor/block/plant/biome/dimension/projectile exports, full compile bridge and complete batch/resume/report pipeline. The app UI is not considered complete until these use the native engine.
 
 ## Parity rules
 
@@ -85,7 +86,7 @@ mojmodelbridge export-model-sources .\ModelDragon.java .\MCreatorWorkspace --mod
 
 ### Renderer-linked MCreator entity export
 
-Export renderer-linked entities from a mixed source/class mod directory into an existing MCreator workspace. The command creates model and AnimationDefinition Java sources, copies them into the workspace package, resolves body textures or writes placeholders, generates living-entity element JSON, and updates the workspace manifest and English language map. It does not yet port item/block/biome/projectile exports or the full Gradle compile bridge.
+Export renderer-linked entities from a mixed source/class mod directory into an existing MCreator workspace. The command creates model and AnimationDefinition Java sources, copies them into the workspace package, resolves body textures or writes placeholders, generates living-entity element JSON, and updates the workspace manifest and English language map. It does not yet port item/tool/armor/block/plant/biome/dimension/projectile exports or the full Gradle compile bridge.
 
 ```powershell
 mojmodelbridge export-mcreator-entities .\ExtractedMod .\MCreatorWorkspace --source-root .\DecompiledSources
