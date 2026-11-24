@@ -962,6 +962,49 @@ fn block_render_shape(path: &Path, source: &mojmodelbridge::mcreator_block::Bloc
     if shape == "custom" && is_plant_source(source) { "plant".to_owned() } else { shape }
 }
 
+fn append_paths(target: &mut Vec<PathBuf>, values: &[PathBuf]) {
+    for value in values {
+        if !target.contains(value) { target.push(value.clone()); }
+    }
+}
+
+fn find_armor_layer_textures(files: &[PathBuf], prefix: &str, source: &str) -> Vec<PathBuf> {
+    let normalized_prefix = compact(prefix.trim_end_matches("Armor").trim_end_matches("armor"));
+    let mut result = Vec::<PathBuf>::new();
+    for reference in declared_texture_refs(source) {
+        if let Some(path) = find_texture_reference(files, std::slice::from_ref(&reference)) {
+            if path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/armor/")
+                && !result.contains(&path)
+            {
+                result.push(path);
+            }
+        }
+    }
+
+    let mut candidates = files.iter().filter(|path| {
+        if !path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("png")) {
+            return false;
+        }
+        let normalized = path.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+        if !normalized.contains("/textures/models/armor/")
+            && !normalized.contains("/textures/armor/")
+        {
+            return false;
+        }
+        let stem = compact(path.file_stem().and_then(|value| value.to_str()).unwrap_or(""));
+        normalized_prefix.is_empty() || stem.contains(&normalized_prefix)
+    }).cloned().collect::<Vec<_>>();
+    candidates.sort_by_key(|path| {
+        let file = path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+        let layer = if file.contains("layer_1") || file.contains("layer1") { 0 }
+            else if file.contains("layer_2") || file.contains("layer2") { 1 }
+            else { 2 };
+        (layer, path.to_string_lossy().to_ascii_lowercase())
+    });
+    append_paths(&mut result, &candidates);
+    result
+}
+
 fn resource_model_texture_paths(files: &[PathBuf], model: &Path) -> Vec<PathBuf> {
     let Ok(bytes) = fs::read(model) else { return Vec::new(); };
     let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { return Vec::new(); };
