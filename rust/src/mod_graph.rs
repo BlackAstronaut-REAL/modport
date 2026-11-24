@@ -760,6 +760,7 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
                     };
                     let arguments = compiled_pop_n(&mut stack, parsed.parameters.len());
                     let receiver = if op == 0xb8 { CompiledValue::Null } else { compiled_pop(&mut stack) };
+                    if debug_entity { println!("MBDBG invoke @{} {}{} args={:?} receiver={:?}", instruction.offset, name, descriptor, arguments, receiver); }
 
                     if name == "<init>" {
                         if let CompiledValue::Object(index) = receiver {
@@ -893,6 +894,8 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
     for method in &class.methods {
         let Some(code) = method.code.as_ref() else { continue; };
         let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+        let debug_entity = class_name == "EntityStatFixture";
+        if debug_entity { println!("MBDBG method {} {}", method.name, method.descriptor); }
         let mut stack = Vec::<CompiledValue>::new();
         let mut objects = Vec::<CompiledObject>::new();
         let mut current_attribute: Option<&'static str> = None;
@@ -922,6 +925,7 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
 
             if (0x02..=0x14).contains(&op) {
                 if let Some(value) = compiled_constant(&class, instruction) {
+                    if debug_entity { println!("MBDBG ldc @{} op={:02x} value={:?}", instruction.offset, op, value); }
                     if let CompiledValue::Number(number) = value {
                         recent_numeric = Some(number);
                         stack.push(CompiledValue::Number(number));
@@ -1056,6 +1060,7 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
         }
     }
 
+    if class_name == "EntityStatFixture" { println!("MBDBG size_values={:?} metadata={:?}", size_values, metadata); }
     let has_size_assignment = !size_values.is_empty();
     if let Some((width, height)) = size_values.iter().copied()
         .max_by(|a, b| (a.0 * a.1).total_cmp(&(b.0 * b.1)))
