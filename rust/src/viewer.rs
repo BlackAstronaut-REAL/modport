@@ -13,6 +13,9 @@ pub struct ViewerCube {
     pub min: [f32; 3],
     pub max: [f32; 3],
     pub uv_origin: [f32; 2],
+    /// Optional per-face UV rectangles in source texture pixels. Minecraft
+    /// resource item models use independent face UVs rather than a ModelBox net.
+    pub face_uvs: Option<[[f32; 4]; 6]>,
     pub mirror: bool,
     pub name: String,
 }
@@ -123,6 +126,7 @@ impl ViewerScene {
                         (cube.z + cube.dz + cube.inflate) as f32,
                     ],
                     uv_origin: [cube.uv_x as f32, cube.uv_y as f32],
+                    face_uvs: None,
                     mirror: cube.mirror,
                     name: cube.name.clone(),
                 }
