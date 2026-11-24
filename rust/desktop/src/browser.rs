@@ -711,9 +711,9 @@ fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::Equipment
     let mut properties = serde_json::Map::new();
     let mut lore = Vec::new();
     let fields: &[(&str, &[&str], &str)] = &[
-        ("max_stack_size", &["setMaxStackSize", "stacksTo", "maxStackSize"], "Stack size"),
-        ("max_damage", &["setMaxDamage", "durability", "maxDamage"], "Durability"),
-        ("attack_damage", &["setAttackDamage", "attackDamage"], "Attack damage"),
+        ("max_stack_size", &["setMaxStackSize", "stacksTo", "maxStackSize", "getItemStackLimit"], "Stack size"),
+        ("max_damage", &["setMaxDamage", "durability", "maxDamage", "getMaxDamage"], "Durability"),
+        ("attack_damage", &["setAttackDamage", "attackDamage", "getDamageVsEntity"], "Attack damage"),
         ("enchantability", &["getItemEnchantability", "getEnchantability", "enchantability"], "Enchantability"),
         ("nutrition", &["setHealAmount", "nutrition"], "Food nutrition"),
         ("saturation", &["setSaturationModifier", "saturationMod", "saturation"], "Food saturation"),
