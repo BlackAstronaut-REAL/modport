@@ -232,8 +232,6 @@ fn draw_cube(
     let dx = x1 - x0;
     let dy = y1 - y0;
 
-    let side_v0 = v + dz;
-    let side_v1 = v + dz + dy;
     let mut faces = Vec::<([MeshVertex; 4], [f32; 3])>::with_capacity(6);
 
     // Face vertex order and UV corner order mirror the vanilla ModelBox /
@@ -479,4 +477,53 @@ pub fn draw_spawn_egg(ui: &mut egui::Ui, size: f32, selected: bool) {
     painter.circle_filled(center + egui::vec2(0.0, size * 0.05), size * 0.13, Color32::from_rgb(93, 153, 71));
     painter.circle_filled(center + egui::vec2(size * 0.08, -size * 0.09), size * 0.045, Color32::from_rgb(54, 112, 61));
     painter.circle_filled(center + egui::vec2(-size * 0.10, size * 0.11), size * 0.035, Color32::from_rgb(54, 112, 61));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mojmodelbridge::viewer::{ViewerAnimation, ViewerNode};
+
+    #[test]
+    fn quad_uvs_follow_vanilla_textured_quad_vertex_order() {
+        let points = [[0.0, 0.0, 0.0]; 4];
+        let vertices = quad_from_rect(points, [1.0, 2.0, 3.0, 4.0], false, 16.0, 16.0);
+        assert_eq!(vertices[0].uv, [3.0 / 16.0, 2.0 / 16.0]);
+        assert_eq!(vertices[1].uv, [1.0 / 16.0, 2.0 / 16.0]);
+        assert_eq!(vertices[2].uv, [1.0 / 16.0, 4.0 / 16.0]);
+        assert_eq!(vertices[3].uv, [3.0 / 16.0, 4.0 / 16.0]);
+    }
+
+    #[test]
+    fn software_viewport_draws_a_textured_scene_without_gpu_state() {
+        let scene = ViewerScene {
+            name: "TestCube".to_owned(),
+            texture_size: [16, 16],
+            texture: String::new(),
+            texture_variants: Vec::new(),
+            nodes: vec![ViewerNode {
+                name: "body".to_owned(),
+                parent: None,
+                local_translation: [0.0, 12.0, 0.0],
+                base_rotation: [0.0; 3],
+                cubes: vec![ViewerCube {
+                    min: [-4.0, -8.0, -4.0],
+                    max: [4.0, 0.0, 4.0],
+                    uv_origin: [0.0, 0.0],
+                    mirror: false,
+                    name: "body_cube".to_owned(),
+                }],
+            }],
+            animations: Vec::<ViewerAnimation>::new(),
+            warnings: Vec::new(),
+        };
+        let pose = [NodePose {
+            translation: [0.0, 12.0, 0.0],
+            rotation: [0.0; 3],
+        }];
+        let mut camera = Camera::default();
+        let rendered = render_scene(&scene, &pose, None, [160, 160], &mut camera);
+        let background = Color32::from_rgb(22, 27, 38);
+        assert!(rendered.pixels.iter().any(|pixel| *pixel != background));
+    }
 }
