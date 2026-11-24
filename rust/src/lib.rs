@@ -31,3 +31,5 @@ pub const LEGACY_REFERENCE_VERSION: &str = "3.4.0-beta12";
 pub mod workspace_validation;
 pub mod worldgen_bridge;
 pub mod mcreator_workspace;
+
+pub mod mcreator_equipment;
