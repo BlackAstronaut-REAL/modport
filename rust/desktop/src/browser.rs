@@ -150,20 +150,31 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         } else {
             "Items"
         };
+        let resource_model_source = find_item_model_json(&all_files, &registry);
+        let (renderer_model, renderer_textures) = find_held_renderer_model(&all_files, &registry);
         let texture_refs = equipment_texture_refs(&source.source_text);
         let icon_path = find_texture_reference(&all_files, &texture_refs)
             .or_else(|| renderer_textures.first().cloned())
             .or_else(|| resource_model_source.as_ref()
                 .and_then(|path| resource_model_texture_paths(&all_files, path).first().cloned()));
-        let resource_model_source = find_item_model_json(&all_files, &registry);
-        let (renderer_model, renderer_textures) = find_held_renderer_model(&all_files, &registry);
         let model_source = renderer_model
             .or_else(|| find_linked_java_model(&all_files, &source.source_text, false));
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
-        let components_json = find_item_components(&all_files, &registry)
-            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
-            .unwrap_or_else(|| "{}".to_owned());
+        let (source_properties, source_property_lore) = item_source_properties(source);
+        append_unique(&mut lore, &source_property_lore);
+        let mut components = find_item_components(&all_files, &registry)
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(object) = components.as_object_mut() {
+            object.insert("source_properties".to_owned(), source_properties);
+        } else {
+            components = serde_json::json!({
+                "minecraft_components": components,
+                "source_properties": source_properties,
+            });
+        }
+        let components_json = serde_json::to_string_pretty(&components)
+            .unwrap_or_else(|_| "{}".to_owned());
         let mut texture_paths = renderer_textures;
         if let Some(path) = resource_model_source.as_ref() {
             append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
@@ -660,6 +671,52 @@ fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource
         "sword", "bow", "crossbow", "trident", "dagger", "spear",
         "weapon", "battleaxe", "waraxe", "mace",
     ].iter().any(|token| evidence.contains(token))
+}
+
+fn numeric_source_call(source: &str, methods: &[&str]) -> Option<f64> {
+    let alternatives = methods.iter().map(|name| regex::escape(name)).collect::<Vec<_>>().join("|");
+    let pattern = Regex::new(&format!(
+        r"(?is)(?:\b(?:{alternatives})\s*\(\s*|\b(?:{alternatives})\s*=\s*)([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?"
+    )).ok()?;
+    pattern.captures(source).and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<f64>().ok())
+}
+
+fn item_source_properties(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> (Value, Vec<String>) {
+    let text = &source.source_text;
+    let mut properties = serde_json::Map::new();
+    let mut lore = Vec::new();
+    let fields: &[(&str, &[&str], &str)] = &[
+        ("max_stack_size", &["setMaxStackSize", "stacksTo", "maxStackSize"], "Stack size"),
+        ("max_damage", &["setMaxDamage", "durability", "maxDamage"], "Durability"),
+        ("attack_damage", &["setAttackDamage", "attackDamage"], "Attack damage"),
+        ("enchantability", &["getItemEnchantability", "getEnchantability", "enchantability"], "Enchantability"),
+        ("nutrition", &["setHealAmount", "nutrition"], "Food nutrition"),
+        ("saturation", &["setSaturationModifier", "saturationMod", "saturation"], "Food saturation"),
+    ];
+    for (key, names, label) in fields {
+        if let Some(value) = numeric_source_call(text, names) {
+            properties.insert((*key).to_owned(), serde_json::json!(value));
+            lore.push(format!("{label}: {}", format_stat(value)));
+        }
+    }
+    if let Some(capture) = Regex::new(r"(?i)\b(?:Rarity|EnumRarity)\s*\.\s*(COMMON|UNCOMMON|RARE|EPIC)").unwrap()
+        .captures(text)
+    {
+        let rarity = capture[1].to_ascii_lowercase();
+        properties.insert("rarity".to_owned(), serde_json::json!(rarity));
+        lore.push(format!("Rarity: {}", capture[1].to_ascii_lowercase()));
+    }
+    if let Some(tool_type) = source.tool_type.as_deref() {
+        properties.insert("tool_type".to_owned(), serde_json::json!(tool_type));
+        lore.push(format!("Tool type: {tool_type}"));
+    }
+    let no_repair = text.contains("setNoRepair") || text.contains("setNoRepair()");
+    if no_repair {
+        properties.insert("repairable".to_owned(), serde_json::json!(false));
+    }
+    properties.insert("is_food".to_owned(), serde_json::json!(is_food_source(text, &source.superclass)));
+    (Value::Object(properties), lore)
 }
 
 fn is_food_source(source: &str, superclass: &str) -> bool {
