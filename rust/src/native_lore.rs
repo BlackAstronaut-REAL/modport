@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn preserves_escaped_java_strings_and_ignores_unrecognized_format_constants() {
         let source = r#"
-            tooltip.add(TextFormatting.GOLD + "Line\\nOne");
+            tooltip.add(TextFormatting.GOLD + "Line\nOne");
             tooltip.add(TextFormatting.NOT_A_REAL_CODE + "Fallback");
         "#;
         let lore = extract_legacy_lore(source);
