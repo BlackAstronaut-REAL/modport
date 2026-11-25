@@ -1236,16 +1236,19 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     }
 
     let index = source_index(&java_paths);
-    let mut registry = compiled_registry_names(&class_paths);
+    // Entity registry IDs are separate from the broader item/block registry map.
+    let mut entity_registry = compiled_registry_names(&class_paths);
+    for (entity, name) in registry_names(&java_paths) {
+        entity_registry.insert(entity, name);
+    }
+    let mut registry = entity_registry.clone();
     for (class, names) in &compiled_content.registries {
         if let Some(name) = names.iter().next() {
             registry.entry(class.clone()).or_insert_with(|| name.clone());
         }
     }
-    // Source registrations are more descriptive than the compact legacy
-    // compiled call pattern, so explicit source IDs take precedence.
-    for (entity, name) in registry_names(&java_paths) {
-        registry.insert(entity, name);
+    for (entity, name) in &entity_registry {
+        registry.insert(entity.clone(), name.clone());
     }
     let field_entities = registry_field_entities(&java_paths);
     let mut registrations = Vec::new();
@@ -1322,33 +1325,29 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     ));
 
     let mut entities = BTreeMap::new();
-    for registration in &registrations {
-        if entities.contains_key(&registration.entity_class) { continue; }
-        let source = java_files.get(&registration.entity_class)
-            .or_else(|| java_files.get(simple_name(&registration.entity_class)));
+    let mut entity_names: HashSet<String> = entity_registry.keys().cloned().collect();
+    entity_names.extend(registrations.iter().map(|registration| registration.entity_class.clone()));
+    for entity_name in entity_names {
+        let entity_registry_name = entity_registry.get(&entity_name).or_else(|| registry.get(&entity_name));
+        let source = java_files.get(&entity_name).or_else(|| java_files.get(simple_name(&entity_name)));
+        let compiled = class_files.get(&entity_name).or_else(|| class_files.get(simple_name(&entity_name)));
         let metadata = if let Some(path) = source {
-            parse_entity_source_metadata(path, registry.get(&registration.entity_class).map(String::as_str))
+            parse_entity_source_metadata(path, entity_registry_name.map(String::as_str))
                 .unwrap_or_else(|_| EntityMetadata {
-                    class_name: registration.entity_class.clone(),
-                    display_name: class_display_name(&registration.entity_class),
-                    registry_name: registry.get(&registration.entity_class).cloned().unwrap_or_else(|| registry_slug(&registration.entity_class)),
+                    class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
+                    registry_name: entity_registry_name.cloned().unwrap_or_else(|| registry_slug(&entity_name)),
                     superclass: String::new(), width: default_width(), height: default_height(),
                     health: default_health(), movement_speed: default_speed(), attack_damage: default_attack(),
                     armor: 0.0, follow_range: default_follow(), xp: 0, fire_immune: false, water_mob: false,
                     flying_mob: false, ai_classes: Vec::new(),
                     warnings: vec!["Entity source metadata was not fully parsed; defaults remain in use.".to_owned()]
                 })
-        } else if let Some(path) = class_files.get(&registration.entity_class) {
-            parse_entity_class_metadata(
-                path,
-                &registration.entity_class,
-                registry.get(&registration.entity_class).map(String::as_str)
-            )
+        } else if let Some(path) = compiled {
+            parse_entity_class_metadata(path, &entity_name, entity_registry_name.map(String::as_str))
         } else {
             EntityMetadata {
-                class_name: registration.entity_class.clone(),
-                display_name: class_display_name(&registration.entity_class),
-                registry_name: registry.get(&registration.entity_class).cloned().unwrap_or_else(|| registry_slug(&registration.entity_class)),
+                class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
+                registry_name: entity_registry_name.cloned().unwrap_or_else(|| registry_slug(&entity_name)),
                 superclass: String::new(), width: default_width(), height: default_height(),
                 health: default_health(), movement_speed: default_speed(), attack_damage: default_attack(),
                 armor: 0.0, follow_range: default_follow(), xp: 0, fire_immune: false, water_mob: false,
@@ -1356,7 +1355,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
                 warnings: vec!["Entity class source and compiled class were not found; metadata defaults remain in use.".to_owned()]
             }
         };
-        entities.insert(registration.entity_class.clone(), metadata);
+        entities.insert(entity_name, metadata);
     }
 
     if registrations.is_empty() {
@@ -1541,6 +1540,32 @@ mod tests {
         assert_eq!(metadata.attack_damage, 12.0);
         assert_eq!(metadata.follow_range, 32.0);
         assert_eq!(metadata.armor, 6.0);
+    }
+
+    #[test]
+    fn discovers_registered_entity_without_renderer_registration() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("src/main/java/demo/entity")).unwrap();
+        fs::write(root.join("src/main/java/demo/entity/EntityNoRenderer.java"), r#"
+            public class EntityNoRenderer extends EntityMob {
+                public void applyAttributes() {
+                    getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(36.0D);
+                }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/main/java/demo/entity/EntityRegistry.java"), r#"
+            public class EntityRegistry {
+                RegistryObject<EntityType<EntityNoRenderer>> NO_RENDERER =
+                    ENTITY_TYPES.register("no_renderer", () -> EntityType.Builder.of(EntityNoRenderer::new, MobCategory.MONSTER).build("no_renderer"));
+            }
+        "#).unwrap();
+        let graph = scan_mod_graph(root, &[]).unwrap();
+        let entity = graph.entities.get("EntityNoRenderer")
+            .expect("registered mob must be discovered without a renderer registration");
+        assert_eq!(entity.registry_name, "no_renderer");
+        assert_eq!(entity.health, 36.0);
+        assert!(graph.registrations.is_empty());
     }
 
     #[test]
