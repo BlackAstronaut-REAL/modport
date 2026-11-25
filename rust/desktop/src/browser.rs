@@ -34,8 +34,12 @@ pub struct BrowserEntry {
     pub model_source: Option<PathBuf>,
     /// Java Edition item/block resource model JSON with explicit cuboid elements.
     pub resource_model_source: Option<PathBuf>,
+    /// Blockstate-level X/Y quarter-turns for the primary model.
+    pub resource_model_rotation: [i32; 2],
     /// Remaining blockstate multipart model sources, composed with the primary model.
     pub additional_resource_model_sources: Vec<PathBuf>,
+    /// X/Y quarter-turns aligned with additional_resource_model_sources.
+    pub additional_resource_model_rotations: Vec<[i32; 2]>,
     /// Additional source textures referenced by a linked resource model.
     pub texture_paths: Vec<PathBuf>,
     /// In-game block render archetype inferred from blockstate/model JSON.
@@ -143,7 +147,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path: icon_path.clone(),
             model_source,
             resource_model_source: None,
+            resource_model_rotation: [0, 0],
             additional_resource_model_sources: Vec::new(),
+            additional_resource_model_rotations: Vec::new(),
             texture_paths: icon_path.into_iter().collect(),
             render_shape: None,
             lore: mob_lore,
@@ -206,7 +212,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path,
             model_source,
             resource_model_source,
+            resource_model_rotation: [0, 0],
             additional_resource_model_sources: Vec::new(),
+            additional_resource_model_rotations: Vec::new(),
             texture_paths,
             render_shape: None,
             lore,
@@ -369,7 +377,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             } else {
                 find_block_model_json(&all_files, &registry).0
             },
+            resource_model_rotation: [0, 0],
             additional_resource_model_sources: Vec::new(),
+            additional_resource_model_rotations: Vec::new(),
             texture_paths: Vec::new(),
             render_shape: if category == "Blocks" { Some("orphan texture".to_owned()) } else { None },
             lore,
@@ -399,7 +409,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path: None,
             model_source: Some(path.clone()),
             resource_model_source: None,
+            resource_model_rotation: [0, 0],
             additional_resource_model_sources: Vec::new(),
+            additional_resource_model_rotations: Vec::new(),
             texture_paths: Vec::new(),
             render_shape: None,
             lore: Vec::new(),
