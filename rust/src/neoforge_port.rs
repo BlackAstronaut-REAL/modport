@@ -25,6 +25,7 @@ use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
 use crate::native_block_entity::discover_block_entities;
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
+use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -44,6 +45,7 @@ pub struct NativeItemPlan {
     pub craft_remainder: Option<String>,
     pub generated_as: String,
     pub warnings: Vec<String>,
+    pub method_mappings: Vec<ItemMethodMapping>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -119,6 +121,7 @@ pub struct NativeArmorPlan {
     pub enchantability: u32,
     pub defense: BTreeMap<String, u32>,
     pub piece_lore: BTreeMap<String, Vec<String>>,
+    pub method_mappings: BTreeMap<String, Vec<ItemMethodMapping>>,
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
@@ -134,6 +137,7 @@ pub struct NeoForgePortReport {
     pub source_roots: Vec<String>,
     pub source_file_counts: BTreeMap<String, usize>,
     pub items: Vec<NativeItemPlan>,
+    pub detected_item_methods: Vec<ItemMethodMapping>,
     pub blocks: Vec<NativeBlockPlan>,
     pub block_entities: Vec<NativeBlockEntityPlan>,
     pub entities: Vec<NativeEntityPlan>,
@@ -505,6 +509,7 @@ pub fn port_to_neoforge(
             (true, false, false, false) => "vanilla Item registration".to_owned(),
         },
         warnings: item.warnings.clone(),
+        method_mappings: map_legacy_item_methods(&item.source_text),
     }).collect();
     items.extend(tool_records.iter().map(|tool| NativeItemPlan {
         registry_name: tool.id.clone(),
@@ -520,6 +525,10 @@ pub fn port_to_neoforge(
         craft_remainder: None,
         generated_as: if tool.lore.is_empty() { native_tool_generated_kind(&tool.kind).to_owned() } else { format!("{} with formatted legacy tooltip lore", native_tool_generated_kind(&tool.kind)) },
         warnings: tool.warnings.clone(),
+        method_mappings: equipment.iter()
+            .find(|source| source.class_name == tool.class_name)
+            .map(|source| map_legacy_item_methods(&source.source_text))
+            .unwrap_or_default(),
     }));
     items.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
 
@@ -580,6 +589,13 @@ pub fn port_to_neoforge(
             defense: armor.defense.clone(),
             piece_lore: armor.pieces.iter().filter(|piece| !piece.lore.is_empty())
                 .map(|piece| (piece.id.clone(), piece.lore.clone())).collect(),
+            method_mappings: armor.pieces.iter().map(|piece| {
+                let mappings = equipment.iter()
+                    .find(|source| source.class_name == piece.class_name)
+                    .map(|source| map_legacy_item_methods(&source.source_text))
+                    .unwrap_or_default();
+                (piece.id.clone(), mappings)
+            }).collect(),
             generated_as: "registered native ArmorMaterial and wearable ArmorItem pieces".to_owned(),
             warnings: armor.warnings.clone(),
         }
@@ -597,6 +613,20 @@ pub fn port_to_neoforge(
 
     if !tool_records.is_empty() {
         warnings.push(format!("{} registered tool/weapon item(s) were emitted as native NeoForge tool classes; custom attack behavior, mining tags, repair ingredients, and special abilities may need further reconstruction.", tool_records.len()));
+    }
+    let mut method_catalog = BTreeMap::<String, ItemMethodMapping>::new();
+    for mapping in items.iter().flat_map(|item| item.method_mappings.iter()) {
+        method_catalog.entry(mapping.source_method.clone()).or_insert_with(|| mapping.clone());
+    }
+    for mapping in armor_sets.iter().flat_map(|armor| armor.method_mappings.values()).flatten() {
+        method_catalog.entry(mapping.source_method.clone()).or_insert_with(|| mapping.clone());
+    }
+    let detected_item_methods: Vec<ItemMethodMapping> = method_catalog.into_values().collect();
+    if !detected_item_methods.is_empty() {
+        warnings.push(format!(
+            "Recognized {} distinct legacy item method(s) against the NeoForge 1.21.1 item API dictionary. Per-item mappings, conversion statuses, and adapter notes are included in port-analysis.json; recognition does not imply that a custom method body was translated.",
+            detected_item_methods.len()
+        ));
     }
     if items.is_empty() && blocks.is_empty() {
         warnings.push("No registered Java/bytecode item or block subclasses were recovered. The project contains copied resources and source analysis only.".to_owned());
@@ -638,6 +668,7 @@ pub fn port_to_neoforge(
         source_roots: input_roots.iter().map(|root| root.to_string_lossy().to_string()).collect(),
         source_file_counts,
         items,
+        detected_item_methods,
         blocks,
         block_entities: native_block_entities,
         entities,
