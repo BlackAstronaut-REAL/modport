@@ -1332,6 +1332,24 @@ const DEFINITIONS: &[Definition] = &[
     d!("ServerChatEvent", "getMessage", V_112, "server_chat_message", "ServerChatEvent / chat Component", "chat", "automatic_rename_candidate", "Preserve original message text, formatting and command-vs-chat distinction.", "net/minecraftforge/event/ServerChatEvent.html"),
     d!("ServerChatEvent", "setMessage", V_112, "server_chat_message_write", "ServerChatEvent / chat Component", "chat", "adapter_required", "Translate rewritten text to Component while preserving event cancellation and broadcast order.", "net/minecraftforge/event/ServerChatEvent.html"),
 
+    // Additional inherited event accessors and mutable gameplay fields.
+    d!("LivingDropsEvent", "getSource", V_18, "living_drop_damage_source", "LivingDropsEvent damage source / loot context", "events_loot", "automatic_rename_candidate", "Preserve the direct/indirect damage source responsible for the death and resulting drops.", "net/minecraftforge/event/entity/living/LivingDropsEvent.html"),
+    d!("LivingDropsEvent", "isRecentlyHit", V_18, "living_drop_recently_hit", "LivingDropsEvent recently-hit loot context", "events_loot", "automatic_rename_candidate", "Preserve the recently-hit flag used by player-attributed loot rules.", "net/minecraftforge/event/entity/living/LivingDropsEvent.html"),
+    d!("PlayerFlyableFallEvent", "setDistance", V_18, "player_flyable_fall_distance_write", "Player fall-damage / flying permission logic", "events_player", "adapter_required", "Preserve modified fall distance before multiplier and damage calculation.", "net/minecraftforge/event/entity/player/PlayerFlyableFallEvent.html"),
+    d!("PlayerFlyableFallEvent", "getMultiplier", V_18, "player_flyable_fall_multiplier", "Player fall-damage multiplier", "events_player", "automatic_rename_candidate", "Preserve the flyable-fall damage multiplier independently from distance.", "net/minecraftforge/event/entity/player/PlayerFlyableFallEvent.html"),
+    d!("PlayerFlyableFallEvent", "setMultiplier", V_18, "player_flyable_fall_multiplier_write", "Player fall-damage multiplier", "events_player", "adapter_required", "Preserve custom fall multiplier, including zero-damage and partial-damage outcomes.", "net/minecraftforge/event/entity/player/PlayerFlyableFallEvent.html"),
+    d!("PlayerEvent.HarvestCheck", "getTargetBlock", V_18, "player_harvest_target_block", "Player harvest predicate / BlockState", "events_player", "automatic_rename_candidate", "Preserve target block state used when computing whether this player can harvest it.", "net/minecraftforge/event/entity/player/PlayerEvent.HarvestCheck.html"),
+    d!("PlayerSleepInBedEvent", "setResult", V_18, "player_sleep_result_write", "Player#startSleepInBed / sleep result", "events_player", "adapter_required", "Preserve the full SleepResult enum, including rejection reasons and forced success behavior.", "net/minecraftforge/event/entity/player/PlayerSleepInBedEvent.html"),
+    d!("BlockEvent.FluidPlaceBlockEvent", "getLiquidPos", V_112, "fluid_placement_origin", "LiquidBlock flow origin position", "events_blocks", "automatic_rename_candidate", "Preserve the originating liquid position; it can differ from the position being replaced.", "net/minecraftforge/event/world/BlockEvent.FluidPlaceBlockEvent.html"),
+    d!("BlockEvent.FluidPlaceBlockEvent", "getNewState", V_112, "fluid_placement_new_state", "LiquidBlock flow placement output", "events_blocks", "automatic_rename_candidate", "Preserve the proposed replacement block state after earlier listeners.", "net/minecraftforge/event/world/BlockEvent.FluidPlaceBlockEvent.html"),
+    d!("BlockEvent.FluidPlaceBlockEvent", "setNewState", V_112, "fluid_placement_new_state_write", "LiquidBlock flow placement output", "events_blocks", "adapter_required", "Preserve the replacement state mutation used by custom cobblestone/obsidian generator behavior.", "net/minecraftforge/event/world/BlockEvent.FluidPlaceBlockEvent.html"),
+    d!("AttachCapabilitiesEvent", "getCapabilities", V_112, "capability_attached_map", "Capability attachment providers / attachment serialization", "capabilities", "adapter_required", "The returned map is unmodifiable; preserve key uniqueness and provider serialization semantics.", "net/minecraftforge/event/AttachCapabilitiesEvent.html"),
+    d!("WorldEvent.PotentialSpawns", "getWorld", V_18, "potential_spawn_world", "MobSpawnSettings / world spawn context", "worldgen", "automatic_rename_candidate", "Preserve the queried world and dimension for the spawn-list calculation.", "net/minecraftforge/event/world/WorldEvent.PotentialSpawns.html"),
+    d!("ChunkDataEvent", "getChunk", V_18, "chunk_data_event_chunk", "ChunkDataEvent / chunk persistent data lifecycle", "persistence", "automatic_rename_candidate", "Preserve the chunk whose NBT payload is being loaded or saved.", "net/minecraftforge/event/world/ChunkDataEvent.html"),
+    d!("ChunkDataEvent", "getWorld", V_18, "chunk_data_event_world", "ChunkDataEvent / level lifecycle", "persistence", "automatic_rename_candidate", "Preserve dimension/world identity for chunk data migration and attachment restoration.", "net/minecraftforge/event/world/ChunkDataEvent.html"),
+    d!("ChunkWatchEvent", "getChunk", V_18, "chunk_watch_event_chunk", "Chunk tracking / per-player chunk visibility", "networking", "automatic_rename_candidate", "Preserve chunk coordinates and identity for player watch transitions.", "net/minecraftforge/event/world/ChunkWatchEvent.html"),
+    d!("ExplosionEvent", "getWorld", V_18, "explosion_event_world", "Explosion level / world context", "events_combat", "automatic_rename_candidate", "Preserve the world in which the explosion executes, independently from its source entity.", "net/minecraftforge/event/world/ExplosionEvent.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -1356,6 +1374,8 @@ fn documentation_url(version: &str, path: &str) -> Option<String> {
 fn source_owner_doc_path(version: &str, owner: &str) -> Option<&'static str> {
     let modern_fml = version != "1.7.10";
     match owner {
+        "Event" => Some(if modern_fml { "net/minecraftforge/fml/common/eventhandler/Event.html" } else { "cpw/mods/fml/common/eventhandler/Event.html" }),
+        "EventBus" => Some(if modern_fml { "net/minecraftforge/fml/common/eventhandler/EventBus.html" } else { "cpw/mods/fml/common/eventhandler/EventBus.html" }),
         "GameRegistry" => Some(if modern_fml { "net/minecraftforge/fml/common/registry/GameRegistry.html" } else { "cpw/mods/fml/common/registry/GameRegistry.html" }),
         "IWorldGenerator" => Some(if modern_fml { "net/minecraftforge/fml/common/IWorldGenerator.html" } else { "cpw/mods/fml/common/IWorldGenerator.html" }),
         "IFuelHandler" => Some(if modern_fml { "net/minecraftforge/fml/common/IFuelHandler.html" } else { "cpw/mods/fml/common/IFuelHandler.html" }),
@@ -1736,6 +1756,75 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         "TileEntityLockable" | "TileEntityChest" | "TileEntityFurnace"
         | "TileEntityMobSpawner" | "TileEntitySign" => {
             candidates.insert("TileEntity".to_owned());
+        }
+        // Forge event inheritance is important for usage matching: source
+        // receivers are often typed as a concrete nested event while a method
+        // such as getPlayer/getWorld is declared on one of its event bases.
+        "LivingAttackEvent" | "LivingDeathEvent" | "LivingDropsEvent"
+        | "LivingExperienceDropEvent" | "LivingHurtEvent" | "LivingDamageEvent"
+        | "LivingFallEvent" | "LivingHealEvent" | "LivingPackSizeEvent"
+        | "LivingSetAttackTargetEvent" | "LivingSpawnEvent" | "LivingEntityUseItemEvent"
+        | "LivingJumpEvent" | "LivingUpdateEvent" | "EnderTeleportEvent"
+        | "ZombieEvent" | "BabyEntitySpawnEvent" | "AnimalTameEvent" => {
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "PlayerEvent" | "ArrowLooseEvent" | "ArrowNockEvent" | "AttackEntityEvent"
+        | "BonemealEvent" | "EntityInteractEvent" | "EntityItemPickupEvent"
+        | "FillBucketEvent" | "ItemTooltipEvent" | "PlayerDestroyItemEvent"
+        | "PlayerDropsEvent" | "PlayerFlyableFallEvent" | "PlayerPickupXpEvent"
+        | "PlayerSetSpawnEvent" | "PlayerSleepInBedEvent" | "PlayerWakeUpEvent"
+        | "PlayerEvent.Clone" | "PlayerEvent.BreakSpeed" | "PlayerEvent.HarvestCheck"
+        | "PlayerEvent.LoadFromFile" | "PlayerEvent.NameFormat" | "PlayerEvent.SaveToFile"
+        | "PlayerEvent.StartTracking" | "PlayerEvent.StopTracking" | "CriticalHitEvent"
+        | "ItemFishedEvent" => {
+            candidates.insert("PlayerEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "BlockEvent" | "BlockEvent.BreakEvent" | "BlockEvent.PlaceEvent"
+        | "BlockEvent.EntityPlaceEvent" | "BlockEvent.MultiPlaceEvent"
+        | "BlockEvent.EntityMultiPlaceEvent" | "BlockEvent.HarvestDropsEvent"
+        | "BlockEvent.NeighborNotifyEvent" | "BlockEvent.CropGrowEvent"
+        | "BlockEvent.CropGrowEvent.Pre" | "BlockEvent.CropGrowEvent.Post"
+        | "BlockEvent.CreateFluidSourceEvent" | "BlockEvent.FarmlandTrampleEvent"
+        | "BlockEvent.FluidPlaceBlockEvent" | "BlockEvent.PortalSpawnEvent" => {
+            candidates.insert("BlockEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ChunkDataEvent" | "ChunkDataEvent.Load" | "ChunkDataEvent.Save"
+        | "ChunkWatchEvent" | "ChunkWatchEvent.Watch" | "ChunkWatchEvent.UnWatch"
+        | "ChunkEvent" | "ChunkEvent.Load" | "ChunkEvent.Unload" => {
+            candidates.insert("ChunkDataEvent".to_owned());
+            candidates.insert("ChunkEvent".to_owned());
+            candidates.insert("WorldEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ExplosionEvent" | "ExplosionEvent.Start" | "ExplosionEvent.Detonate" => {
+            candidates.insert("ExplosionEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "WorldEvent" | "WorldEvent.Load" | "WorldEvent.Save" | "WorldEvent.Unload"
+        | "WorldEvent.PotentialSpawns" | "WorldEvent.CreateSpawnPosition" => {
+            candidates.insert("WorldEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "DecorateBiomeEvent" | "DecorateBiomeEvent.Decorate" | "DecorateBiomeEvent.Pre"
+        | "DecorateBiomeEvent.Post" | "OreGenEvent" | "OreGenEvent.Pre"
+        | "OreGenEvent.Post" | "OreGenEvent.GenerateMinable" | "BiomeEvent"
+        | "BiomeEvent.BiomeColor" | "BiomeEvent.GetGrassColor"
+        | "BiomeEvent.GetFoliageColor" | "BiomeEvent.GetWaterColor"
+        | "SaplingGrowTreeEvent" | "ChunkGeneratorEvent" | "PopulateChunkEvent"
+        | "WorldTypeEvent" => {
+            candidates.insert("Event".to_owned());
+        }
+        "AnvilUpdateEvent" | "AttachCapabilitiesEvent" | "CommandEvent"
+        | "DifficultyChangeEvent" | "GameRuleChangeEvent" | "LootTableLoadEvent"
+        | "ServerChatEvent" | "ClientChatEvent" | "ClientChatReceivedEvent"
+        | "GenericEvent" => {
+            candidates.insert("Event".to_owned());
         }
         _ => {}
     }
@@ -2199,6 +2288,32 @@ mod tests {
         assert!(has(&v112, "ExplosionEvent.Detonate", "getAffectedBlocks"));
         assert!(has(&v112, "LootTableLoadEvent", "setTable"));
         assert!(!has(&v17, "LootTableLoadEvent", "setTable"));
+    }
+
+
+    #[test]
+    fn concrete_forge_event_types_resolve_inherited_api_usages() {
+        let source = r#"
+            class EventConsumer {
+                void consume(LivingHealEvent heal, PlayerEvent.Clone clone,
+                             BlockEvent.CropGrowEvent.Pre grow,
+                             ChunkDataEvent.Load chunk) {
+                    heal.getEntityLiving();
+                    clone.getPlayer();
+                    grow.getWorld();
+                    chunk.getChunk();
+                    chunk.getWorld();
+                }
+            }
+        "#;
+        let found = map_legacy_api_usages(source, Some("1.12.2"));
+        let has = |owner: &str, method: &str| found.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        assert!(has("LivingEvent", "getEntityLiving"));
+        assert!(has("PlayerEvent", "getPlayer"));
+        assert!(has("BlockEvent", "getWorld"));
+        assert!(has("ChunkEvent", "getChunk"));
+        assert!(has("WorldEvent", "getWorld"));
     }
 
     #[test]
