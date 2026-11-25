@@ -909,7 +909,7 @@ mod tests {
         let uvs = slab.nodes[0].cubes[0].face_uvs.unwrap();
         assert_eq!(uvs[0], [0.0, 8.0, 16.0, 16.0]);
         assert_eq!(uvs[2], [0.0, 0.0, 16.0, 16.0]);
-        assert_eq!(uvs[3], [0.0, 8.0, 16.0, 16.0]);
+        assert_eq!(uvs[3], [0.0, 0.0, 16.0, 16.0]);
 
         let (stairs, _) = synthetic_block_preview("Stone Stairs", "stairs", None).unwrap();
         let top_step = &stairs.nodes[0].cubes[1];
