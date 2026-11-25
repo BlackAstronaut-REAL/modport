@@ -4,6 +4,7 @@ use mojmodelbridge::mod_graph::{scan_mod_graph, EntityMetadata};
 use mojmodelbridge::mcreator_armor::discover_armor_sources;
 use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
 use mojmodelbridge::mcreator_equipment::{discover_equipment_sources, source_tool_materials, ToolMaterialStats};
+use mojmodelbridge::source::java::{extract_balanced, split_top_level};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -234,6 +235,12 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 .unwrap_or_else(|| serde_json::json!({}));
             let component_lore = extract_component_lore(&mut components);
             append_unique(&mut lore, &component_lore);
+            let armor_properties = armor_source_properties(&all_files, &set.prefix);
+            if let Some(object) = components.as_object_mut() {
+                if armor_properties.as_object().is_some_and(|properties| !properties.is_empty()) {
+                    object.insert("source_properties".to_owned(), armor_properties);
+                }
+            }
             let components_json = serde_json::to_string_pretty(&components)
                 .unwrap_or_else(|_| "{}".to_owned());
             let mut texture_paths = find_armor_layer_textures(&all_files, &set.prefix, &set.source_text);
@@ -687,6 +694,80 @@ fn identifier_has_any_word(value: &str, candidates: &[&str]) -> bool {
 fn identifier_has_pair(value: &str, first: &str, second: &str) -> bool {
     identifier_words(value).windows(2)
         .any(|pair| pair[0] == first && pair[1] == second)
+}
+
+fn armor_source_properties(files: &[PathBuf], prefix: &str) -> Value {
+    let target = compact(prefix);
+    if target.is_empty() { return serde_json::json!({}); }
+    let assignment = Regex::new(
+        r"(?is)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:this\s*\.\s*)?(?:get|load)_armorstats\s*\("
+    ).unwrap();
+    let number = Regex::new(r"^\s*(-?\d+(?:\.\d+)?)\s*[fFdD]?\s*$").unwrap();
+    let field_suffix = Regex::new(r"(?i)_?armorstats$").unwrap();
+
+    for path in files.iter().filter(|path| {
+        path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+    }) {
+        let Ok(source) = fs::read_to_string(path) else { continue; };
+        for found in assignment.find_iter(&source) {
+            let Some(captures) = assignment.captures(&source[found.start()..found.end()]) else { continue; };
+            let field_name = captures[1].to_owned();
+            let Some(open) = source[found.start()..found.end()].rfind('(')
+                .map(|offset| found.start() + offset) else { continue; };
+            let Ok((raw_args, _)) = extract_balanced(&source, open, '(', ')') else { continue; };
+            let arguments = split_top_level(&raw_args, ',');
+            let label = arguments.iter().find_map(|argument| {
+                let value = argument.trim();
+                if (value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\''))
+                {
+                    Some(value[1..value.len() - 1].to_owned())
+                } else {
+                    None
+                }
+            }).unwrap_or_default();
+            let field_base = field_suffix.replace(&field_name, "").to_string();
+            if compact(&label) != target && compact(&field_name) != target
+                && compact(&field_base) != target {
+                continue;
+            }
+
+            let numbers = arguments.iter().filter_map(|argument| {
+                number.captures(argument).and_then(|capture| capture[1].parse::<f64>().ok())
+            }).collect::<Vec<_>>();
+            if numbers.len() < 6 { continue; }
+
+            let mut properties = serde_json::Map::new();
+            for (key, value) in [
+                ("durability", numbers[0]),
+                ("helmet", numbers[1]),
+                ("body", numbers[2]),
+                ("leggings", numbers[3]),
+                ("boots", numbers[4]),
+                ("enchantability", numbers[5]),
+            ] {
+                properties.insert(key.to_owned(), serde_json::json!(value));
+            }
+            if numbers.len() >= 14 {
+                for (key, value) in [
+                    ("enchant_respiration", numbers[6]),
+                    ("enchant_aqua_affinity", numbers[7]),
+                    ("enchant_protection", numbers[8]),
+                    ("enchant_fire_protection", numbers[9]),
+                    ("enchant_blast_protection", numbers[10]),
+                    ("enchant_projectile_protection", numbers[11]),
+                    ("enchant_unbreaking", numbers[12]),
+                    ("enchant_feather_falling", numbers[13]),
+                ] {
+                    if value != 0.0 {
+                        properties.insert(key.to_owned(), serde_json::json!(value));
+                    }
+                }
+            }
+            return Value::Object(properties);
+        }
+    }
+    serde_json::json!({})
 }
 
 fn is_armor_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
@@ -1701,6 +1782,30 @@ fn humanize(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovers_source_armor_material_stats_and_special_enchant_levels() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("ArmorRegistry.java");
+        fs::write(&source, r#"
+            class ArmorRegistry {
+                static ArmorStats Ruby_armorstats;
+                static {
+                    Ruby_armorstats = this.get_armorstats(config, "Ruby",
+                        90, 4, 9, 8, 4, 40, 1, 2, 3, 4, 5, 6, 7, 8);
+                }
+            }
+        "#).unwrap();
+        let properties = armor_source_properties(&[source], "ruby");
+        assert_eq!(properties["durability"], 90.0);
+        assert_eq!(properties["helmet"], 4.0);
+        assert_eq!(properties["body"], 9.0);
+        assert_eq!(properties["leggings"], 8.0);
+        assert_eq!(properties["boots"], 4.0);
+        assert_eq!(properties["enchantability"], 40.0);
+        assert_eq!(properties["enchant_respiration"], 1.0);
+        assert_eq!(properties["enchant_feather_falling"], 8.0);
+    }
 
     #[test]
     fn selects_entity_specific_texture_from_legacy_variant_registry() {
