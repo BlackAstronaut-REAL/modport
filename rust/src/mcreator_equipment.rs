@@ -895,6 +895,178 @@ fn material_stats_from_values(values: [f64; 5]) -> ToolMaterialStats {
 
 /// Recover legacy get_*stats objects and addToolMaterial fields, then associate
 /// each material with registered Item/Tool fields that pass it to constructors.
+fn compiled_equipment_field_name(class: &ClassFile, instruction: &Instruction) -> Option<String> {
+    if !matches!(instruction.opcode, 0xb2 | 0xb3) { return None; }
+    let index = u16::from_be_bytes([
+        *instruction.operands.first()?,
+        *instruction.operands.get(1)?,
+    ]);
+    class.member_reference(index).map(|(_, name, _)| name)
+}
+
+fn compiled_equipment_new_class(class: &ClassFile, instruction: &Instruction) -> Option<String> {
+    if instruction.opcode != 0xbb { return None; }
+    let index = u16::from_be_bytes([
+        *instruction.operands.first()?,
+        *instruction.operands.get(1)?,
+    ]);
+    class.class_name(index).map(|name| name.rsplit('/').next().unwrap_or(name).to_owned())
+}
+
+fn compiled_tool_numbers_before(
+    class: &ClassFile,
+    instructions: &[Instruction],
+    call_index: usize,
+) -> Vec<f64> {
+    let start = call_index.saturating_sub(80);
+    let mut values = Vec::new();
+    for instruction in instructions[start..call_index].iter().rev() {
+        if let Some(value) = bytecode_number_constant(class, instruction) {
+            if values.len() < 5 { values.push(value); }
+        }
+        if values.len() == 5 { break; }
+    }
+    values.reverse();
+    values
+}
+
+fn compiled_tool_stats_from_numbers(values: &[f64]) -> Option<ToolMaterialStats> {
+    if values.len() < 5 { return None; }
+    Some(ToolMaterialStats {
+        uses: Some(values[1].round() as i64),
+        efficiency: Some(values[2]),
+        damage: Some(values[3]),
+        enchantability: Some(values[4].round() as i64),
+    })
+}
+
+fn compiled_next_static_field(
+    class: &ClassFile,
+    instructions: &[Instruction],
+    start: usize,
+    limit: usize,
+) -> Option<String> {
+    instructions.iter().skip(start + 1).take(limit).find_map(|instruction| {
+        if instruction.opcode != 0xb3 { return None; }
+        compiled_equipment_field_name(class, instruction)
+    })
+}
+
+/// Recover get_weaponstats -> addToolMaterial -> registered Item field links
+/// from classfiles. This is the compiled-only counterpart to source_tool_materials.
+pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<String, ToolMaterialStats>> {
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    let mut results = BTreeMap::<String, ToolMaterialStats>::new();
+
+    for info in compiled.classes.values() {
+        let Ok(bytes) = fs::read(&info.path) else { continue; };
+        let Ok(class) = ClassFile::parse(&bytes) else { continue; };
+        let mut class_item_fields = BTreeMap::<String, (String, Option<ToolMaterialStats>)>::new();
+
+        for method in &class.methods {
+            let Some(code) = method.code.as_ref() else { continue; };
+            let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+            let mut stat_fields = BTreeMap::<String, ToolMaterialStats>::new();
+            let mut material_fields = BTreeMap::<String, ToolMaterialStats>::new();
+
+            // First pass: recover helper-generated weapon-stat objects.
+            for (index, instruction) in instructions.iter().enumerate() {
+                if !matches!(instruction.opcode, 0xb6..=0xb9) { continue; }
+                let Some(operands) = instruction.operands.get(0..2) else { continue; };
+                let cp_index = u16::from_be_bytes([operands[0], operands[1]]);
+                let Some((_, method_name, _)) = class.member_reference(cp_index) else { continue; };
+                if !Regex::new(r"(?i)(?:get|load)_?weaponstats$")
+                    .unwrap().is_match(&method_name) {
+                    continue;
+                }
+                let values = compiled_tool_numbers_before(&class, &instructions, index);
+                let target = compiled_next_static_field(&class, &instructions, index, 12);
+                if let (Some(stats), Some(target)) = (
+                    compiled_tool_stats_from_numbers(&values),
+                    target,
+                ) {
+                    stat_fields.insert(target.clone(), stats.clone());
+                    results.entry(compact_name(&target)).or_insert(stats);
+                }
+            }
+
+            // Second pass: bind stat objects (or direct numeric arguments) to
+            // addToolMaterial fields.
+            for (index, instruction) in instructions.iter().enumerate() {
+                if !matches!(instruction.opcode, 0xb6..=0xb9) { continue; }
+                let Some(operands) = instruction.operands.get(0..2) else { continue; };
+                let cp_index = u16::from_be_bytes([operands[0], operands[1]]);
+                let Some((_, method_name, _)) = class.member_reference(cp_index) else { continue; };
+                if method_name != "addToolMaterial" { continue; }
+
+                let target = compiled_next_static_field(&class, &instructions, index, 12);
+                let start = index.saturating_sub(50);
+                let referenced = instructions[start..index].iter().rev()
+                    .filter_map(|prior| {
+                        if prior.opcode != 0xb2 { return None; }
+                        compiled_equipment_field_name(&class, prior)
+                    })
+                    .find_map(|field| stat_fields.get(&field).cloned());
+                let stats = referenced.or_else(|| {
+                    compiled_tool_stats_from_numbers(&compiled_tool_numbers_before(&class, &instructions, index))
+                });
+                if let (Some(target), Some(stats)) = (target, stats) {
+                    material_fields.insert(target.clone(), stats.clone());
+                    results.entry(compact_name(&target)).or_insert(stats);
+                }
+            }
+
+            // Third pass: associate each static Item subclass with the material
+            // field referenced in its constructor.
+            for (index, instruction) in instructions.iter().enumerate() {
+                if instruction.opcode != 0xb3 { continue; }
+                let Some(target) = compiled_equipment_field_name(&class, instruction) else { continue; };
+                if material_fields.contains_key(&target) { continue; }
+
+                let start = index.saturating_sub(160);
+                let mut new_index = None;
+                for probe in (start..index).rev() {
+                    if instructions[probe].opcode == 0xbb {
+                        new_index = Some(probe);
+                        break;
+                    }
+                    if instructions[probe].opcode == 0xb3 {
+                        break;
+                    }
+                }
+                let Some(new_index) = new_index else { continue; };
+                let Some(item_class) = compiled_equipment_new_class(&class, &instructions[new_index]) else {
+                    continue;
+                };
+                let stats = instructions[new_index..index].iter().rev()
+                    .filter_map(|prior| {
+                        if prior.opcode != 0xb2 { return None; }
+                        compiled_equipment_field_name(&class, prior)
+                    })
+                    .find_map(|field| material_fields.get(&field).cloned());
+                class_item_fields.insert(target, (item_class, stats));
+            }
+        }
+
+        // Registry identifiers are indexed by concrete class in the shared
+        // compiled registry pass, so construction and registration may live
+        // in separate methods without losing their relationship.
+        for (_field, (item_class, stats)) in class_item_fields {
+            let Some(stats) = stats else { continue; };
+            if let Some(registries) = compiled.registries.get(&item_class) {
+                for registry in registries {
+                    let key = compact_name(&normalize_registry(registry));
+                    if !key.is_empty() {
+                        results.insert(key, stats.clone());
+                    }
+                }
+            }
+            results.entry(compact_name(&item_class)).or_insert(stats);
+        }
+    }
+    Ok(results)
+}
+
 pub fn source_tool_materials(
     source_roots: &[PathBuf],
     source_modid: &str,
@@ -1310,7 +1482,9 @@ pub fn export_equipment_to_workspace(
     };
 
     let discovered = discover_equipment_sources(source_roots)?;
-    let tool_materials = source_tool_materials(source_roots, &import_modid);
+    let mut tool_materials = compiled_tool_materials(source_roots)?;
+    // Decompiled source takes precedence over bytecode-derived material values.
+    tool_materials.extend(source_tool_materials(source_roots, &import_modid));
     let mut report = EquipmentWorkspaceExportReport {
         workspace_file:workspace_file.clone(), discovered:discovered.len(), exported:0, skipped:0,
         records:Vec::new(), warnings:Vec::new(),
@@ -1578,6 +1752,16 @@ mod equipment_discovery_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_compiled_weapon_stat_tables_to_tool_material_properties() {
+        let stats = compiled_tool_stats_from_numbers(&[3.0, 2400.0, 9.0, 5.0, 18.0]).unwrap();
+        assert_eq!(stats.uses, Some(2400));
+        assert_eq!(stats.efficiency, Some(9.0));
+        assert_eq!(stats.damage, Some(5.0));
+        assert_eq!(stats.enchantability, Some(18));
+        assert!(compiled_tool_stats_from_numbers(&[2400.0, 9.0, 5.0]).is_none());
+    }
 
     #[test]
     fn recovers_compiled_numeric_getters_by_method_identity() {
