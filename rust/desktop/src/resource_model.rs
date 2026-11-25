@@ -417,7 +417,8 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|value| parent.ends_with(value)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if ["block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate", "block/fence"]
+    } else if ["block/template_fence_post", "block/template_fence_side", "block/template_fence_gate",
+         "block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate", "block/fence"]
         .iter().any(|value| parent.ends_with(value)) {
         Some("fence")
     } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
@@ -532,6 +533,18 @@ fn builtin_cube(
 ) -> ViewerNode {
     let width = texture_size[0].max(1) as f32;
     let height = texture_size[1].max(1) as f32;
+    // Built-in geometry follows the implicit UV rules used by resource-model elements.
+    let from = [min[0] + 8.0, min[1] + 8.0, min[2] + 8.0];
+    let to = [max[0] + 8.0, max[1] + 8.0, max[2] + 8.0];
+    let face_uvs = Some(std::array::from_fn(|face| {
+        let uv = default_face_uv(from, to, face);
+        [
+            uv[0] * width / 16.0,
+            uv[1] * height / 16.0,
+            uv[2] * width / 16.0,
+            uv[3] * height / 16.0,
+        ]
+    }));
     ViewerNode {
         name: name.to_owned(),
         parent: None,
@@ -541,7 +554,7 @@ fn builtin_cube(
             min,
             max,
             uv_origin: [0.0; 2],
-            face_uvs: Some([[0.0, 0.0, width, height]; 6]),
+            face_uvs,
             face_texture_indices: None,
             face_visibility: None,
             face_uv_rotations: None,
@@ -888,6 +901,20 @@ mod tests {
         let (scene, resolved_textures) = load_block_model(&derived, &[root.to_path_buf()]).unwrap();
         assert_eq!(scene.nodes.len(), 2);
         assert_eq!(resolved_textures, vec![texture_path]);
+    }
+
+    #[test]
+    fn synthetic_partial_cubes_use_geometry_derived_face_uvs() {
+        let (slab, _) = synthetic_block_preview("Stone Slab", "slab_bottom", None).unwrap();
+        let uvs = slab.nodes[0].cubes[0].face_uvs.unwrap();
+        assert_eq!(uvs[0], [0.0, 8.0, 16.0, 16.0]);
+        assert_eq!(uvs[2], [0.0, 0.0, 16.0, 16.0]);
+        assert_eq!(uvs[3], [0.0, 8.0, 16.0, 16.0]);
+
+        let (stairs, _) = synthetic_block_preview("Stone Stairs", "stairs", None).unwrap();
+        let top_step = &stairs.nodes[0].cubes[1];
+        let step_uvs = top_step.face_uvs.unwrap();
+        assert_ne!(step_uvs[0], [0.0, 0.0, 16.0, 16.0]);
     }
 
     #[test]
