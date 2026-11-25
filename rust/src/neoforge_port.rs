@@ -260,7 +260,7 @@ pub fn port_to_neoforge(
         ai_classes: entity.ai_classes.clone(),
         generated_as: "native PathfinderMob subclass with recovered attributes, conservative goals, and fallback humanoid renderer".to_owned(),
         warnings: vec![
-            "The source mob is represented by a generated PathfinderMob; custom superclass logic, exact AI goal parameters, attacks, animations, and model geometry are not yet reconstructed.".to_owned()
+            "The source mob is emitted as a PathfinderMob placeholder with recovered attributes and generic goals; exact AI parameters, attacks, custom superclass logic, animations, and model geometry remain incomplete.".to_owned()
         ],
     }).collect();
 
@@ -289,7 +289,7 @@ pub fn port_to_neoforge(
         warnings.push("No registered Java/bytecode item or block subclasses were recovered. The project contains copied resources and source analysis only.".to_owned());
     }
     if !entities.is_empty() {
-        warnings.push(format!("{} entity class(es) were recognized but are not yet registered as native NeoForge entities.", entities.len()));
+        warnings.push(format!("{} entity class(es) were registered as basic native PathfinderMob placeholders; exact source AI and custom render models remain incomplete.", entities.len()));
     }
     if !armor_sets.is_empty() {
         warnings.push(format!("{} armor set(s) were recognized but remain non-wearable until ArmorMaterial/ArmorItem generation is implemented.", armor_sets.len()));
@@ -353,16 +353,18 @@ pub fn port_to_neoforge(
         "converted": {
             "items": report.items.len(),
             "blocks": report.blocks.len(),
+            "entity_placeholders": report.entities.len(),
             "resource_files": resource_files_copied
         },
         "recognized_but_pending": {
-            "entities": report.entities.len(),
+            "custom_entity_ai_and_models": report.entities.len(),
             "armor_sets": report.armor_sets.len(),
             "projectiles": report.projectiles.len()
         },
         "documentation_domains": report.detected_domains,
         "notes": [
             "Registered simple items and blocks are emitted as native NeoForge registrations.",
+            "Registered living entities receive generated PathfinderMob classes, recovered basic attributes, conservative goals, and a fallback humanoid renderer.",
             "Original assets and data JSON are copied with the mod namespace remapped where possible.",
             "Custom source behavior not explicitly converted is listed as pending in port-analysis.json."
         ]
@@ -1193,6 +1195,53 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 1);
         assert_eq!(status["converted"]["blocks"], 1);
+    }
+
+    #[test]
+    fn generates_registered_entity_classes_attributes_and_client_renderer() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("entity_mod");
+        let output = temp.path().join("entity_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"entitymod","name":"Entity Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/EntityRegistry.java"), r#"
+            public class EntityRubyBeast extends EntityMob {
+                public EntityRubyBeast() {
+                    setSize(1.2F, 1.8F);
+                    getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(42.0D);
+                    getEntityAttribute(SharedMonsterAttributes.movementSpeed).setBaseValue(0.28D);
+                    getEntityAttribute(SharedMonsterAttributes.attackDamage).setBaseValue(7.0D);
+                    tasks.addTask(1, new EntityAIAttackMelee(this, 1.0D, true));
+                }
+            }
+            public class EntityRegistry {
+                RegistryObject<EntityType<EntityRubyBeast>> RUBY_BEAST =
+                    ENTITY_TYPES.register("ruby_beast", () -> EntityType.Builder.of(
+                        EntityRubyBeast::new, MobCategory.MONSTER).build("ruby_beast"));
+            }
+        "#).unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+
+        assert_eq!(report.entities.len(), 1);
+        assert_eq!(report.entities[0].registry_name, "ruby_beast");
+        assert!(report.entities[0].generated_as.contains("PathfinderMob"));
+        let java = output.join("src/main/java/com/modport/entitymod");
+        let entity = fs::read_to_string(java.join("entity/ConvertedEntityRubyBeast.java")).unwrap();
+        assert!(entity.contains("extends PathfinderMob"));
+        assert!(entity.contains("MeleeAttackGoal"));
+        let registry = fs::read_to_string(java.join("registry/ModEntities.java")).unwrap();
+        assert!(registry.contains("ENTITY_RUBY_BEAST"));
+        assert!(registry.contains("EntityType.Builder.of(ConvertedEntityRubyBeast::new"));
+        let attributes = fs::read_to_string(java.join("entity/ModEntityAttributes.java")).unwrap();
+        assert!(attributes.contains("Attributes.MAX_HEALTH, 42D"));
+        let renderers = fs::read_to_string(java.join("client/ModEntityRenderers.java")).unwrap();
+        assert!(renderers.contains("registerEntityRenderer"));
+        assert!(renderers.contains("ModelLayers.PLAYER"));
+        let main = fs::read_to_string(java.join("NeoForgeMod.java")).unwrap();
+        assert!(main.contains("ModEntityAttributes::createAttributes"));
     }
 
     #[test]
