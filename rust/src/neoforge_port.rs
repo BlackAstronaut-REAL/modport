@@ -1230,6 +1230,7 @@ fn generate_lore_item_java(
     let mut source = format!(r#"package {package}.item;
 
 import java.util.List;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -2264,6 +2265,11 @@ mod tests {
             }
             public class RubyItem extends Item {
                 public RubyItem() { setMaxStackSize(16); }
+                public void addInformation(List<String> tooltip) {
+                    tooltip.add(TextFormatting.GOLD + "Ruby ");
+                    tooltip.add(EnumChatFormatting.BOLD + "Power");
+                    tooltip.add(ChatFormatting.ITALIC + "Rare");
+                }
             }
         "#).unwrap();
         fs::write(source.join("src/main/java/demo/ModBlocks.java"), r#"
@@ -2294,10 +2300,17 @@ mod tests {
         assert_eq!(report.target_mod_id, "oldmod");
         assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby"]);
         assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_ore"]);
+        assert_eq!(report.items[0].lore, vec!["§6Ruby ", "§lPower", "§oRare"]);
         assert!(report.resource_files_copied >= 3);
         assert!(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/models/item/ruby.json").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/blockstates/ruby_ore.json").is_file());
+        let lore_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/item/LoreRuby.java")).unwrap();
+        assert!(lore_java.contains("ChatFormatting.GOLD"));
+        assert!(lore_java.contains("withBold(true)"));
+        assert!(lore_java.contains("withItalic(true)"));
+        let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
+        assert!(items_java.contains("new com.modport.oldmod.item.LoreRuby"));
         let blocks_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModBlocks.java")).unwrap();
         assert!(blocks_java.contains(".requiresCorrectToolForDrops()"));
         assert!(blocks_java.contains(".randomTicks()"));
