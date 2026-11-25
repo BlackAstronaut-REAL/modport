@@ -78,7 +78,7 @@ fn forge_coordinate_pattern() -> &'static Regex {
 fn neoforge_version_pattern() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
-        Regex::new(r"(?i)(?:net\\.neoforged:neoforge|neoforge)\\s*[:= ]\\s*['\\\"]?(\\d+\\.\\d+(?:\\.\\d+)?)")
+        Regex::new(r#"(?i)(?:net\.neoforged:neoforge|neoforge)\s*[:= ]\s*['"]?(\d+\.\d+(?:\.\d+)?)"#)
             .expect("static NeoForge dependency coordinate regex")
     })
 }
