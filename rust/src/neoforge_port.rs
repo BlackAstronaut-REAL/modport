@@ -73,6 +73,7 @@ pub struct NativeBlockPlan {
     pub hardness: f64,
     pub resistance: f64,
     pub light_level: u32,
+    pub shape: String,
     pub harvest_level: u32,
     pub destroy_tool: Option<String>,
     pub step_sound: Option<String>,
@@ -249,6 +250,7 @@ struct BlockRecord {
     source_path: String,
     properties: Map<String, Value>,
     plant_like: bool,
+    shape: String,
     warnings: Vec<String>,
 }
 
@@ -528,6 +530,7 @@ pub fn port_to_neoforge(
         hardness: block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0),
         resistance: block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0),
         light_level: block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32,
+        shape: block.shape.clone(),
         harvest_level: block.properties.get("harvest_level").and_then(Value::as_u64).unwrap_or(0) as u32,
         destroy_tool: block.properties.get("destroy_tool").and_then(Value::as_str).map(str::to_owned),
         step_sound: block.properties.get("step_sound").and_then(Value::as_str).map(str::to_owned),
@@ -1346,13 +1349,30 @@ fn collect_native_tools(
     tools
 }
 
+fn infer_block_shape(source: &BlockSource, plant_like: bool) -> &'static str {
+    let combined = format!("{} {} {}", source.class_name, source.superclass, source.source_text).to_ascii_lowercase();
+    if plant_like { return "cross"; }
+    if ["blockslab", "slabblock", "blockhalf"].iter().any(|token| combined.contains(token)) {
+        return "slab";
+    }
+    if ["blockstairs", "stairsblock"].iter().any(|token| combined.contains(token)) {
+        return "stairs";
+    }
+    "cube"
+}
+
 fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<BlockRecord> {
     let mut blocks = Vec::new();
     for source in sources {
         let properties = source_block_properties(source);
         let plant_like = is_plant_source(source);
         let mut block_warnings = Vec::new();
-        block_warnings.push("Custom block methods, state properties, interactions, drops and tick behavior are not copied; this entry uses a simple native Block.".to_owned());
+        block_warnings.push(match infer_block_shape(source, plant_like) {
+            "slab" => "Legacy slab class detected; native slab state and models are generated, but double-slab merging and custom placement rules remain pending.".to_owned(),
+            "stairs" => "Legacy stair class detected; native stair variants/models are generated, but shape calculation and custom placement rules remain pending.".to_owned(),
+            "cross" => "Plant-like class detected; a cross model and non-collision fallback are generated; growth and special placement remain pending.".to_owned(),
+            _ => "Custom block methods, state properties, interactions, drops and tick behavior are not copied; this entry uses a simple native Block.".to_owned(),
+        });
         if plant_like {
             block_warnings.push("Plant-like source detected; a cross-model and non-collision fallback is emitted, but growth and special placement behavior remain pending.".to_owned());
         }
@@ -1367,6 +1387,7 @@ fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<Bl
             source_path: source.source_path.clone(),
             properties,
             plant_like,
+            shape: infer_block_shape(source, plant_like).to_owned(),
             warnings: block_warnings,
         });
     }
@@ -2671,23 +2692,83 @@ fn write_native_resources(
         let key = format!("block.{mod_id}.{}", block.id);
         localization.entry(key).or_insert_with(|| json!(display_name_from_id(&block.id)));
 
-        let block_state = namespace_root.join(format!("blockstates/{}.json", block.id));
-        if !block_state.exists() {
-            write_json_file(&block_state, &json!({"variants":{"":{"model":format!("{mod_id}:block/{}", block.id)}}}))?;
-            written.push(relative_to(resources_root, &block_state));
-        }
-
         let block_model = namespace_root.join(format!("models/block/{}.json", block.id));
-        if !block_model.exists() {
-            let texture = find_texture_reference(&textures_root, mod_id, &block.id, &block.class_name)
-                .unwrap_or_else(|| "minecraft:block/stone".to_owned());
-            let model = if block.plant_like {
-                json!({"parent":"minecraft:block/cross","textures":{"cross":texture}})
-            } else {
-                json!({"parent":"minecraft:block/cube_all","textures":{"all":texture}})
-            };
-            write_json_file(&block_model, &model)?;
-            written.push(relative_to(resources_root, &block_model));
+        let texture = find_texture_reference(&textures_root, mod_id, &block.id, &block.class_name)
+            .unwrap_or_else(|| "minecraft:block/stone".to_owned());
+        let block_state = namespace_root.join(format!("blockstates/{}.json", block.id));
+
+        match block.shape.as_str() {
+            "slab" => {
+                if !block_state.exists() {
+                    let mut variants = Map::new();
+                    variants.insert("type=bottom".to_owned(), json!({"model":format!("{mod_id}:block/{}", block.id)}));
+                    variants.insert("type=top".to_owned(), json!({"model":format!("{mod_id}:block/{}_top", block.id)}));
+                    variants.insert("type=double".to_owned(), json!({"model":format!("{mod_id}:block/{}_double", block.id)}));
+                    write_json_file(&block_state, &json!({"variants":variants}))?;
+                    written.push(relative_to(resources_root, &block_state));
+                }
+                let models = [
+                    (block_model.clone(), json!({"parent":"minecraft:block/slab","textures":{"bottom":texture,"top":texture,"side":texture}})),
+                    (namespace_root.join(format!("models/block/{}_top.json", block.id)), json!({"parent":"minecraft:block/slab_top","textures":{"bottom":texture,"top":texture,"side":texture}})),
+                    (namespace_root.join(format!("models/block/{}_double.json", block.id)), json!({"parent":"minecraft:block/cube_all","textures":{"all":texture}})),
+                ];
+                for (path, model) in models {
+                    if !path.exists() {
+                        write_json_file(&path, &model)?;
+                        written.push(relative_to(resources_root, &path));
+                    }
+                }
+            }
+            "stairs" => {
+                let mut variants = Map::new();
+                for facing in ["east", "west", "south", "north"] {
+                    let y = match facing { "east" => 0, "south" => 90, "west" => 180, _ => 270 };
+                    for half in ["bottom", "top"] {
+                        let x = if half == "top" { 180 } else { 0 };
+                        for shape in ["straight", "inner_left", "inner_right", "outer_left", "outer_right"] {
+                            let suffix = match shape {
+                                "inner_left" | "inner_right" => "_inner",
+                                "outer_left" | "outer_right" => "_outer",
+                                _ => "",
+                            };
+                            let model = format!("{mod_id}:block/{}{suffix}", block.id);
+                            let key = format!("facing={facing},half={half},shape={shape}");
+                            variants.insert(key, json!({"model":model,"x":x,"y":y,"uvlock":true}));
+                        }
+                    }
+                }
+                if !block_state.exists() {
+                    write_json_file(&block_state, &json!({"variants":variants}))?;
+                    written.push(relative_to(resources_root, &block_state));
+                }
+                let base_textures = json!({"bottom":texture,"top":texture,"side":texture});
+                let models = [
+                    (block_model.clone(), json!({"parent":"minecraft:block/stairs","textures":base_textures})),
+                    (namespace_root.join(format!("models/block/{}_inner.json", block.id)), json!({"parent":"minecraft:block/inner_stairs","textures":{"bottom":texture,"top":texture,"side":texture}})),
+                    (namespace_root.join(format!("models/block/{}_outer.json", block.id)), json!({"parent":"minecraft:block/outer_stairs","textures":{"bottom":texture,"top":texture,"side":texture}})),
+                ];
+                for (path, model) in models {
+                    if !path.exists() {
+                        write_json_file(&path, &model)?;
+                        written.push(relative_to(resources_root, &path));
+                    }
+                }
+            }
+            _ => {
+                if !block_state.exists() {
+                    write_json_file(&block_state, &json!({"variants":{"":{"model":format!("{mod_id}:block/{}", block.id)}}}))?;
+                    written.push(relative_to(resources_root, &block_state));
+                }
+                if !block_model.exists() {
+                    let model = if block.plant_like {
+                        json!({"parent":"minecraft:block/cross","textures":{"cross":texture}})
+                    } else {
+                        json!({"parent":"minecraft:block/cube_all","textures":{"all":texture}})
+                    };
+                    write_json_file(&block_model, &model)?;
+                    written.push(relative_to(resources_root, &block_model));
+                }
+            }
         }
 
         let item_model = namespace_root.join(format!("models/item/{}.json", block.id));
