@@ -46,7 +46,15 @@ pub struct NativeBlockPlan {
     pub hardness: f64,
     pub resistance: f64,
     pub light_level: u32,
+    pub harvest_level: u32,
+    pub destroy_tool: Option<String>,
+    pub step_sound: Option<String>,
+    pub requires_correct_tool: bool,
+    pub random_ticks: bool,
     pub plant_like: bool,
+    pub waterloggable: bool,
+    pub has_gravity: bool,
+    pub recovered_properties: Map<String, Value>,
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
@@ -358,8 +366,20 @@ pub fn port_to_neoforge(
         hardness: block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0),
         resistance: block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0),
         light_level: block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32,
+        harvest_level: block.properties.get("harvest_level").and_then(Value::as_u64).unwrap_or(0) as u32,
+        destroy_tool: block.properties.get("destroy_tool").and_then(Value::as_str).map(str::to_owned),
+        step_sound: block.properties.get("step_sound").and_then(Value::as_str).map(str::to_owned),
+        requires_correct_tool: block.properties.get("requires_correct_tool").and_then(Value::as_bool).unwrap_or(false),
+        random_ticks: block.properties.get("random_ticks").and_then(Value::as_bool).unwrap_or(false),
         plant_like: block.plant_like,
-        generated_as: "vanilla Block + BlockItem registration".to_owned(),
+        waterloggable: block.properties.get("waterloggable").and_then(Value::as_bool).unwrap_or(false),
+        has_gravity: block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false),
+        recovered_properties: block.properties.clone(),
+        generated_as: if block.plant_like {
+            "native Block + BlockItem with cross model and non-collision properties".to_owned()
+        } else {
+            "native Block + BlockItem with recovered properties and datapack loot/tags".to_owned()
+        },
         warnings: block.warnings.clone(),
     }).collect();
 
@@ -1664,7 +1684,7 @@ fn java_block_sound_type(value: &str) -> &'static str {
         "CANDLE" => "CANDLE",
         "AMETHYST" => "AMETHYST",
         "COPPER" => "COPPER",
-        "PISTON" => "PISTON",
+        "PISTON" => "STONE",
         _ => "STONE",
     }
 }
