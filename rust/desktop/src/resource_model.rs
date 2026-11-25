@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use image::RgbaImage;
 use mojmodelbridge::viewer::{
     ViewerAnimation, ViewerCube, ViewerNode, ViewerScene,
 };
@@ -7,6 +8,22 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
+
+fn texture_frame_dimensions(path: &Path) -> Option<(u32, u32)> {
+    let (image_width, image_height) = image::image_dimensions(path).ok()?;
+    let sidecar = PathBuf::from(format!("{}.mcmeta", path.display()));
+    let metadata = fs::read(sidecar).ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+    let animation = metadata.as_ref()?.get("animation")?.as_object()?;
+    let width = animation.get("width").and_then(Value::as_u64)
+        .map(|value| value as u32).unwrap_or(image_width);
+    let height = animation.get("height").and_then(Value::as_u64)
+        .map(|value| value as u32).unwrap_or(width);
+    if width == 0 || height == 0 || width > image_width || height > image_height {
+        return Some((image_width, image_height));
+    }
+    Some((width, height))
+}
 
 fn read_json(path: &Path) -> Result<Value> {
     let bytes = fs::read(path).with_context(|| format!("Reading item model {}", path.display()))?;
@@ -230,7 +247,7 @@ fn face_uvs(
             .unwrap_or_else(|| default_face_uv(from, to, index));
         let size = resolved_face_texture_path(Some(face), textures, roots, namespace)
             .and_then(|path| texture_paths.iter().find(|candidate| **candidate == path))
-            .and_then(|path| image::image_dimensions(path).ok())
+            .and_then(|path| texture_frame_dimensions(path))
             .unwrap_or((default_texture_size[0], default_texture_size[1]));
         let sx = size.0 as f32 / 16.0;
         let sy = size.1 as f32 / 16.0;
@@ -858,6 +875,79 @@ pub fn synthetic_block_preview(
     Ok((scene, texture_paths))
 }
 
+/// Extrude a 2D item sprite into a pixel-thick model. Every opaque source pixel
+/// becomes a one-pixel voxel; only exposed side faces are emitted, and the same
+/// source pixel is sampled on the front, back, and all exposed edges.
+pub fn sprite_preview_scene(
+    name: &str,
+    texture_path: &Path,
+    image: &RgbaImage,
+) -> ViewerScene {
+    let width = image.width().max(1);
+    let height = image.height().max(1);
+    let scale = 16.0 / width.max(height) as f32;
+    let half_width = width as f32 * scale * 0.5;
+    let half_height = height as f32 * scale * 0.5;
+    let half_depth = scale * 0.5;
+    let opaque = |x: i32, y: i32| -> bool {
+        x >= 0 && y >= 0 && x < width as i32 && y < height as i32
+            && image.get_pixel(x as u32, y as u32)[3] > 0
+    };
+    let mut cubes = Vec::new();
+
+    for y in 0..height {
+        for x in 0..width {
+            if image.get_pixel(x, y)[3] == 0 { continue; }
+            let u0 = x as f32;
+            let v0 = y as f32;
+            let uv = [u0, v0, u0 + 1.0, v0 + 1.0];
+            cubes.push(ViewerCube {
+                min: [
+                    x as f32 * scale - half_width,
+                    half_height - (y + 1) as f32 * scale,
+                    -half_depth,
+                ],
+                max: [
+                    (x + 1) as f32 * scale - half_width,
+                    half_height - y as f32 * scale,
+                    half_depth,
+                ],
+                uv_origin: [0.0; 2],
+                face_uvs: Some([uv; 6]),
+                face_texture_indices: Some([0; 6]),
+                face_visibility: Some([
+                    !opaque(x as i32 + 1, y as i32),
+                    !opaque(x as i32 - 1, y as i32),
+                    !opaque(x as i32, y as i32 + 1),
+                    !opaque(x as i32, y as i32 - 1),
+                    true,
+                    true,
+                ]),
+                face_uv_rotations: None,
+                crossed_plane: false,
+                mirror: true,
+                name: format!("pixel_{x}_{y}"),
+            });
+        }
+    }
+
+    ViewerScene {
+        name: name.to_owned(),
+        texture_size: [width, height],
+        texture: texture_path.to_string_lossy().to_string(),
+        texture_variants: vec![texture_path.to_string_lossy().to_string()],
+        nodes: vec![ViewerNode {
+            name: "extruded_sprite".to_owned(),
+            parent: None,
+            local_translation: [0.0; 3],
+            base_rotation: [0.0; 3],
+            cubes,
+        }],
+        animations: Vec::new(),
+        warnings: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1266,4 +1356,32 @@ mod tests {
         assert_eq!(scene.nodes.len(), 1);
         assert_eq!(found_textures, vec![texture_path]);
     }
+
+    #[test]
+    fn animated_texture_uv_dimensions_use_frame_size_instead_of_sheet_size() {
+        let temp = tempfile::tempdir().unwrap();
+        let texture = temp.path().join("animated.png");
+        RgbaImage::new(16, 128).save(&texture).unwrap();
+        fs::write(
+            PathBuf::from(format!("{}.mcmeta", texture.display())),
+            r#"{"animation":{"width":16,"height":16}}"#,
+        ).unwrap();
+        assert_eq!(texture_frame_dimensions(&texture), Some((16, 16)));
+    }
+
+    #[test]
+    fn sprite_extrusion_emits_only_opaque_pixels_and_preserves_pixel_uvs() {
+        let temp = tempfile::tempdir().unwrap();
+        let texture = temp.path().join("sprite.png");
+        let mut image = RgbaImage::new(2, 2);
+        image.put_pixel(0, 0, image::Rgba([255, 0, 0, 255]));
+        image.put_pixel(1, 0, image::Rgba([0, 255, 0, 255]));
+        image.put_pixel(0, 1, image::Rgba([0, 0, 255, 255]));
+        let scene = sprite_preview_scene("sprite", &texture, &image);
+        assert_eq!(scene.nodes.len(), 1);
+        assert_eq!(scene.nodes[0].cubes.len(), 3);
+        assert_eq!(scene.nodes[0].cubes[0].face_uvs, Some([[0.0, 0.0, 1.0, 1.0]; 6]));
+        assert_eq!(scene.nodes[0].cubes[0].face_visibility, Some([false, true, true, false, true, true]));
+    }
+
 }
