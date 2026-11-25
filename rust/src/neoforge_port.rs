@@ -757,7 +757,7 @@ fn detect_legacy_api_methods(roots: &[PathBuf]) -> Vec<LegacyApiMethodMapping> {
     for root in roots {
         for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
             if !entry.file_type().is_file()
-                || !entry.path().extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+                || !entry.path().extension().is_some_and(|extension| extension.to_string_lossy().eq_ignore_ascii_case("java"))
             {
                 continue;
             }
