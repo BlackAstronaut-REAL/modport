@@ -482,19 +482,26 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
     // Archive extraction is independent by input JAR. Extract concurrently into
     // isolated temp directories, then merge in sorted archive order so warning
     // order and duplicate-class precedence remain deterministic.
-    let extracted_archives: Vec<_> = archives.par_iter().map(|archive_path| {
-        let extraction = Builder::new().prefix("mojmodelbridge-classes-").tempdir()
-            .map(Arc::new)
-            .map_err(|error| format!("Could not create temporary class extraction: {error}"));
-        let Ok(extraction) = extraction else {
-            return (archive_path.clone(), Err(extraction.unwrap_err()));
-        };
-        let mut extracted_paths = Vec::new();
-        match extract_archive_classes(archive_path, extraction.path(), &mut extracted_paths) {
-            Ok(()) => Ok((archive_path.clone(), extraction, extracted_paths)),
-            Err(error) => Err((archive_path.clone(), format!("Could not index compiled classes: {error}"))),
-        }
-    }).collect();
+    let extracted_archives: Vec<Result<(PathBuf, Arc<tempfile::TempDir>, Vec<PathBuf>), (PathBuf, String)>> =
+        archives.par_iter().map(|archive_path| {
+            let extraction = match Builder::new().prefix("mojmodelbridge-classes-").tempdir() {
+                Ok(value) => Arc::new(value),
+                Err(error) => {
+                    return Err((
+                        archive_path.clone(),
+                        format!("Could not create temporary class extraction: {error}"),
+                    ));
+                }
+            };
+            let mut extracted_paths = Vec::new();
+            match extract_archive_classes(archive_path, extraction.path(), &mut extracted_paths) {
+                Ok(()) => Ok((archive_path.clone(), extraction, extracted_paths)),
+                Err(error) => Err((
+                    archive_path.clone(),
+                    format!("Could not index compiled classes: {error}"),
+                )),
+            }
+        }).collect();
 
     for result in extracted_archives {
         match result {
