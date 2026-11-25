@@ -174,15 +174,15 @@ fn flush_segment(output: &mut Vec<String>, segment: &mut String, style: LoreStyl
     let mut expression = format!("Component.literal(\"{escaped}\")");
     let mut modifiers = Vec::new();
     if let Some(color) = style.color {
-        modifiers.push(format!("style.withColor(ChatFormatting.{color})"));
+        modifiers.push(format!("withColor(ChatFormatting.{color})"));
     }
-    if style.bold { modifiers.push("style.withBold(true)".to_owned()); }
-    if style.italic { modifiers.push("style.withItalic(true)".to_owned()); }
-    if style.underlined { modifiers.push("style.withUnderlined(true)".to_owned()); }
-    if style.strikethrough { modifiers.push("style.withStrikethrough(true)".to_owned()); }
-    if style.obfuscated { modifiers.push("style.withObfuscated(true)".to_owned()); }
+    if style.bold { modifiers.push("withBold(true)".to_owned()); }
+    if style.italic { modifiers.push("withItalic(true)".to_owned()); }
+    if style.underlined { modifiers.push("withUnderlined(true)".to_owned()); }
+    if style.strikethrough { modifiers.push("withStrikethrough(true)".to_owned()); }
+    if style.obfuscated { modifiers.push("withObfuscated(true)".to_owned()); }
     if !modifiers.is_empty() {
-        expression.push_str(&format!(".withStyle(style -> {})", modifiers.join(".")));
+        expression.push_str(&format!(".withStyle(style -> style.{})", modifiers.join(".style.")));
     }
     output.push(expression);
     segment.clear();
