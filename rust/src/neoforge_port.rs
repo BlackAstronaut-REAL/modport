@@ -3148,7 +3148,7 @@ mod tests {
             "#,
         ).unwrap();
 
-        let found = detect_legacy_api_methods(&[temp.path().to_path_buf()]);
+        let found = detect_legacy_api_methods(&[temp.path().to_path_buf()], None);
         assert!(found.iter().any(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick"));
         assert!(found.iter().any(|entry| entry.source_owner == "ItemStack" && entry.source_method == "getItem"));
         assert!(found.iter().any(|entry| entry.source_owner == "GameRegistry" && entry.source_method == "registerItem"));
