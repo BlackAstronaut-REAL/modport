@@ -145,6 +145,57 @@ pub fn discover_block_entities(
         }
     }
 
+    // Legacy Forge registration: GameRegistry.registerTileEntity(Class.class, "id").
+    // Associate only when the corresponding block source explicitly constructs
+    // or returns the tile entity from its block-entity factory methods.
+    let legacy_registration = Regex::new(
+        r#"(?i)GameRegistry\\s*\\.\\s*registerTileEntity\\s*\\(\\s*([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\.class\\s*,\\s*"([^"]+)""#
+    ).expect("static legacy tile entity registration regex");
+    for path in java_files(roots) {
+        let Ok(source) = fs::read_to_string(&path) else { continue };
+        for capture in legacy_registration.captures_iter(&source) {
+            let Some(raw_class) = capture.get(1).map(|value| value.as_str()) else { continue };
+            let Some(raw_id) = capture.get(2).map(|value| value.as_str()) else { continue };
+            let source_class = simple_class(raw_class);
+            let registry_name = normalize_registry(raw_id);
+            let mut associated_blocks = BTreeSet::new();
+            for (block_id, block_class) in blocks {
+                let block_source = java_files(roots).into_iter().find(|candidate| {
+                    candidate.file_stem().and_then(|value| value.to_str())
+                        .is_some_and(|name| name.eq_ignore_ascii_case(block_class))
+                });
+                let Some(block_source) = block_source else { continue };
+                let Ok(block_text) = fs::read_to_string(block_source) else { continue };
+                let references_tile = block_text.contains(&source_class)
+                    && (block_text.contains("createNewTileEntity")
+                        || block_text.contains("createTileEntity")
+                        || block_text.contains("hasTileEntity"));
+                if references_tile {
+                    associated_blocks.insert(block_id.clone());
+                }
+            }
+            let key = (registry_name.clone(), source_class.clone());
+            if !seen.insert(key) { continue; }
+            let mut warnings = Vec::new();
+            if associated_blocks.is_empty() {
+                warnings.push(format!(
+                    "Legacy TileEntity '{}' was registered but no block factory reference could be matched; it was inventoried but not emitted.",
+                    source_class
+                ));
+            }
+            warnings.push(
+                "Legacy TileEntity has been mapped to a native BlockEntity placeholder; custom NBT read/write, tick logic, inventory, menus, capabilities and interactions remain unported.".to_owned()
+            );
+            output.push(BlockEntitySourceRecord {
+                registry_name,
+                source_class,
+                source_path: path.to_string_lossy().to_string(),
+                associated_blocks: associated_blocks.into_iter().collect(),
+                warnings,
+            });
+        }
+    }
+
     output.sort_by(|a, b| a.registry_name.cmp(&b.registry_name).then(a.source_class.cmp(&b.source_class)));
     Ok(output)
 }
@@ -153,6 +204,37 @@ pub fn discover_block_entities(
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn discovers_legacy_tile_entity_registration_and_block_factory_relationship() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/TileRegistry.java"), r#"
+            public class TileRegistry {
+                void register() {
+                    GameRegistry.registerTileEntity(TileEntityRubyMachine.class, "ruby_machine");
+                }
+            }
+        "#).unwrap();
+        fs::write(root.join("src/BlockRubyMachine.java"), r#"
+            public class BlockRubyMachine extends Block {
+                @Override
+                public TileEntity createNewTileEntity(World world, int metadata) {
+                    return new TileEntityRubyMachine();
+                }
+            }
+        "#).unwrap();
+
+        let found = discover_block_entities(
+            &[root.to_path_buf()],
+            &[("ruby_machine".to_owned(), "BlockRubyMachine".to_owned())]
+        ).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].registry_name, "ruby_machine");
+        assert_eq!(found[0].source_class, "TileEntityRubyMachine");
+        assert_eq!(found[0].associated_blocks, vec!["ruby_machine"]);
+    }
 
     #[test]
     fn finds_block_entity_type_and_owning_block_from_neoforge_registration() {
