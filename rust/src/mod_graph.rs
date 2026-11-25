@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -777,10 +778,14 @@ fn class_texture_references(class: &ClassFile) -> Vec<String> {
 fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistration>> {
     let bytes = fs::read(path).with_context(|| format!("Reading compiled registry {}", path.display()))?;
     let class = ClassFile::parse(&bytes)?;
+    parse_compiled_registration_class_file(&class, path)
+}
+
+fn parse_compiled_registration_class_file(class: &ClassFile, path: &Path) -> Result<Vec<RendererRegistration>> {
     let class_name = class.this_name()
         .map(|name| simple_name(name).to_owned())
         .unwrap_or_else(|| path.file_stem().and_then(|value| value.to_str()).unwrap_or("Unknown").to_owned());
-    let textures = class_texture_references(&class);
+    let textures = class_texture_references(class);
     let mut registrations = Vec::new();
 
     for method in &class.methods {
@@ -831,7 +836,7 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
             }
 
             if (0x02..=0x14).contains(&op) {
-                if let Some(value) = compiled_constant(&class, instruction) {
+                if let Some(value) = compiled_constant(class, instruction) {
                     stack.push(value);
                 }
                 continue;
@@ -939,15 +944,17 @@ fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistra
 
 
 
-fn compiled_registry_names(class_paths: &[PathBuf]) -> BTreeMap<String, String> {
+fn compiled_registry_names(compiled: &crate::compiled_registry::CompiledRegistryIndex) -> BTreeMap<String, String> {
     let mut result = BTreeMap::new();
-    let markers = [b"registerModEntity".as_slice(), b"registerGlobalEntityID".as_slice()];
-    for path in class_paths {
-        let Ok(bytes) = fs::read(path) else { continue; };
-        if !markers.iter().any(|marker| bytes.windows(marker.len()).any(|window| window == *marker)) {
-            continue;
-        }
-        let Ok(class) = ClassFile::parse(&bytes) else { continue; };
+    let markers = ["registerModEntity", "registerGlobalEntityID"];
+    for info in compiled.classes.values() {
+        let Some(class) = compiled.parsed_class_paths.get(&info.path) else { continue };
+        let class = class.as_ref();
+        let has_marker = class.constant_pool.iter().flatten().any(|entry| {
+            matches!(entry, crate::bytecode::ConstantPoolEntry::Utf8(value)
+                if markers.iter().any(|marker| value == marker))
+        });
+        if !has_marker { continue; }
         for method in &class.methods {
             let Some(code) = method.code.as_ref() else { continue; };
             let Ok(instructions) = decode_instructions(&code.code) else { continue; };
@@ -955,7 +962,7 @@ fn compiled_registry_names(class_paths: &[PathBuf]) -> BTreeMap<String, String> 
             let mut recent_string = String::new();
             for instruction in &instructions {
                 if (0x12..=0x14).contains(&instruction.opcode) {
-                    match compiled_constant(&class, instruction) {
+                    match compiled_constant(class, instruction) {
                         Some(CompiledValue::Class(value)) => recent_class = simple_name(&value).to_owned(),
                         Some(CompiledValue::Text(value)) => recent_string = value,
                         _ => {}
@@ -976,6 +983,7 @@ fn compiled_registry_names(class_paths: &[PathBuf]) -> BTreeMap<String, String> 
     result
 }
 
+
 fn entity_attribute_name(field: &str) -> Option<&'static str> {
     match field {
         "field_111267_a" | "maxHealth" | "MAX_HEALTH" | "GENERIC_MAX_HEALTH" => Some("health"),
@@ -987,8 +995,8 @@ fn entity_attribute_name(field: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
-    let mut metadata = EntityMetadata {
+fn default_compiled_entity_metadata(class_name: &str, registry: Option<&str>) -> EntityMetadata {
+    EntityMetadata {
         class_name: class_name.to_owned(),
         display_name: class_display_name(registry.unwrap_or(class_name)),
         registry_name: registry.map(str::to_owned).unwrap_or_else(|| registry_slug(class_name)),
@@ -1006,15 +1014,23 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
         flying_mob: false,
         ai_classes: Vec::new(),
         warnings: Vec::new(),
-    };
+    }
+}
+
+fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
     let parsed = fs::read(path).ok().and_then(|bytes| ClassFile::parse(&bytes).ok());
     let Some(class) = parsed else {
+        let mut metadata = default_compiled_entity_metadata(class_name, registry);
         metadata.warnings.push(
             "Compiled entity class could not be parsed; numeric attributes and superclass traits remain defaults.".to_owned()
         );
         return metadata;
     };
+    parse_entity_class_metadata_from_class(&class, class_name, registry)
+}
 
+fn parse_entity_class_metadata_from_class(class: &ClassFile, class_name: &str, registry: Option<&str>) -> EntityMetadata {
+    let mut metadata = default_compiled_entity_metadata(class_name, registry);
     metadata.superclass = class.super_name().map(simple_name).unwrap_or("").to_owned();
     let superclass = metadata.superclass.to_ascii_lowercase();
     metadata.water_mob = ["watermob", "squid", "fish"].iter().any(|token| superclass.contains(token));
@@ -1059,7 +1075,7 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
             }
 
             if (0x02..=0x14).contains(&op) {
-                if let Some(value) = compiled_constant(&class, instruction) {
+                if let Some(value) = compiled_constant(class, instruction) {
                     if let CompiledValue::Number(number) = value {
                         recent_numeric = Some(number);
                         stack.push(CompiledValue::Number(number));
@@ -1262,7 +1278,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
 
     let index = source_index(&java_paths);
     // Entity registry IDs are separate from the broader item/block registry map.
-    let mut entity_registry = compiled_registry_names(&class_paths);
+    let mut entity_registry = compiled_registry_names(&compiled_content);
     for (entity, name) in registry_names(&java_paths) {
         entity_registry.insert(entity, name);
     }
@@ -1312,12 +1328,21 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
         b"registerRenderer".as_slice(),
         b"registerEntityRenderer".as_slice(),
     ];
-    for path in &class_paths {
-        let Ok(bytes) = fs::read(path) else { continue; };
-        if !registration_markers.iter().any(|marker| bytes.windows(marker.len()).any(|window| window == *marker)) {
-            continue;
-        }
-        match parse_compiled_registration_class(path) {
+    let compiled_registrations: Vec<(PathBuf, Result<Vec<RendererRegistration>, String>)> =
+        class_paths.par_iter().filter_map(|path| {
+            let class = compiled_content.parsed_class_paths.get(path)?;
+            let has_marker = class.constant_pool.iter().flatten().any(|entry| {
+                matches!(entry, crate::bytecode::ConstantPoolEntry::Utf8(value)
+                    if registration_markers.iter().any(|marker| value.as_bytes() == *marker))
+            });
+            if !has_marker { return None; }
+            Some((path.clone(), parse_compiled_registration_class_file(class.as_ref(), path)
+                .map_err(|error| format!("{error:#}"))))
+        }).collect();
+    let mut compiled_registrations = compiled_registrations;
+    compiled_registrations.sort_by_key(|(path, _)| path.to_string_lossy().to_ascii_lowercase());
+    for (path, parsed) in compiled_registrations {
+        match parsed {
             Ok(found) => registrations.extend(found),
             Err(error) => warnings.push(format!(
                 "Could not recover compiled renderer registrations from {}: {error}",
@@ -1330,12 +1355,10 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     // that may live in the registration/bootstrap class.
     for registration in &mut registrations {
         if let Some(path) = class_files.get(&registration.renderer_class) {
-            if let Ok(bytes) = fs::read(path) {
-                if let Ok(class) = ClassFile::parse(&bytes) {
-                    registration.texture_refs.extend(class_texture_references(&class));
-                    registration.texture_refs.sort_by_key(|value| value.to_ascii_lowercase());
-                    registration.texture_refs.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-                }
+            if let Some(class) = compiled_content.parsed_class_paths.get(path) {
+                registration.texture_refs.extend(class_texture_references(class.as_ref()));
+                registration.texture_refs.sort_by_key(|value| value.to_ascii_lowercase());
+                registration.texture_refs.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
             }
         }
     }
@@ -1376,7 +1399,13 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
                     warnings: vec!["Entity source metadata was not fully parsed; defaults remain in use.".to_owned()]
                 })
         } else if let Some(path) = compiled {
-            parse_entity_class_metadata(path, &entity_name, entity_registry_name.map(String::as_str))
+            if let Some(class) = compiled_content.parsed_class_paths.get(path) {
+                parse_entity_class_metadata_from_class(
+                    class.as_ref(), &entity_name, entity_registry_name.map(String::as_str)
+                )
+            } else {
+                parse_entity_class_metadata(path, &entity_name, entity_registry_name.map(String::as_str))
+            }
         } else {
             EntityMetadata {
                 class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
