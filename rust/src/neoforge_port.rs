@@ -37,6 +37,10 @@ pub struct NativeItemPlan {
     pub source_path: String,
     pub lore: Vec<String>,
     pub food: Option<NativeFoodPlan>,
+    pub durability: Option<u32>,
+    pub rarity: Option<String>,
+    pub fire_resistant: bool,
+    pub craft_remainder: Option<String>,
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
@@ -160,6 +164,10 @@ struct ItemRecord {
     kind: String,
     lore: Vec<String>,
     food: Option<FoodRecord>,
+    durability: Option<u32>,
+    rarity: Option<String>,
+    fire_resistant: bool,
+    craft_remainder: Option<String>,
     warnings: Vec<String>,
 }
 
@@ -383,11 +391,21 @@ pub fn port_to_neoforge(
             always_edible: food.always_edible,
             fast: food.fast,
         }),
-        generated_as: match (item.lore.is_empty(), item.food.is_some()) {
-            (false, true) => "native Item with FoodProperties and formatted legacy tooltip lore".to_owned(),
-            (true, true) => "native Item with FoodProperties".to_owned(),
-            (false, false) => "native Item subclass with formatted legacy tooltip lore".to_owned(),
-            (true, false) => "vanilla Item registration".to_owned(),
+        durability: item.durability,
+        rarity: item.rarity.clone(),
+        fire_resistant: item.fire_resistant,
+        craft_remainder: item.craft_remainder.clone(),
+        generated_as: match (
+            item.lore.is_empty(), item.food.is_some(), item.durability.is_some(),
+            item.rarity.is_some() || item.fire_resistant || item.craft_remainder.is_some()
+        ) {
+            (false, true, _, _) => "native Item with FoodProperties and formatted legacy tooltip lore".to_owned(),
+            (true, true, _, _) => "native Item with FoodProperties".to_owned(),
+            (false, false, true, _) => "native durable Item subclass with formatted legacy tooltip lore".to_owned(),
+            (false, false, false, _) => "native Item subclass with formatted legacy tooltip lore".to_owned(),
+            (true, false, true, _) => "native durable Item".to_owned(),
+            (true, false, false, true) => "native Item with recovered rarity/fire/remainder properties".to_owned(),
+            (true, false, false, false) => "vanilla Item registration".to_owned(),
         },
         warnings: item.warnings.clone(),
     }).collect();
@@ -725,6 +743,67 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
     })
 }
 
+#[derive(Debug, Clone, Default)]
+struct RecoveredItemProperties {
+    durability: Option<u32>,
+    rarity: Option<String>,
+    fire_resistant: bool,
+    craft_remainder: Option<String>,
+}
+
+fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties {
+    let text = &source.source_text;
+    let durability = Regex::new(r"(?i)(?:setMaxDamage|func_77656_e|\\.durability)\\s*\\(\\s*(\\d+)")
+        .expect("static item durability regex")
+        .captures(text)
+        .and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .map(|value| value.min(100_000));
+
+    let rarity = Regex::new(
+        r"(?i)(?:setRarity|\\.rarity)\\s*\\(\\s*(?:(?:EnumRarity|Rarity)\\s*\\.\\s*)?([A-Z_]+)"
+    ).expect("static item rarity regex")
+        .captures(text)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_ascii_uppercase())
+        .filter(|value| matches!(value.as_str(), "COMMON" | "UNCOMMON" | "RARE" | "EPIC"));
+
+    let fire_resistant = Regex::new(r"(?i)(?:setFireResistant|fireResistant)\\s*\\(")
+        .expect("static item fire-resistance regex")
+        .is_match(text);
+
+    let craft_remainder = Regex::new(
+        r"(?i)setContainerItem\\s*\\(\\s*(?:net\\.minecraft\\.init\\.)?Items\\s*\\.\\s*([A-Za-z0-9_]+)"
+    ).expect("static container item regex")
+        .captures(text)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_ascii_uppercase());
+
+    RecoveredItemProperties { durability, rarity, fire_resistant, craft_remainder }
+}
+
+fn item_properties_java(item: &ItemRecord) -> String {
+    let mut properties = if let Some(durability) = item.durability {
+        format!("new Item.Properties().durability({durability})")
+    } else {
+        format!("new Item.Properties().stacksTo({})", item.stack_size)
+    };
+    if let Some(food) = &item.food {
+        properties.push_str(&format!(".food({})", food_properties_java(food)));
+    }
+    if let Some(rarity) = &item.rarity {
+        properties.push_str(&format!(".rarity(Rarity.{rarity})"));
+    }
+    if item.fire_resistant {
+        properties.push_str(".fireResistant()");
+    }
+    if let Some(remainder) = &item.craft_remainder {
+        properties.push_str(&format!(".craftRemainder(Items.{remainder})"));
+    }
+    properties
+}
+
 fn food_properties_java(food: &FoodRecord) -> String {
     let mut builder = format!(
         "new FoodProperties.Builder().nutrition({}).saturationMod({}F)",
@@ -777,7 +856,10 @@ fn collect_items(
         }
         let lore = collect_source_lore(&source.source_text, language_lore, &source.registry_name);
         let food = recover_food_properties(source);
-        if lore.is_empty() && food.is_none() {
+        let item_properties = recover_item_properties(source);
+        if lore.is_empty() && food.is_none() && item_properties.durability.is_none()
+            && item_properties.rarity.is_none() && !item_properties.fire_resistant
+            && item_properties.craft_remainder.is_none() {
             record_warnings.push("Non-tooltip custom item methods are not copied; this entry is emitted as a basic native Item.".to_owned());
         } else if !lore.is_empty() {
             record_warnings.push("Legacy formatted tooltip lore was reconstructed; other custom item methods remain unported.".to_owned());
@@ -794,6 +876,10 @@ fn collect_items(
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
             lore,
             food,
+            durability: item_properties.durability,
+            rarity: item_properties.rarity,
+            fire_resistant: item_properties.fire_resistant,
+            craft_remainder: item_properties.craft_remainder,
             warnings: record_warnings,
         });
     }
@@ -1969,6 +2055,12 @@ import net.neoforged.neoforge.registries.DeferredRegister;
     if items.iter().any(|item| item.food.is_some()) {
         body.push_str("import net.minecraft.world.food.FoodProperties;\\n");
     }
+    if items.iter().any(|item| item.rarity.is_some()) {
+        body.push_str("import net.minecraft.world.item.Rarity;\\n");
+    }
+    if items.iter().any(|item| item.craft_remainder.is_some()) {
+        body.push_str("import net.minecraft.world.item.Items;\\n");
+    }
     if !armors.is_empty() {
         body.push_str("import net.minecraft.world.item.ArmorItem;\n");
         body.push_str(&format!("import {package}.registry.ModArmorMaterials;\n"));
@@ -2002,10 +2094,7 @@ public final class ModItems {
 "#);
     for item in items {
         let field = java_field_name(&item.id, "ITEM");
-        let mut properties = format!("new Item.Properties().stacksTo({})", item.stack_size);
-        if let Some(food) = &item.food {
-            properties.push_str(&format!(".food({})", food_properties_java(food)));
-        }
+        let properties = item_properties_java(item);
         if item.lore.is_empty() {
             body.push_str(&format!(
                 "    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem(\"{id}\", {properties});\n",
@@ -2528,6 +2617,46 @@ mod tests {
         assert!(output.join("src/main/resources/assets/toolmod/models/item/ruby_sword.json").is_file());
         let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
         assert_eq!(status["converted"]["tools_and_weapons"], 2);
+    }
+
+    #[test]
+    fn ports_legacy_item_durability_rarity_fire_resistance_and_container_remainder() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("property_mod");
+        let output = temp.path().join("property_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"propertymod","name":"Property Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/ModItems.java"), r#"
+            public class ModItems {
+                public static final Item RUBY_TOOL = new RubyTool();
+                public static void register() {
+                    GameRegistry.registerItem(RUBY_TOOL, "ruby_tool");
+                }
+            }
+            public class RubyTool extends Item {
+                public RubyTool() {
+                    setMaxDamage(47);
+                    setRarity(EnumRarity.RARE);
+                    setFireResistant();
+                    setContainerItem(Items.BUCKET);
+                }
+            }
+        "#).unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+        let item = report.items.iter().find(|item| item.registry_name == "ruby_tool").unwrap();
+        assert_eq!(item.durability, Some(47));
+        assert_eq!(item.rarity.as_deref(), Some("RARE"));
+        assert!(item.fire_resistant);
+        assert_eq!(item.craft_remainder.as_deref(), Some("BUCKET"));
+
+        let items = fs::read_to_string(output.join("src/main/java/com/modport/propertymod/registry/ModItems.java")).unwrap();
+        assert!(items.contains(".durability(47)"));
+        assert!(items.contains(".rarity(Rarity.RARE)"));
+        assert!(items.contains(".fireResistant()"));
+        assert!(items.contains(".craftRemainder(Items.BUCKET)"));
     }
 
     #[test]
