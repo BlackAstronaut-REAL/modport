@@ -67,6 +67,13 @@ const DEFINITIONS: &[Definition] = &[
     Definition { source: "onDroppedByPlayer", target: "ItemTossEvent / player item-drop event adapter", category: "events", status: "event_adapter_required", notes: "Move behavior to the relevant NeoForge event path and preserve cancellation semantics.", docs: "items/index.md" },
     Definition { source: "onItemPickup", target: "Player/item pickup event adapter", category: "events", status: "event_adapter_required", notes: "Move pickup behavior to the relevant event and preserve cancellation and stack-transfer semantics.", docs: "items/index.md" },
     Definition { source: "onBlockStartBreak", target: "PlayerInteractEvent.LeftClickBlock / block-break event adapter", category: "events", status: "event_adapter_required", notes: "This is not a direct Item override in the target API. Reconstruct intended timing and cancellation behavior with the appropriate event.", docs: "items/interactionpipeline.md" },
+    Definition { source: "setPotionEffect", target: "FoodProperties.Builder#effect(Supplier<MobEffectInstance>, float)", category: "food_effects", status: "effect_adapter_required", notes: "Recover the effect registry entry, duration, amplifier, and chance. Use the supplier overload to avoid premature effect classloading.", docs: "items/index.md" },
+    Definition { source: "setAlwaysEdible", target: "FoodProperties.Builder#alwaysEdible()", category: "food", status: "automatic_property", notes: "A static always-edible flag can be emitted on the modern food builder.", docs: "items/index.md" },
+    Definition { source: "getItemStackDisplayName", target: "Item#getName(ItemStack) -> Component", category: "localization", status: "signature_adapter_required", notes: "Translate the legacy String-returning display name to a text Component and preserve stack-sensitive naming.", docs: "items/index.md" },
+    Definition { source: "getItemStackLimit", target: "DataComponents#MAX_STACK_SIZE / Item.Properties#stacksTo(int)", category: "stacking", status: "manual_adapter_required", notes: "Static values can use stacksTo; conditional stack limits need a stack-aware component or custom item behavior.", docs: "items/datacomponents.md" },
+    Definition { source: "initCapabilities", target: "RegisterCapabilitiesEvent#registerItem(...) / item capability provider", category: "capabilities", status: "capability_adapter_required", notes: "Move per-stack capability construction into NeoForge capability registration and preserve provider lifetime and invalidation semantics.", docs: "datastorage/capabilities.md" },
+    Definition { source: "getShareTag", target: "DataComponentType persistent/network codec", category: "networking", status: "component_codec_adapter_required", notes: "Replace ad-hoc item-stack share tags with persistent and/or network-synchronized data components as appropriate.", docs: "items/datacomponents.md" },
+    Definition { source: "readShareTag", target: "DataComponentType persistent/network codec", category: "networking", status: "component_codec_adapter_required", notes: "Reconstruct incoming custom stack state through the matching data component codec rather than legacy NBT share-tag mutation.", docs: "items/datacomponents.md" },
     Definition { source: "setNoRepair", target: "Item.Properties#setNoRepair()", category: "repair", status: "automatic_property", notes: "A static no-repair setting can be emitted as an Item.Properties builder call.", docs: "items/index.md" },
     Definition { source: "setMaxDamage", target: "Item.Properties#durability(int) / DataComponents#MAX_DAMAGE", category: "durability", status: "automatic_property", notes: "Static max-damage values can be transferred to Item.Properties#durability; per-stack dynamic behavior requires a component adapter.", docs: "items/index.md" },
     Definition { source: "setMaxStackSize", target: "Item.Properties#stacksTo(int) / DataComponents#MAX_STACK_SIZE", category: "stacking", status: "automatic_property", notes: "Static stack limits can be transferred to Item.Properties#stacksTo.", docs: "items/index.md" },
@@ -76,7 +83,7 @@ const DEFINITIONS: &[Definition] = &[
 fn property_call_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
-        r"\b(?P<name>setMaxDamage|setMaxStackSize|setNoRepair|setContainerItem)\s*\("
+        r"\b(?P<name>setMaxDamage|setMaxStackSize|setNoRepair|setContainerItem|setPotionEffect|setAlwaysEdible)\s*\("
     ).expect("static legacy item property-call regex"))
 }
 
@@ -182,6 +189,17 @@ mod tests {
         assert!(called.contains("setMaxStackSize"));
         assert!(called.contains("setNoRepair"));
         assert!(called.contains("setContainerItem"));
+        let food_calls = map_legacy_item_methods(r#"
+            class FoodItem extends ItemFood {
+                FoodItem() {
+                    setPotionEffect(new PotionEffect(Potion.getPotionById(10), 120, 1), 0.25F);
+                    setAlwaysEdible();
+                }
+            }
+        "#);
+        let food_names: BTreeSet<String> = food_calls.into_iter().map(|entry| entry.source_method).collect();
+        assert!(food_names.contains("setPotionEffect"));
+        assert!(food_names.contains("setAlwaysEdible"));
 
         let entries = item_method_dictionary();
         assert!(entries.iter().any(|entry| entry.source_method == "setMaxDamage"
