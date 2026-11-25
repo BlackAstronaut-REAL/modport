@@ -919,7 +919,7 @@ fn entity_source_texture_refs(
     entity_class: &str,
     java_files: &BTreeMap<String, PathBuf>,
 ) -> Vec<String> {
-    let mut all_sources = Vec::<(String, String)>::new();
+    let mut all_sources = Vec::<String>::new();
     let mut direct_sources = Vec::<String>::new();
     let mut seen = HashSet::<PathBuf>::new();
     for (class_name, path) in java_files {
@@ -933,24 +933,23 @@ fn entity_source_texture_refs(
         {
             direct_sources.push(source.clone());
         }
-        all_sources.push((class_name.clone(), source));
+        all_sources.push(source);
     }
 
-    let mut selected = BTreeSet::<String>::new();
+    // Match both old Forge ResourceLocation constructors and modern Mojmap factories.
     let two_arg = Regex::new(
-        r#"(?is)ResourceLocation\\s+([A-Za-z0-9_$]+)\\s*=\\s*(?:new\\s+ResourceLocation|ResourceLocation\\.(?:fromNamespaceAndPath|tryBuild))\\s*\\(\\s*"[^"]+"\\s*,\\s*"([^"]+)""#
+        r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*"[^"]+"\s*,\s*"([^"]+)""#
     ).unwrap();
     let one_arg = Regex::new(
-        r#"(?is)ResourceLocation\\s+([A-Za-z0-9_$]+)\\s*=\\s*(?:new\\s+ResourceLocation|ResourceLocation\\.(?:parse|tryParse|withDefaultNamespace))\\s*\\(\\s*"([^"]+)""#
+        r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)""#
     ).unwrap();
-    let variant_selector = Regex::new(
-        &format!(
-            r#"(?is)if\\s*\\(\\s*"{}"\\s*\\.equals\\s*\\([^)]*\\)\\s*\\)\\s*\\{{?\\s*return\\s+([A-Za-z0-9_$]+)"#,
-            regex::escape(entity_class)
-        )
-    ).unwrap();
+    let variant_selector = Regex::new(&format!(
+        r#"(?is)if\s*\(\s*"{}"\s*\.equals\s*\([^)]*\)\s*\)\s*\{{?\s*return\s+([A-Za-z0-9_$]+)"#,
+        regex::escape(entity_class)
+    )).unwrap();
 
-    for (_, source) in &all_sources {
+    let mut selected = BTreeSet::<String>::new();
+    for source in &all_sources {
         let mut constants = HashMap::<String, String>::new();
         for capture in two_arg.captures_iter(source) {
             constants.insert(capture[1].to_owned(), capture[2].to_owned());
@@ -968,10 +967,19 @@ fn entity_source_texture_refs(
         return selected.into_iter().collect();
     }
 
+    // No exact variant selector was found; use the entity's own texture accessor.
+    // In a multi-return method the final return is the actual fallback texture,
+    // while earlier constants may belong to glowing eyes or overlays.
     let mut direct = BTreeSet::<String>::new();
     for source in &direct_sources {
         let texture_method = Regex::new(
-            r#"(?s)\\b(?:getTexture|getEntityTexture|getTextureLocation|getEntityTextureLocation)\\s*\\([^)]*\\)\\s*\\{{"#
+            r#"(?s)\b(?:getTexture|getEntityTexture|getTextureLocation|getEntityTextureLocation)\s*\([^)]*\)\s*\{"#
+        ).unwrap();
+        let two_arg = Regex::new(
+            r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*"[^"]+"\s*,\s*"([^"]+)""#
+        ).unwrap();
+        let one_arg = Regex::new(
+            r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)""#
         ).unwrap();
         for found in texture_method.find_iter(source) {
             let Some(open) = source[found.start()..found.end()].rfind('{')
@@ -984,18 +992,15 @@ fn entity_source_texture_refs(
             for capture in one_arg.captures_iter(source) {
                 constants.insert(capture[1].to_owned(), capture[2].to_owned());
             }
-            let returned = Regex::new(r"(?m)\\breturn\\s+([A-Za-z0-9_$]+)\\s*;").unwrap();
+            let returned = Regex::new(r"(?m)\breturn\s+([A-Za-z0-9_$]+)\s*;").unwrap();
             if let Some(last) = returned.captures_iter(&body).last() {
                 if let Some(reference) = constants.get(&last[1]) {
                     direct.insert(reference.clone());
                 }
             }
-            for reference in declared_texture_refs(&body) {
-                direct.insert(reference);
-            }
         }
         let entity_paths = Regex::new(
-            r#"(?i)textures/(?:entity|entities|mob|mobs)/[^"\\s]+?\\.png"#
+            r#"(?i)textures/(?:entity|entities|mob|mobs)/[^"\s]+?\.png"#
         ).unwrap();
         for capture in entity_paths.captures_iter(source) {
             direct.insert(capture[0].replace('\\', "/"));
