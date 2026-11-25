@@ -27,6 +27,7 @@ This is a partial converter, not a full behavior translator. Entity classes curr
 | Tools/weapons | Sword, axe, pickaxe, shovel, hoe, bow/crossbow, fishing rod, shears; recovered material stats where found |
 | Armor | Wearable armor materials/pieces, defense, durability, enchantability, layer textures; special effects/repair items pending |
 | Blocks | Basic blocks, BlockItems, hardness, resistance, light, sound, mining requirements, loot and simple fallback models |
+| Block entities | Source-detected BlockEntityType registrations, owning EntityBlock subclasses, and placeholder BlockEntity classes; storage/ticking/menus pending |
 | Plants | Cross-model/non-collision fallback; growth and special placement remain pending |
 | Entities | Registered entity placeholders with recovered attributes, conservative goals and fallback renderer |
 | Recipes/resources | JSON and common legacy Java recipes, namespace remapping, legacy result/ore recipe migration, asset/data import |
