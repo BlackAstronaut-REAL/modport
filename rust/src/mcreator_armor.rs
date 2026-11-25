@@ -879,6 +879,8 @@ pub fn export_armor_to_workspace(
     let mut workspace: Value = serde_json::from_slice(&bytes)?;
     let target_modid = json_string(workspace.get("workspaceSettings").unwrap_or(&Value::Null),"modid","converted_mod");
     let discovered = discover_armor_sources(source_roots)?;
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
     let mut recovered_armor_stats = compiled_armor_stats(source_roots)?;
     // Readable source has higher fidelity than nearby compiled constants.
     recovered_armor_stats.extend(source_armor_stats(source_roots));
@@ -1015,10 +1017,20 @@ pub fn export_armor_to_workspace(
         let element_name=unique_element_name(&set.prefix,&mut used_names);
         let stats = recovered_armor_stats.get(&compact_id(&set.prefix))
             .or_else(|| recovered_armor_stats.get(&compact_id(&set.registry_name)));
-        let (element,mut builder_warnings)=build_armor_element(
+        let (mut element,mut builder_warnings)=build_armor_element(
             Some(&template),&set.prefix,&set.registry_name,&set.fields,&piece_textures,&layer_prefix,stats,imported_fv
         );
         warnings.append(&mut builder_warnings);
+        let display = localization.translated_name(&set.registry_name, &armor_display_name(&set.prefix));
+        if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
+            if definition.contains_key("name") {
+                definition.insert("name".to_owned(), json!(display));
+            }
+            let information = localization.item_information(&set.source_text, &set.registry_name);
+            if !information.is_empty() && definition.contains_key("specialInformation") {
+                definition.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
+        }
         let path=output_elements.join(format!("{element_name}.mod.json"));
         fs::write(&path,format!("{}\n",serde_json::to_string_pretty(&element)?))
             .with_context(||format!("Writing armor element {}",path.display()))?;
@@ -1036,7 +1048,7 @@ pub fn export_armor_to_workspace(
             "mojmodelbridge_source_paths":set.source_paths
         });
         workspace["mod_elements"].as_array_mut().expect("workspace has mod_elements").push(descriptor);
-        update_language(&mut workspace,&target_modid,&set.registry_name,&armor_display_name(&set.prefix));
+        update_language(&mut workspace,&target_modid,&set.registry_name,&display);
         report.exported += 1;
         report.records.push(ArmorExportRecord {
             prefix:set.prefix,element_name,registry_name:set.registry_name,piece_textures,
