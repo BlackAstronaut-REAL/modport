@@ -262,7 +262,7 @@ pub fn port_to_neoforge(
         }
     }
 
-    let mut item_records = collect_items(&equipment, &mut warnings);
+    let mut item_records = collect_items(&equipment, &armor_sources, &mut warnings);
     let mut block_records = collect_blocks(&block_sources, &mut warnings);
     for item in &mut item_records {
         item.source_path = prepared.display_source_path(&item.source_path);
@@ -1387,7 +1387,7 @@ public final class ModItems {
                 r#"    public static final DeferredItem<ArmorItem> {field} = ITEMS.register("{id}", () -> new ArmorItem(
         ModArmorMaterials.{material_field},
         ArmorItem.Type.{item_type},
-        new Item.Properties().durability({durability})
+        new Item.Properties().stacksTo(1).durability({durability})
     ));
 "#,
                 id = piece.id,
@@ -1635,6 +1635,69 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 1);
         assert_eq!(status["converted"]["blocks"], 1);
+    }
+
+    #[test]
+    fn ports_legacy_armor_as_registered_wearable_material_and_pieces() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("armor_mod");
+        let output = temp.path().join("armor_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::create_dir_all(source.join("src/main/resources/assets/oldmod/textures/models/armor")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"oldmod","name":"Armor Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/ArmorRegistry.java"), r#"
+            public class ArmorRegistry {
+                ItemArmor ruby_helmet;
+                ItemArmor ruby_chestplate;
+                ItemArmor ruby_leggings;
+                ItemArmor ruby_boots;
+                int ruby_armorstats = get_armorstats("ruby", 15, 3, 8, 6, 2, 12);
+                void register() {
+                    GameRegistry.registerItem(ruby_helmet, "ruby_helmet");
+                    GameRegistry.registerItem(ruby_chestplate, "ruby_chestplate");
+                    GameRegistry.registerItem(ruby_leggings, "ruby_leggings");
+                    GameRegistry.registerItem(ruby_boots, "ruby_boots");
+                }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/resources/assets/oldmod/textures/models/armor/ruby_layer_1.png"), b"layer one").unwrap();
+        fs::write(source.join("src/main/resources/assets/oldmod/textures/models/armor/ruby_layer_2.png"), b"layer two").unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+
+        assert_eq!(report.armor_sets.len(), 1);
+        let armor = &report.armor_sets[0];
+        assert_eq!(armor.material_id, "ruby_armor");
+        assert_eq!(armor.registry_names.len(), 4);
+        assert_eq!(armor.durability_multiplier, 15);
+        assert_eq!(armor.enchantability, 12);
+        assert_eq!(armor.defense["helmet"], 3);
+        assert_eq!(armor.defense["body"], 8);
+        assert_eq!(armor.defense["leggings"], 6);
+        assert_eq!(armor.defense["boots"], 2);
+        assert!(armor.generated_as.contains("wearable ArmorItem"));
+
+        let java_root = output.join("src/main/java/com/modport/oldmod");
+        let materials = fs::read_to_string(java_root.join("registry/ModArmorMaterials.java")).unwrap();
+        assert!(materials.contains("DeferredRegister<ArmorMaterial>"));
+        assert!(materials.contains("ARMOR_MATERIAL_RUBY_ARMOR"));
+        assert!(materials.contains("ArmorItem.Type.CHESTPLATE, 8"));
+        assert!(materials.contains("ruby"));
+        let items = fs::read_to_string(java_root.join("registry/ModItems.java")).unwrap();
+        assert!(items.contains("new ArmorItem("));
+        assert!(items.contains("ArmorItem.Type.HELMET"));
+        assert!(items.contains("ArmorItem.Type.LEGGINGS"));
+        assert!(items.contains("stacksTo(1).durability(165)"));
+        let entrypoint = fs::read_to_string(java_root.join("NeoForgeMod.java")).unwrap();
+        assert!(entrypoint.contains("ModArmorMaterials.register(modEventBus)"));
+        assert!(output.join("src/main/resources/assets/oldmod/textures/models/armor/ruby_layer_1.png").is_file());
+        assert!(output.join("src/main/resources/assets/oldmod/textures/models/armor/ruby_layer_2.png").is_file());
+        assert!(output.join("src/main/resources/assets/oldmod/models/item/ruby_helmet.json").is_file());
+        let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
+        assert_eq!(status["converted"]["armor_sets"], 1);
+        assert_eq!(status["converted"]["armor_pieces"], 4);
     }
 
     #[test]
