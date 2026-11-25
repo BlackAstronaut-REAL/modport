@@ -1047,10 +1047,13 @@ fn compiled_next_static_field(
 /// from classfiles. This is the compiled-only counterpart to source_tool_materials.
 pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<String, ToolMaterialStats>> {
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
-    let mut results = BTreeMap::<String, ToolMaterialStats>::new();
-
-    for class in compiled.parsed_classes.values() {
+    let class_infos: Vec<_> = compiled.classes.values().collect();
+    let per_class: Vec<BTreeMap<String, ToolMaterialStats>> = class_infos.par_iter().map(|info| {
+        let Some(class) = compiled.parsed_class_paths.get(&info.path) else {
+            return BTreeMap::new();
+        };
         let class = class.as_ref();
+        let mut class_results = BTreeMap::<String, ToolMaterialStats>::new();
 
         // These maps deliberately outlive an individual method. Old Forge mods
         // often initialize stat objects, register tool materials, instantiate
@@ -1081,7 +1084,7 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                     target,
                 ) {
                     stat_fields.insert(target.clone(), stats.clone());
-                    results.entry(compact_name(&target)).or_insert(stats);
+                    class_results.entry(compact_name(&target)).or_insert(stats);
                 }
             }
 
@@ -1108,7 +1111,7 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                 });
                 if let (Some(target), Some(stats)) = (target, stats) {
                     material_fields.insert(target.clone(), stats.clone());
-                    results.entry(compact_name(&target)).or_insert(stats);
+                    class_results.entry(compact_name(&target)).or_insert(stats);
                 }
             }
 
@@ -1178,12 +1181,17 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                 for registry in registries {
                     let key = compact_name(&normalize_registry(registry));
                     if !key.is_empty() {
-                        results.insert(key, stats.clone());
+                        class_results.insert(key, stats.clone());
                     }
                 }
             }
-            results.entry(compact_name(&item_class)).or_insert(stats);
+            class_results.entry(compact_name(&item_class)).or_insert(stats);
         }
+        class_results
+    }).collect();
+    let mut results = BTreeMap::<String, ToolMaterialStats>::new();
+    for partial in per_class {
+        results.extend(partial);
     }
     Ok(results)
 }

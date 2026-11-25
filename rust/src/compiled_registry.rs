@@ -31,8 +31,10 @@ pub struct CompiledRegistryIndex {
     pub registries: BTreeMap<String, BTreeSet<String>>,
     /// JVM owner#field -> concrete class assigned to that static field.
     pub field_classes: BTreeMap<String, String>,
-    /// Decoded class files retained so downstream exporters can share them.
+    /// Decoded class files retained for lambda resolution and downstream exporters.
     pub parsed_classes: HashMap<String, Arc<ClassFile>>,
+    /// Original path -> decoded class, matching the winning simple-name class index.
+    pub parsed_class_paths: HashMap<PathBuf, Arc<ClassFile>>,
     pub warnings: Vec<String>,
     /// Keeps archive-extracted class files alive while downstream exporters
     /// consume the paths recorded in `classes`.
@@ -516,6 +518,7 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
         .collect();
 
     let mut parsed = HashMap::<String, Arc<ClassFile>>::new();
+    let mut parsed_class_paths = HashMap::<PathBuf, Arc<ClassFile>>::new();
     for (path, result) in parsed_results {
         let class = match result {
             Ok(value) => value,
@@ -539,7 +542,9 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
                 && !path.file_stem().is_some_and(|stem| stem.to_string_lossy().contains('$'))
         }).unwrap_or(true);
         if replace { index.classes.insert(name, info); }
-        parsed.insert(internal, Arc::new(class));
+        let parsed_class = Arc::new(class);
+        parsed.insert(internal, Arc::clone(&parsed_class));
+        parsed_class_paths.insert(path, parsed_class);
     }
 
     let mut fields = BTreeMap::<String, String>::new();
@@ -554,6 +559,7 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
         scan_registrations(class, &fields, &parsed, &mut index.registries);
     }
     index.parsed_classes = parsed.clone();
+    index.parsed_class_paths = parsed_class_paths;
     if let Ok(mut guard) = cache.lock() {
         guard.insert(cache_key, (fingerprint, index.clone()));
     }

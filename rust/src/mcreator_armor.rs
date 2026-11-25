@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use regex::Regex;
+use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -756,10 +757,13 @@ fn armor_stats_from_numbers(numbers: &[f64]) -> Option<BTreeMap<String, f64>> {
 /// Labels and static assignment names are both indexed for later material matching.
 pub fn compiled_armor_stats(source_roots: &[PathBuf]) -> Result<BTreeMap<String, BTreeMap<String, f64>>> {
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
-    let mut result = BTreeMap::<String, BTreeMap<String, f64>>::new();
-
-    for class in compiled.parsed_classes.values() {
+    let class_infos: Vec<_> = compiled.classes.values().collect();
+    let per_class: Vec<BTreeMap<String, BTreeMap<String, f64>>> = class_infos.par_iter().map(|info| {
+        let Some(class) = compiled.parsed_class_paths.get(&info.path) else {
+            return BTreeMap::new();
+        };
         let class = class.as_ref();
+        let mut class_result = BTreeMap::<String, BTreeMap<String, f64>>::new();
         for method in &class.methods {
             let Some(code) = method.code.as_ref() else { continue; };
             let Ok(instructions) = crate::bytecode::decode_instructions(&code.code) else { continue; };
@@ -783,11 +787,16 @@ pub fn compiled_armor_stats(source_roots: &[PathBuf]) -> Result<BTreeMap<String,
                 for key in [&label, &target, &stripped] {
                     let key = compact_id(key);
                     if !key.is_empty() {
-                        result.insert(key, stats.clone());
+                        class_result.insert(key, stats.clone());
                     }
                 }
             }
         }
+        class_result
+    }).collect();
+    let mut result = BTreeMap::<String, BTreeMap<String, f64>>::new();
+    for partial in per_class {
+        result.extend(partial);
     }
     Ok(result)
 }
