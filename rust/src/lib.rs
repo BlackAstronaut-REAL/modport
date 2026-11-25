@@ -16,6 +16,7 @@ pub mod discovery;
 pub mod metadata;
 pub mod neoforge_docs;
 pub mod neoforge_project;
+pub mod neoforge_port;
 pub mod localization;
 pub mod mcreator_model;
 pub mod mcreator_entity;
