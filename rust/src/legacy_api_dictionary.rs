@@ -3493,6 +3493,57 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityMob", "isValidLightLevel", V_ALL, "mob_spawn_light_predicate", "Hostile mob spawn light check", "worldgen", "Preserve skylight/block light random checks and dimension night rules.", "net/minecraft/entity/EntityMob.html"),
 
 
+    // Chunk/ChunkPrimer and section storage methods used by worldgen and custom blocks.
+    d!("Chunk", "checkLight", V_112, "chunk_lighting_validation", "Chunk lighting consistency check", "world_lighting", "Preserve section light arrays and world skylight propagation.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlockLightOpacity", V_112, "chunk_block_light_opacity", "Chunk block-state light opacity lookup", "world_lighting", "Preserve block position and state-dependent opacity.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlockStorageArray", V_ALL, "chunk_section_storage_array", "ExtendedBlockStorage section array", "world_chunks", "Preserve null entries for empty sections and exact vertical section index mapping.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getEntitiesOfTypeWithinAABB", V_112, "chunk_entities_by_class_aabb", "Chunk typed entity query", "world_entities", "Preserve entity class, predicate, bounds and per-section entity list traversal.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getHeight", V_ALL, "chunk_height_value", "Chunk highest non-air Y height", "world_chunks", "Preserve heightmap and local X/Z coordinates; result is dimension-height aware.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getInhabitedTime", V_112, "chunk_inhabited_time", "Chunk accumulated inhabited ticks", "world_chunks", "Preserve long tick counter used for regional difficulty and chunk lifecycle.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getRandomWithSeed", V_112, "chunk_deterministic_random", "Chunk deterministic coordinate random", "worldgen", "Preserve world seed and chunk X/Z derivation for reproducible feature generation.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getTileEntityMap", V_112, "chunk_tile_entity_map", "Chunk tile entity position map", "world_chunks", "Preserve map identity and pending tile entity entries during chunk load.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getTopFilledSegment", V_ALL, "chunk_top_filled_section", "Highest non-empty ExtendedBlockStorage section", "world_chunks", "Preserve null/empty section behavior and section-index-to-block-Y conversion.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getWorld", V_112, "chunk_world_reference", "Chunk owning World reference", "world_chunks", "Preserve dimension/world identity; do not use the currently active client world as a substitute.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isEmpty", V_ALL, "chunk_empty_predicate", "Chunk empty state", "world_chunks", "Preserve block section and entity-independent emptiness semantics.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isEmptyBetween", V_112, "chunk_vertical_empty_predicate", "Chunk vertical range emptiness", "world_chunks", "Preserve min/max Y and section traversal for spawn/height queries.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "markDirty", V_ALL, "chunk_mark_dirty", "Chunk persistence dirty flag", "world_persistence", "Preserve dirty state when block/tile entity/light data changes and save scheduling.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "removeEntity", V_ALL, "chunk_entity_remove", "Chunk entity list removal", "world_chunks", "Preserve entity section membership and chunk tracking removal order.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setInhabitedTime", V_112, "chunk_inhabited_time_write", "Chunk accumulated inhabited ticks", "world_chunks", "Preserve persisted long counter and server tick timing.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setLightFor", V_112, "chunk_light_write", "Chunk block/sky light section mutation", "world_lighting", "Preserve EnumSkyBlock and section light array updates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setModified", V_112, "chunk_modified_flag_write", "Chunk saved/modified state", "world_persistence", "Preserve direct modified flag change independently from markDirty side effects.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setTileEntity", V_ALL, "chunk_tile_entity_write", "Chunk tile entity insertion/replacement", "world_chunks", "Preserve world attachment and invalidation of replaced tile entity.", "net/minecraft/world/chunk/Chunk.html"),
+
+    d!("ChunkPrimer", "findGroundBlockIdx", V_112, "chunk_primer_ground_height", "ChunkPrimer top non-air/non-liquid block scan", "worldgen", "Preserve local X/Z and downward scan semantics used during surface decoration.", "net/minecraft/world/chunk/ChunkPrimer.html"),
+    d!("ChunkPrimer", "getBlockState", V_112, "chunk_primer_block_state_read", "ChunkPrimer staged block state lookup", "worldgen", "Preserve local X/Z and absolute Y bounds across the 16x256x16 primer volume.", "net/minecraft/world/chunk/ChunkPrimer.html"),
+    d!("ChunkPrimer", "setBlockState", V_112, "chunk_primer_block_state_write", "ChunkPrimer staged block state mutation", "worldgen", "Preserve write order and local coordinate indexing before primer is converted to a Chunk.", "net/minecraft/world/chunk/ChunkPrimer.html"),
+    d!("ChunkPrimer", "getData", V_112, "chunk_primer_packed_state_data", "ChunkPrimer compact block state storage", "worldgen", "Preserve packed storage layout and state palette encoding for custom chunk generators.", "net/minecraft/world/chunk/ChunkPrimer.html"),
+
+    d!("ExtendedBlockStorage", "get", V_112, "chunk_section_get_data", "ExtendedBlockStorage state/light data", "world_chunks", "Preserve section array identity and palette-backed block state access.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "getBlockByExtId", V_ALL, "chunk_section_legacy_block_lookup", "Legacy block numeric ID lookup", "world_chunks", "Deprecated numeric-ID access; preserve extended block ID and metadata only for legacy chunk formats.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "getData", V_112, "chunk_section_data_container", "BlockStateContainer section data", "world_chunks", "Preserve palette and data container state, including palette resizing.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "getYLocation", V_ALL, "chunk_section_base_y", "Chunk section base Y coordinate", "world_chunks", "Preserve 16-block section origin and vertical index mapping.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "isEmpty", V_ALL, "chunk_section_empty_predicate", "Chunk section empty state", "world_chunks", "Preserve block-state count and palette semantics.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "needsRandomTick", V_112, "chunk_section_random_tick_predicate", "Chunk section random tick presence", "world_ticks", "Preserve section-level random tick bookkeeping used to skip empty update passes.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "set", V_112, "chunk_section_set_data", "ExtendedBlockStorage block state/light mutation", "world_chunks", "Preserve palette insertion, block counts and lighting update invalidation.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "setBlockState", V_ALL, "chunk_section_block_state_write", "Chunk section local BlockState mutation", "world_chunks", "Preserve local X/Y/Z ordering and old-state return value.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "setData", V_112, "chunk_section_data_container_write", "Chunk section palette data replacement", "world_chunks", "Preserve palette/container ownership and block count recomputation.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "setSkyLight", V_ALL, "chunk_section_sky_light_write", "Chunk section skylight mutation", "world_lighting", "Preserve 0-15 light values and no-sky-dimension behavior.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+    d!("ExtendedBlockStorage", "setBlockLight", V_ALL, "chunk_section_block_light_write", "Chunk section block light mutation", "world_lighting", "Preserve 0-15 light values and block emission propagation.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
+
+    // IBlockState functional properties and world-aware behavior.
+    d!("IBlockState", "getActualState", V_112, "block_state_actual_state", "World/position-dependent block state expansion", "blocks", "Preserve IBlockAccess and BlockPos because connected fences, doors and multipart blocks derive render state dynamically.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getBlockState", V_112, "block_state_base_container", "State container and owning block", "blocks", "Preserve state container/property schema identity.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getMapColor", V_112, "block_state_map_color", "Map pixel color for block state", "blocks_render", "Preserve world/position-sensitive map color rather than item tint/color handler.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getPropertyKeys", V_112, "block_state_property_keys", "Immutable set of state property definitions", "blocks", "Preserve declared property identity and iteration order.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isFullCube", V_112, "block_state_full_cube_predicate", "State-aware full cube predicate", "blocks_physics", "Preserve full-cube render/collision semantics separately from normal-cube and opacity.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isNormalCube", V_112, "block_state_normal_cube_predicate", "World-aware normal cube predicate", "blocks_physics", "Preserve world/position and side-specific normal-cube behavior.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isOpaqueCube", V_112, "block_state_opaque_cube_predicate", "Block-state opaque cube predicate", "blocks_render", "Preserve opacity separately from full cube and render layer.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isTopSolid", V_112, "block_state_top_solid_predicate", "Block-state top-face solidity", "blocks_physics", "Preserve top-face support separately from generic side-solid/full-cube checks.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isTranslucent", V_112, "block_state_translucent_predicate", "Block-state translucency", "blocks_render", "Preserve translucent material behavior separately from render-layer choice.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "rotate", V_112, "block_state_rotation", "BlockState rotation transform", "blocks", "Preserve Rotation enum and all directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "withMirror", V_112, "block_state_mirror", "BlockState mirror transform", "blocks", "Preserve Mirror enum and directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5315,6 +5366,24 @@ mod tests {
         let found = map_legacy_api_methods(source, Some("1.12.2"));
         assert!(found.iter().any(|e| e.source_owner == "EntityAIBase" && e.source_method == "shouldExecute"));
         assert!(found.iter().any(|e| e.source_owner == "PathNavigate" && e.source_method == "noPath"));
+    }
+
+
+    #[test]
+    fn chunk_storage_and_block_state_contracts_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("Chunk", "getBlockState"), ("Chunk", "setBlockState"),
+            ("Chunk", "getTileEntity"), ("Chunk", "getPersistentChunkIterator"),
+            ("Chunk", "onLoad"), ("Chunk", "onUnload"),
+            ("ChunkPrimer", "findGroundBlockIdx"), ("ChunkPrimer", "setBlockState"),
+            ("ExtendedBlockStorage", "setSkyLight"), ("ExtendedBlockStorage", "setBlockLight"),
+            ("IBlockState", "getActualState"), ("IBlockState", "cycleProperty"),
+            ("IBlockState", "getCollisionBoundingBox"), ("IBlockState", "withProperty"),
+            ("IBlockState", "isSideSolid"), ("IBlockState", "rotate"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
     #[test]
