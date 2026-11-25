@@ -228,8 +228,6 @@ fn run_constructor(
     let mut texture_offsets = HashMap::<String, (i32, i32)>::new();
     let mut texture_width = 64u32;
     let mut texture_height = 32u32;
-    let mut explicit_width = false;
-    let mut explicit_height = false;
     let mut scalar_fields = HashMap::<String, f64>::new();
     let mut warnings = Vec::<String>::new();
 
@@ -374,10 +372,8 @@ fn run_constructor(
                                 Value::This => {
                                     if name == "field_78090_t" || name == "textureWidth" {
                                         texture_width = (number as i64).max(1) as u32;
-                                        explicit_width = true;
                                     } else if name == "field_78089_u" || name == "textureHeight" {
                                         texture_height = (number as i64).max(1) as u32;
-                                        explicit_height = true;
                                     } else {
                                         scalar_fields.insert(name.clone(), number);
                                     }
@@ -439,8 +435,6 @@ fn run_constructor(
                         ) {
                             texture_width = (width as i64).max(1) as u32;
                             texture_height = (height as i64).max(1) as u32;
-                            explicit_width = true;
-                            explicit_height = true;
                         }
                     }
                     continue;
@@ -489,8 +483,10 @@ fn run_constructor(
 
                 if name == "setTextureSize" || name == "func_78787_b" {
                     if let (Some(width),Some(height))=(args.first().and_then(Value::number),args.get(1).and_then(Value::number)) {
-                        if !explicit_width { texture_width=texture_width.max(width as u32); }
-                        if !explicit_height { texture_height=texture_height.max(height as u32); }
+                        // ModelRenderer.setTextureSize can override dimensions
+                        // inherited from ModelBase on custom armor meshes.
+                        texture_width=texture_width.max((width as i64).max(1) as u32);
+                        texture_height=texture_height.max((height as i64).max(1) as u32);
                     }
                     continue;
                 }

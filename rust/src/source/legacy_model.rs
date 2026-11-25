@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use regex::Regex;
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use crate::model::{Cube, ParsedModel, Part};
@@ -219,6 +219,7 @@ pub fn parse_legacy_java_model(
     }
 
     let mut builder = ModelBuilder::new(biped_inflate);
+    let mut overridden_biped_parts = HashSet::<usize>::new();
     let declaration = regex(&format!(r"\bclass\s+{}(?:\s+extends\s+([A-Za-z_$][\w$.]*))?", regex::escape(&class_name)))?;
     let superclass = declaration.captures(&clean).and_then(|c| c.get(1))
         .map(|m| m.as_str().rsplit('.').next().unwrap_or(m.as_str()).to_owned()).unwrap_or_default();
@@ -248,6 +249,7 @@ pub fn parse_legacy_java_model(
 
     let call_specs: &[(&str, &[&str])] = &[
         ("set_uv", &["func_78784_a", "setTextureOffset"]),
+        ("set_texture_size", &["func_78787_b", "setTextureSize"]),
         ("add_box", &["func_78789_a", "func_78790_a", "addBox"]),
         ("offset", &["func_78793_a", "setRotationPoint"]),
         ("add_child", &["func_78792_a", "addChild"]),
@@ -380,6 +382,15 @@ pub fn parse_legacy_java_model(
         let parsed: Result<()> = (|| {
             match event.kind {
                 "create" => {
+                    if BIPED_PARTS.iter().any(|part| part.variable == variable)
+                        && overridden_biped_parts.insert(index)
+                    {
+                        // ModelBiped supplies placeholder geometry for inherited
+                        // parts. A concrete renderer assignment replaces that part;
+                        // retaining both meshes overlays the stock UV layout on the
+                        // custom armor geometry.
+                        builder.parts[index].cubes.clear();
+                    }
                     if args.len() >= 3 {
                         builder.uv_by_variable.insert(variable.clone(), (
                             eval_int(&args[args.len()-2], &constants)?,
@@ -391,6 +402,15 @@ pub fn parse_legacy_java_model(
                             unquote_java_string(&args[1]),
                         );
                     }
+                }
+                "set_texture_size" if args.len() >= 2 => {
+                    // ModelRenderer has its own atlas dimensions. Preserve the
+                    // widest/tallest dimensions used by any renderer so Blockbench
+                    // does not normalize these UV coordinates against 64x32.
+                    let width = eval_int(&args[0], &constants)?;
+                    let height = eval_int(&args[1], &constants)?;
+                    texture_width = texture_width.max(width.max(1) as u32);
+                    texture_height = texture_height.max(height.max(1) as u32);
                 }
                 "set_uv" if args.len() >= 2 => {
                     builder.uv_by_variable.insert(variable.clone(), (eval_int(&args[0], &constants)?, eval_int(&args[1], &constants)?));
@@ -619,6 +639,25 @@ mod tests {
         let head = model.parts.iter().find(|p| p.name == "head").unwrap();
         assert_eq!(head.offset[1], 6.0);
     }
+    #[test]
+    fn preserves_renderer_texture_size_and_replaced_biped_uvs() {
+        let source = r#"
+            public class ModelCustomArmor extends ModelBiped {
+                public ModelRenderer bipedHead;
+                public ModelCustomArmor() {
+                    this.bipedHead = new ModelRenderer(this, 40, 16);
+                    this.bipedHead.setTextureSize(128, 64);
+                    this.bipedHead.addBox(-4, -8, -4, 8, 8, 8);
+                }
+            }
+        "#;
+        let model = parse_legacy_java_model(source, "ModelCustomArmor.java", &[]).unwrap();
+        assert_eq!((model.texture_width, model.texture_height), (128, 64));
+        let head = model.parts.iter().find(|part| part.name == "head").unwrap();
+        assert_eq!(head.cubes.len(), 1, "replaced ModelBiped geometry must not retain its stock placeholder cube");
+        assert_eq!((head.cubes[0].uv_x, head.cubes[0].uv_y), (40, 16));
+    }
+
     #[test]
     fn applies_modelbase_named_texture_offsets_to_prefixed_renderer_boxes() {
         let source = r#"
