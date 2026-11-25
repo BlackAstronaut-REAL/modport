@@ -346,7 +346,13 @@ impl MojModelBridgeApp {
             let loaded = if entry.category == "Blocks" {
                 let mut model_sources = vec![source.clone()];
                 model_sources.extend(entry.additional_resource_model_sources.iter().cloned());
-                crate::resource_model::load_block_models(&model_sources, &self.browser.texture_roots)
+                let mut model_rotations = vec![entry.resource_model_rotation];
+                model_rotations.extend(entry.additional_resource_model_rotations.iter().copied());
+                crate::resource_model::load_block_models(
+                    &model_sources,
+                    &model_rotations,
+                    &self.browser.texture_roots,
+                )
             } else {
                 crate::resource_model::load_item_model(source, &self.browser.texture_roots)
             };
