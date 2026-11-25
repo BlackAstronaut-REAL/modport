@@ -3025,6 +3025,73 @@ const DEFINITIONS: &[Definition] = &[
     d!("Entity", "writeToNBTAtomically", V_112, "entity_write_nbt_atomically", "Entity NBT serialization with atomic save policy", "persistence", "Preserve false when serialization cannot safely complete and caller's compound mutation rules.", "net/minecraft/entity/Entity.html"),
     d!("Entity", "writeToNBTOptional", V_112, "entity_write_nbt_optional", "Entity NBT save eligibility and serialization", "persistence", "Preserve shouldSetPosAfterLoading and optional save eligibility before entity NBT is emitted.", "net/minecraft/entity/Entity.html"),
 
+    // EntityPlayer declarations from the 1.12.2 JavaDoc method summary.
+    d!("EntityPlayer", "addItemStackToInventory", V_ALL, "player_inventory_insert", "Player inventory ItemStack insertion", "player_inventory", "Preserve partial insertion, preferred slot selection, stack splitting and false when no inventory space remains.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "addMovementStat", V_ALL, "player_movement_stat", "Player movement statistics accumulation", "player_progression", "Preserve delta XYZ and movement mode; walking/sprinting/swimming/flying statistics are tracked separately.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "addPrefix", V_112, "player_chat_prefix_add", "Player chat display prefix component", "player_identity", "Preserve ordered ITextComponent prefix collection and formatting for chat/name presentation.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "addScore", V_ALL, "player_score_add", "Player scoreboard score accumulation", "player_progression", "Preserve positive/negative score delta and scoreboard objective/stat synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "addShoulderEntity", V_112, "player_shoulder_entity_attach", "Player shoulder entity NBT storage", "player_inventory", "Preserve serialized parrot/entity NBT, left/right shoulder selection and spawn-on-dismount behavior.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "addSuffix", V_112, "player_chat_suffix_add", "Player chat display suffix component", "player_identity", "Preserve ordered ITextComponent suffix collection and formatting after player name.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "applyEntityAttributes", V_ALL, "player_attribute_registration", "Player base attribute registration", "player_attributes", "Protected construction hook; preserve base health, movement speed, attack damage and reach attribute definitions.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "applyEntityCollision", V_ALL, "player_entity_collision", "Player entity collision response", "player_physics", "Preserve collision impulse and player-specific collision filtering against other entities.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "attackTargetEntityWithCurrentItem", V_ALL, "player_melee_attack", "Player melee attack with held stack", "combat", "Preserve attack cooldown strength, critical/sweep conditions, enchantments, shield disabling and target knockback.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "blockUsingShield", V_112, "player_shield_block_callback", "Player shield block response", "combat", "Protected hook; preserve blocked attacker identity and shield cooldown/disable side effects.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "canOpen", V_112, "player_container_lock_permission", "Player locked container access", "player_inventory", "Preserve LockCode comparison and creative-mode bypass for locked chests/containers.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "canUseCommandBlock", V_112, "player_command_block_permission", "Player command-block interaction permission", "player_commands", "Preserve server/player permission policy and command-block enablement.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "createCooldownTracker", V_112, "player_cooldown_tracker_factory", "Player item cooldown tracker factory", "player_inventory", "Protected factory hook; preserve custom tracker instance lifecycle per player.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "damageEntity", V_ALL, "player_damage_pipeline", "Player-specific damage mitigation", "combat", "Protected override; preserve armor, absorption, difficulty, shields, exhaustion and hurt resistance ordering.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "destroyVanishingCursedItems", V_112, "player_vanishing_curse_removal", "Player death Vanishing Curse equipment cleanup", "player_inventory", "Preserve inventory/armor/hand slot traversal and destruction timing before death drops are generated.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "disableShield", V_112, "player_shield_disable", "Player shield disable cooldown", "combat", "Preserve axe attacker flag and active shield stack cooldown; separate from item-level canDisableShield.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "displayGui", V_112, "player_display_interaction_gui", "IInteractionObject container GUI opening", "player_inventory", "Preserve GUI ID/name/container factory and server/client open-container synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "displayGUIChest", V_ALL, "player_display_chest_gui", "Player chest inventory GUI opening", "player_inventory", "Preserve chest inventory identity, lock checks and server-side open-container creation.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "displayGuiCommandBlock", V_112, "player_display_command_block_gui", "Command block GUI opening", "player_commands", "Preserve server tile entity validation and command-block edit packet context.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "displayGuiEditCommandCart", V_112, "player_display_command_minecart_gui", "Command minecart GUI opening", "player_commands", "Preserve command minecart entity identity, permission checks and client edit screen packet.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "displayVillagerTradeGui", V_ALL, "player_display_villager_trade_gui", "Villager/merchant trading GUI opening", "player_inventory", "Preserve merchant identity, trade list and server container synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "dropItemAndGetStack", V_112, "player_drop_item_return_stack", "Drop ItemEntity and receive resulting ItemStack", "player_inventory", "Preserve thrown entity creation, pickup delay and return stack if spawning fails or the item is retained.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getAbsorptionAmount", V_18, "player_absorption_health", "Player absorption health amount", "combat", "Preserve absorption hearts separately from normal health and armor.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getAIMoveSpeed", V_ALL, "player_ai_move_speed", "Player movement speed attribute value", "player_movement", "Preserve movement-speed attribute and sprint multiplier as computed by player logic.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getArmorVisibility", V_112, "player_armor_visibility", "Player worn armor render visibility value", "player_render", "Preserve armor visibility scalar used by player model/armor layer rendering.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getBedOrientationInDegrees", V_ALL, "player_bed_orientation", "Player sleeping bed camera/model orientation", "player_movement", "Preserve bed facing conversion to degrees for sleeping render and wake placement.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getBedSpawnLocation", V_112, "player_bed_spawn_location", "Static safe respawn location near bed", "player_respawn", "Preserve world, bed position and forced flag; returns null when no safe spawn position exists.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getDefaultEyeHeight", V_112, "player_default_eye_height", "Default player eye height", "player_movement", "Preserve eye-height calculation separately from current sneaking/sleeping eye height.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getDisplayNameString", V_112, "player_display_name_string", "Cached computed player display name string", "player_identity", "Preserve formatted/cached display name after prefix/suffix/name-format event processing.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getExperiencePoints", V_ALL, "player_death_experience_drop", "Player death XP drop calculation", "player_progression", "Protected hook; preserve killer player, keep-inventory/keep-level rules and XP curve.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getLeftShoulderEntity", V_112, "player_left_shoulder_entity", "Player left shoulder entity NBT", "player_inventory", "Preserve nullable stored parrot/entity compound and client/server synchronized state.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getOfflineUUID", V_112, "player_offline_uuid", "Static offline UUID derivation from username", "player_identity", "Preserve exact offline-mode UUID hash algorithm and case normalization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getPrefixes", V_112, "player_chat_prefixes", "Player chat prefix component collection", "player_identity", "Preserve ordered component collection and style metadata.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getPrimaryHand", V_112, "player_primary_hand", "Player main-hand side preference", "player_movement", "Preserve EnumHandSide and left/right-handed model/arm behavior.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getRightShoulderEntity", V_112, "player_right_shoulder_entity", "Player right shoulder entity NBT", "player_inventory", "Preserve nullable stored parrot/entity compound and client/server synchronized state.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getUUID", V_112, "player_profile_uuid", "Static UUID from GameProfile", "player_identity", "Preserve profile UUID and fallback behavior where profile has no UUID.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getWorldScoreboard", V_112, "player_world_scoreboard", "Player's current world Scoreboard", "player_progression", "Preserve world-specific scoreboard instance after dimension/world transfer.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getXPSeed", V_112, "player_enchanting_xp_seed", "Player enchanting random seed", "player_progression", "Preserve per-player XP seed used to generate enchantment options and client synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "hasReducedDebug", V_112, "player_reduced_debug_flag", "Reduced debug screen state", "player_gui", "Preserve server-synchronized reduced debug policy separately from client debug key state.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "isEntityInsideOpaqueBlock", V_112, "player_inside_opaque_block", "Player suffocation block intersection", "player_physics", "Preserve player eye and bounding box checks against opaque block collision.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "isMovementBlocked", V_112, "player_movement_blocked_predicate", "Player movement/sleep/blocking state check", "player_movement", "Protected predicate gates player travel and movement while sleeping/dead or otherwise blocked.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "isPlayerSleeping", V_112, "player_sleeping_predicate", "Player sleeping state", "player_respawn", "Preserve current sleeping state separately from fully-asleep timer threshold.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "jump", V_ALL, "player_jump", "Player jump movement/ability callback", "player_movement", "Preserve jump stats, exhaustion, sprint jump impulse and jump potion/effect interactions.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "onDeath", V_ALL, "player_death_lifecycle", "Player death processing", "player_lifecycle", "Preserve death source, inventory drop/keep-inventory behavior, XP drop and respawn state transitions.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "onEnchant", V_112, "player_enchant_item_callback", "Player enchantment completion callback", "player_progression", "Preserve enchanted stack and XP level cost for statistics, sound and advancement side effects.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "openBook", V_112, "player_open_book", "Player writable/written book screen", "player_gui", "Preserve ItemStack and InteractionHand; client GUI opening and server book data validation are separate.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "openEditSign", V_112, "player_open_sign_editor", "Sign editor GUI opening", "player_gui", "Preserve TileEntitySign identity and server edit authorization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "openEditStructure", V_112, "player_open_structure_editor", "Structure block GUI opening", "player_gui", "Preserve TileEntityStructure identity, permissions and structure data packet.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "openGuiHorseInventory", V_112, "player_open_horse_inventory", "Horse/AbstractHorse inventory GUI", "player_inventory", "Preserve horse identity and provided IInventory; saddle/armor/chest slot layouts differ by horse type.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "playSound", V_ALL, "player_play_sound", "Player positional sound playback", "audio", "Preserve volume/pitch and server-to-player sound routing; player implementation can use a distinct sound category.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "refreshDisplayName", V_112, "player_refresh_display_name", "Player cached display-name invalidation", "player_identity", "Preserve explicit cache invalidation after prefix/suffix/name changes or PlayerEvent.NameFormat.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "registerFixesPlayer", V_112, "player_data_fixer_register", "Static DataFixer player schema registration", "persistence", "Preserve player-specific NBT fix registration and migration ordering.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "resetRecipes", V_112, "player_recipe_book_reset", "Player recipe-book unlock reset", "player_progression", "Preserve complete recipe list and client/server recipe-book synchronization after reset.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "sendStatusMessage", V_112, "player_status_message", "Player action-bar/chat status component", "player_gui", "Preserve ITextComponent styling and actionBar routing flag.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "setAbsorptionAmount", V_18, "player_absorption_health_write", "Player absorption health mutation", "combat", "Preserve absorption pool mutation and health synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "setLeftShoulderEntity", V_112, "player_left_shoulder_entity_write", "Player left shoulder entity NBT mutation", "player_inventory", "Preserve compound NBT copy and synchronized shoulder entity data parameter.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "setPrimaryHand", V_112, "player_primary_hand_write", "Player main-hand side preference", "player_movement", "Preserve left/right hand setting and associated model/arm flags.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "setReducedDebug", V_112, "player_reduced_debug_write", "Reduced debug screen setting", "player_gui", "Preserve server-controlled state synchronization with the client debug screen.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "setRightShoulderEntity", V_112, "player_right_shoulder_entity_write", "Player right shoulder entity NBT mutation", "player_inventory", "Preserve compound NBT copy and synchronized shoulder entity data parameter.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "spawnShoulderEntities", V_112, "player_spawn_shoulder_entities", "Player shoulder entity release/spawn", "player_lifecycle", "Protected callback; preserve left/right shoulder spawn order and clearing synchronized NBT only after successful spawn.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "spawnSweepParticles", V_112, "player_sweep_attack_particles", "Player sweep attack visual effects", "combat", "Preserve target positions and particle direction used by sweeping-edge melee effects.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "takeStat", V_ALL, "player_stat_increment", "Player statistic increment", "player_progression", "Preserve stat identity and increment semantics; distinct from addStat(amount) and scoreboard score.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "unlockRecipes", V_112, "player_recipe_book_unlock", "Player recipe-book recipe unlock", "player_progression", "Overloads accept IRecipe list or ResourceLocation array; preserve unlock order and recipe book sync packet.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "updateEntityActionState", V_ALL, "player_action_state_update", "Player input/action state update", "player_movement", "Protected per-tick input update; preserve sneaking/sprinting/jumping/flight flags and movement input ordering.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "updateSize", V_112, "player_eye_and_bounding_size_update", "Player size/eye height refresh", "player_movement", "Protected update after sleep/sneak state changes; preserve eye height and entity bounding box recalculation.", "net/minecraft/entity/player/EntityPlayer.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -4661,6 +4728,32 @@ mod tests {
             "shouldDismountInWater", "startRiding", "updatePassenger", "writeToNBTOptional",
         ] {
             assert!(has("Entity", method), "missing Entity#{method}");
+        }
+    }
+
+
+    #[test]
+    fn entity_player_inventory_combat_and_lifecycle_methods_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for method in [
+            "addItemStackToInventory", "addMovementStat", "addPrefix", "addShoulderEntity",
+            "attackTargetEntityWithCurrentItem", "blockUsingShield", "canOpen",
+            "canUseCommandBlock", "createCooldownTracker", "destroyVanishingCursedItems",
+            "disableShield", "displayGUIChest", "displayGuiCommandBlock",
+            "displayVillagerTradeGui", "dropItemAndGetStack", "getAbsorptionAmount",
+            "getArmorVisibility", "getBedSpawnLocation", "getDisplayNameString",
+            "getExperiencePoints", "getLeftShoulderEntity", "getOfflineUUID",
+            "getPrimaryHand", "getRightShoulderEntity", "getUUID", "getWorldScoreboard",
+            "hasReducedDebug", "isPlayerSleeping", "jump", "onDeath", "onEnchant",
+            "openBook", "openEditSign", "openEditStructure", "openGuiHorseInventory",
+            "refreshDisplayName", "registerFixesPlayer", "resetRecipes", "sendStatusMessage",
+            "setAbsorptionAmount", "setPrimaryHand", "spawnShoulderEntities",
+            "spawnSweepParticles", "takeStat", "unlockRecipes", "updateEntityActionState",
+            "updateSize",
+        ] {
+            assert!(has("EntityPlayer", method), "missing EntityPlayer#{method}");
         }
     }
 
