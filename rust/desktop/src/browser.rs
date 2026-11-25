@@ -685,7 +685,7 @@ fn is_armor_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource)
         .iter().any(|token| behavior.contains(token)) { return true; }
     let evidence = format!("{} {} {}", source.class_name.to_ascii_lowercase(),
         source.superclass.to_ascii_lowercase(), source.registry_name.to_ascii_lowercase());
-    ["helmet", "chestplate", "leggings", "boots", "armor_piece", "armoritem", "itemarmor"]
+    ["helmet", "chestplate", "leggings", "boots", "armor_piece", "armoritem", "itemarmor", "armor"]
         .iter().any(|token| evidence.contains(token))
 }
 
@@ -1765,6 +1765,20 @@ mod tests {
         let components = find_item_components(&[path], "ancient_sword").unwrap();
         assert_eq!(components["minecraft:custom_name"]["text"], "Ancient Sword");
         assert_eq!(components["minecraft:lore"][0]["text"], "Old magic");
+    }
+
+    #[test]
+    fn classifies_generic_armor_registry_names_outside_named_equipment_slots() {
+        let armor = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemDragonArmor".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "dragon_armor".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert!(is_armor_source(&armor));
     }
 
     #[test]
