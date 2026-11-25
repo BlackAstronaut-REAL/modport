@@ -1313,6 +1313,28 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
         .iter().any(|candidate| stem.contains(candidate))
     {
         Some("floor")
+    } else if parent.ends_with("block/slab") {
+        if stem.contains("double") { Some("cube") }
+        else if stem.contains("top") || stem.contains("upper") { Some("slab_top") }
+        else { Some("slab_bottom") }
+    } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
+    } else if ["block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        Some("fence")
+    } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        Some("wall")
+    } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        Some("pane")
+    } else if ["block/door_bottom", "block/door_top", "block/template_door"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        Some("door")
+    } else if ["block/trapdoor_bottom", "block/trapdoor_top", "block/template_trapdoor"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        if stem.contains("top") { Some("trapdoor_top") } else { Some("trapdoor_bottom") }
     } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
         .iter().any(|candidate| parent.ends_with(candidate))
     {
@@ -1400,6 +1422,22 @@ fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource
         "pressure_plate", "repeater", "comparator", "carpet", "rail",
     ].iter().any(|token| evidence.contains(token)) {
         "floor".to_owned()
+    } else if evidence.contains("blockdoubleslab") || evidence.contains("blockdoublewoodenslab") {
+        "cube".to_owned()
+    } else if evidence.contains("blockslab") || evidence.contains("slab") {
+        "slab_bottom".to_owned()
+    } else if evidence.contains("blockstairs") || evidence.contains("stairs") {
+        if evidence.contains("upside") || evidence.contains("top") { "stairs_top".to_owned() } else { "stairs".to_owned() }
+    } else if evidence.contains("blockfencegate") || evidence.contains("blockfence") {
+        "fence".to_owned()
+    } else if evidence.contains("blockwall") || evidence.contains("wall") {
+        "wall".to_owned()
+    } else if evidence.contains("blockpane") || evidence.contains("glasspane") || evidence.contains("pane") {
+        "pane".to_owned()
+    } else if evidence.contains("blocktrapdoor") || evidence.contains("trapdoor") {
+        if evidence.contains("top") { "trapdoor_top".to_owned() } else { "trapdoor_bottom".to_owned() }
+    } else if evidence.contains("blockdoor") || evidence.contains("door") {
+        "door".to_owned()
     } else {
         "cube".to_owned()
     }
@@ -2112,6 +2150,28 @@ mod tests {
         source.class_name = "ItemBattleAxe".to_owned();
         source.registry_name = "battle_axe".to_owned();
         assert!(is_weapon_source(&source));
+    }
+
+    #[test]
+    fn infers_additional_legacy_block_geometries_from_parent_types() {
+        let cases = [
+            ("BlockStoneSlab", "BlockSlab", "slab_bottom"),
+            ("BlockUpsideDownStairs", "BlockStairs", "stairs_top"),
+            ("BlockOakFence", "BlockFence", "fence"),
+            ("BlockGlassPane", "BlockPane", "pane"),
+            ("BlockIronDoor", "BlockDoor", "door"),
+            ("BlockIronTrapdoor", "BlockTrapDoor", "trapdoor_bottom"),
+        ];
+        for (class_name, superclass, expected) in cases {
+            let source = mojmodelbridge::mcreator_block::BlockSource {
+                class_name: class_name.to_owned(),
+                superclass: superclass.to_owned(),
+                registry_name: class_name.to_ascii_lowercase(),
+                source_path: String::new(),
+                source_text: String::new(),
+            };
+            assert_eq!(infer_legacy_block_shape(&source), expected, "{class_name}");
+        }
     }
 
     #[test]
