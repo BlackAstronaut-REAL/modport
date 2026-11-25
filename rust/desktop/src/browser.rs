@@ -848,8 +848,8 @@ fn item_source_properties(
         ("max_damage", &["setMaxDamage", "durability", "maxDamage", "getMaxDamage"], "Durability"),
         ("attack_damage", &["setAttackDamage", "attackDamage", "getDamageVsEntity"], "Attack damage"),
         ("enchantability", &["getItemEnchantability", "getEnchantability", "getEnchantmentValue", "enchantability"], "Enchantability"),
-        ("nutrition", &["setHealAmount", "nutrition"], "Food nutrition"),
-        ("saturation", &["setSaturationModifier", "saturationMod", "saturation"], "Food saturation"),
+        ("nutrition", &["setHealAmount", "getHealAmount", "nutrition"], "Food nutrition"),
+        ("saturation", &["setSaturationModifier", "getSaturationModifier", "saturationMod", "saturation"], "Food saturation"),
     ];
     for (key, names, label) in fields {
         if let Some(value) = numeric_source_call(text, names) {
