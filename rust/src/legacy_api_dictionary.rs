@@ -659,7 +659,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("LivingEquipmentChangeEvent", "getSlot", V_112, "equipment_change_slot", "EquipmentSlot", "events", "automatic_rename_candidate", "Translate legacy armor indices to EquipmentSlot.", "net/minecraftforge/event/entity/living/LivingEquipmentChangeEvent.html"),
     d!("LivingEquipmentChangeEvent", "getFrom", V_112, "equipment_change_old_stack", "Previously equipped ItemStack", "events", "automatic_rename_candidate", "Preserve old stack identity and components.", "net/minecraftforge/event/entity/living/LivingEquipmentChangeEvent.html"),
     d!("LivingEquipmentChangeEvent", "getTo", V_112, "equipment_change_new_stack", "Newly equipped ItemStack", "events", "automatic_rename_candidate", "Preserve new stack identity and component changes.", "net/minecraftforge/event/entity/living/LivingEquipmentChangeEvent.html"),
-    d!("PlayerEvent", "getPlayer", V_ALL, "player_event_player", "Player on PlayerEvent", "events", "automatic_rename_candidate", "Translate EntityPlayer and preserve server-side identity.", "net/minecraftforge/event/entity/player/PlayerEvent.html"),
+    d!("PlayerEvent", "getEntityPlayer", V_ALL, "player_event_player", "EntityPlayer on net.minecraftforge.event.entity.player.PlayerEvent", "events", "automatic_rename_candidate", "The Forge entity-player event base exposes getEntityPlayer(); do not alias this to the separate FML gameevent PlayerEvent public player field.", "net/minecraftforge/event/entity/player/PlayerEvent.html"),
     d!("PlayerEvent.BreakSpeed", "getOriginalSpeed", V_18, "player_break_original_speed", "Original block break speed", "events", "automatic_rename_candidate", "Preserve pre-modifier speed and haste/mining-fatigue context.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
     d!("PlayerEvent.BreakSpeed", "getNewSpeed", V_18, "player_break_new_speed", "Current modified break speed", "events", "automatic_rename_candidate", "Preserve event-modified speed and cancellation.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
     d!("PlayerEvent.BreakSpeed", "setNewSpeed", V_18, "player_break_speed_write", "Set modified break speed", "events", "automatic_rename_candidate", "Port speed modifiers without dropping other event listeners' contributions.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
@@ -1552,6 +1552,73 @@ const DEFINITIONS: &[Definition] = &[
     d!("RenderTooltipEvent.Color", "setBorderEnd", V_112, "tooltip_border_end_color_write", "Tooltip border ARGB", "client_render", "adapter_required", "Preserve packed ARGB end color and its gradient edge.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
     d!("RenderTooltipEvent.Color", "setBorderStart", V_112, "tooltip_border_start_color_write", "Tooltip border ARGB", "client_render", "adapter_required", "Preserve packed ARGB start color and its gradient edge.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
 
+    // Base event lifecycle methods verified in the Forge eventhandler docs.
+    d!("Event", "setup", V_ALL, "event_setup_lifecycle", "Forge Event bus dispatch setup lifecycle", "events", "manual_review", "Protected/internal lifecycle hook invoked by the event bus; preserve only for source subclasses that override or call it.", "net/minecraftforge/fml/common/eventhandler/Event.html"),
+    d!("EventBus", "handleException", V_112, "event_bus_exception_handler", "IEventExceptionHandler / event listener failure path", "events", "manual_adapter_required", "Preserve bus, event, ordered listener array, failing listener index and throwable context; this is an internal exception-dispatch hook.", "net/minecraftforge/fml/common/eventhandler/EventBus.html"),
+    d!("EventBus", "shutdown", V_112, "event_bus_shutdown", "EventBus listener lifecycle shutdown", "events", "manual_adapter_required", "Preserve shutdown state and reject further dispatch/registration according to source bus lifecycle.", "net/minecraftforge/fml/common/eventhandler/EventBus.html"),
+    d!("EnderTeleportEvent", "setAttackDamage", V_112, "teleport_attack_damage_write", "EnderTeleportEvent teleport damage amount", "events_entity", "adapter_required", "Preserve the modified teleport damage before the teleport/damage pipeline consumes it.", "net/minecraftforge/event/entity/living/EnderTeleportEvent.html"),
+
+    // Biome event family and nested value replacement hooks.
+    d!("BiomeEvent", "getBiome", V_112, "biome_event_biome", "Biome / biome event payload", "worldgen", "automatic_rename_candidate", "Preserve the exact biome instance and registry identity.", "net/minecraftforge/event/terraingen/BiomeEvent.html"),
+    d!("BiomeEvent.BiomeColor", "getNewColor", V_112, "biome_color_current", "Biome color event current RGB value", "rendering", "automatic_rename_candidate", "Read current color after earlier listeners; keep separate from original biome color.", "net/minecraftforge/event/terraingen/BiomeEvent.BiomeColor.html"),
+    d!("BiomeEvent.GetVillageBlockID", "getOriginal", V_112, "village_block_original_state", "Village generation original BlockState", "worldgen", "automatic_rename_candidate", "Preserve original state chosen before mods replace village foundation/wall/path blocks.", "net/minecraftforge/event/terraingen/BiomeEvent.GetVillageBlockID.html"),
+    d!("BiomeEvent.GetVillageBlockID", "getReplacement", V_112, "village_block_replacement_state", "Village generation replacement BlockState", "worldgen", "automatic_rename_candidate", "Read current replacement state after earlier listeners.", "net/minecraftforge/event/terraingen/BiomeEvent.GetVillageBlockID.html"),
+    d!("BiomeEvent.GetVillageBlockID", "setReplacement", V_112, "village_block_replacement_state_write", "Village generation replacement BlockState", "worldgen", "adapter_required", "Preserve custom block-state replacement and property values for village generation.", "net/minecraftforge/event/terraingen/BiomeEvent.GetVillageBlockID.html"),
+    d!("BiomeEvent.CreateDecorator", "getNewBiomeDecorator", V_112, "biome_new_decorator", "BiomeDecorator replacement", "worldgen", "automatic_rename_candidate", "Read current biome decorator after previous listeners.", "net/minecraftforge/event/terraingen/BiomeEvent.CreateDecorator.html"),
+    d!("BiomeEvent.CreateDecorator", "getOriginalBiomeDecorator", V_112, "biome_original_decorator", "BiomeDecorator original", "worldgen", "automatic_rename_candidate", "Preserve original decorator separately from replacement.", "net/minecraftforge/event/terraingen/BiomeEvent.CreateDecorator.html"),
+    d!("BiomeEvent.CreateDecorator", "setNewBiomeDecorator", V_112, "biome_new_decorator_write", "BiomeDecorator replacement", "worldgen", "adapter_required", "Preserve decorator replacement and feature generation sequence.", "net/minecraftforge/event/terraingen/BiomeEvent.CreateDecorator.html"),
+
+    // Decoration, ore generation and chunk population context.
+    d!("DecorateBiomeEvent", "getChunkPos", V_112, "biome_decoration_chunk_position", "ChunkPos decoration context", "worldgen", "automatic_rename_candidate", "Use ChunkPos as the stable chunk coordinate; do not confuse it with deprecated BlockPos getPos().", "net/minecraftforge/event/terraingen/DecorateBiomeEvent.html"),
+    d!("DecorateBiomeEvent", "getPos", V_112, "biome_decoration_legacy_position", "Deprecated BlockPos decoration position", "worldgen", "adapter_required", "Deprecated in favor of getChunkPos; preserve original BlockPos behavior for legacy code that reads it.", "net/minecraftforge/event/terraingen/DecorateBiomeEvent.html"),
+    d!("DecorateBiomeEvent", "getRand", V_112, "biome_decoration_random", "Decoration Random source", "worldgen", "automatic_rename_candidate", "Preserve the exact world-generation Random instance and call order for deterministic feature placement.", "net/minecraftforge/event/terraingen/DecorateBiomeEvent.html"),
+    d!("DecorateBiomeEvent.Decorate", "getPlacementPos", V_112, "biome_feature_placement_position", "BlockPos feature placement origin", "worldgen", "automatic_rename_candidate", "Preserve the actual feature placement origin; it can lie anywhere inside the 2x2 chunk generation area.", "net/minecraftforge/event/terraingen/DecorateBiomeEvent.Decorate.html"),
+    d!("OreGenEvent", "getPos", V_112, "ore_generation_origin", "BlockPos ore generation origin", "worldgen", "automatic_rename_candidate", "Preserve ore-generation origin used by the current chunk feature attempt.", "net/minecraftforge/event/terraingen/OreGenEvent.html"),
+    d!("OreGenEvent", "getRand", V_112, "ore_generation_random", "World generation Random source", "worldgen", "automatic_rename_candidate", "Preserve exact Random instance and generation call ordering for deterministic ore placement.", "net/minecraftforge/event/terraingen/OreGenEvent.html"),
+    d!("PopulateChunkEvent", "getChunkX", V_112, "chunk_population_x", "Chunk population X coordinate", "worldgen", "automatic_rename_candidate", "Preserve chunk coordinate rather than block-space X.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.html"),
+    d!("PopulateChunkEvent", "getChunkZ", V_112, "chunk_population_z", "Chunk population Z coordinate", "worldgen", "automatic_rename_candidate", "Preserve chunk coordinate rather than block-space Z.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.html"),
+    d!("PopulateChunkEvent", "getRand", V_112, "chunk_population_random", "Chunk population Random source", "worldgen", "automatic_rename_candidate", "Preserve the exact random object shared by this chunk population pass.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.html"),
+    d!("PopulateChunkEvent", "getWorld", V_112, "chunk_population_world", "Chunk population World", "worldgen", "automatic_rename_candidate", "Preserve world and dimension context for terrain feature placement.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.html"),
+    d!("PopulateChunkEvent", "isHasVillageGenerated", V_112, "chunk_population_village_flag", "Chunk population village-generation state", "worldgen", "automatic_rename_candidate", "Preserve whether a village has already generated in the current chunk; this gates some feature placement logic.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.html"),
+    d!("PopulateChunkEvent.Populate", "getType", V_112, "chunk_population_feature_type", "PopulateChunkEvent.Populate.EventType", "worldgen", "automatic_rename_candidate", "Preserve population event type such as LAKE, DUNGEON, ANIMALS, ICE or CUSTOM.", "net/minecraftforge/event/terraingen/PopulateChunkEvent.Populate.html"),
+
+    // Generator initialization and noise-field replacement.
+    d!("ChunkGeneratorEvent", "getGen", V_112, "chunk_generator_event_gen", "IChunkGenerator event context", "worldgen", "automatic_rename_candidate", "Preserve exact generator instance used by the current generation callback.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.html"),
+    d!("ChunkGeneratorEvent", "getGenerator", V_112, "chunk_generator_event_generator", "IChunkGenerator event context", "worldgen", "automatic_rename_candidate", "Alias of getGen in the source API; retain the method identity for source matching.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getNoisefield", V_112, "chunk_noise_field", "double[] chunk density/noise field", "worldgen", "automatic_rename_candidate", "Preserve the exact noise-array layout and indexing expected by the chunk generator.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getPosX", V_112, "chunk_noise_origin_x", "Noise field origin X", "worldgen", "automatic_rename_candidate", "Preserve noise-field origin coordinates and scale.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getPosY", V_112, "chunk_noise_origin_y", "Noise field origin Y", "worldgen", "automatic_rename_candidate", "Preserve noise-field origin coordinates and scale.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getPosZ", V_112, "chunk_noise_origin_z", "Noise field origin Z", "worldgen", "automatic_rename_candidate", "Preserve noise-field origin coordinates and scale.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getSizeX", V_112, "chunk_noise_size_x", "Noise field size X", "worldgen", "automatic_rename_candidate", "Preserve sample dimensions and array traversal order.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getSizeY", V_112, "chunk_noise_size_y", "Noise field size Y", "worldgen", "automatic_rename_candidate", "Preserve sample dimensions and array traversal order.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "getSizeZ", V_112, "chunk_noise_size_z", "Noise field size Z", "worldgen", "automatic_rename_candidate", "Preserve sample dimensions and array traversal order.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.InitNoiseField", "setNoisefield", V_112, "chunk_noise_field_write", "double[] chunk density/noise field", "worldgen", "adapter_required", "Preserve replacement array values, dimensions and the generator's expected flattening layout.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.InitNoiseField.html"),
+    d!("ChunkGeneratorEvent.ReplaceBiomeBlocks", "getPrimer", V_112, "chunk_biome_replace_primer", "ChunkPrimer terrain buffer", "worldgen", "automatic_rename_candidate", "Preserve mutable primer and its block-state write order.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.ReplaceBiomeBlocks.html"),
+    d!("ChunkGeneratorEvent.ReplaceBiomeBlocks", "getWorld", V_112, "chunk_biome_replace_world", "World terrain replacement context", "worldgen", "automatic_rename_candidate", "Preserve world and dimension used for surface replacement.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.ReplaceBiomeBlocks.html"),
+    d!("ChunkGeneratorEvent.ReplaceBiomeBlocks", "getX", V_112, "chunk_biome_replace_x", "Chunk coordinate X", "worldgen", "automatic_rename_candidate", "Preserve chunk X coordinate independently from block origin.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.ReplaceBiomeBlocks.html"),
+    d!("ChunkGeneratorEvent.ReplaceBiomeBlocks", "getZ", V_112, "chunk_biome_replace_z", "Chunk coordinate Z", "worldgen", "automatic_rename_candidate", "Preserve chunk Z coordinate independently from block origin.", "net/minecraftforge/event/terraingen/ChunkGeneratorEvent.ReplaceBiomeBlocks.html"),
+
+    // Map generator and noise generator initialization hooks.
+    d!("InitMapGenEvent", "getNewGen", V_112, "mapgen_replacement", "MapGenBase replacement", "worldgen", "automatic_rename_candidate", "Read the currently selected map generator after earlier event listeners.", "net/minecraftforge/event/terraingen/InitMapGenEvent.html"),
+    d!("InitMapGenEvent", "getOriginalGen", V_112, "mapgen_original", "Original MapGenBase", "worldgen", "automatic_rename_candidate", "Preserve vanilla/original generator separately from replacement.", "net/minecraftforge/event/terraingen/InitMapGenEvent.html"),
+    d!("InitMapGenEvent", "getType", V_112, "mapgen_type", "InitMapGenEvent.EventType", "worldgen", "automatic_rename_candidate", "Preserve generator category (caves, ravines, villages, structures, etc.) for targeted replacement.", "net/minecraftforge/event/terraingen/InitMapGenEvent.html"),
+    d!("InitMapGenEvent", "setNewGen", V_112, "mapgen_replacement_write", "MapGenBase replacement", "worldgen", "adapter_required", "Preserve map generator replacement and the generator instance selected for subsequent world generation.", "net/minecraftforge/event/terraingen/InitMapGenEvent.html"),
+    d!("InitNoiseGensEvent", "getNewValues", V_112, "noise_generator_values", "NoiseGenerator[] worldgen noise set", "worldgen", "automatic_rename_candidate", "Preserve noise-generator array ordering and each generator's seeded state.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.html"),
+    d!("InitNoiseGensEvent", "getOriginal", V_112, "noise_generator_original", "Original noise generator array", "worldgen", "automatic_rename_candidate", "Preserve unmodified original generator array separately from current replacement.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.html"),
+    d!("InitNoiseGensEvent", "getRandom", V_112, "noise_generator_random", "Worldgen Random seed source", "worldgen", "automatic_rename_candidate", "Preserve the seeded Random instance and call ordering for deterministic world generation.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.html"),
+
+    // Noise generator contexts are mutable structures passed through the event.
+    d!("InitNoiseGensEvent.Context", "clone", V_112, "noise_context_clone", "Noise generator context clone", "worldgen", "adapter_required", "Preserve deep/shallow copy semantics for the contained noise generators and scalar settings.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "getDepth", V_112, "noise_context_depth", "Overworld noise depth parameter", "worldgen", "automatic_rename_candidate", "Preserve getter/setter overload semantics exposed through getDepth().", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "getLPerlin1", V_112, "noise_context_lperlin1", "Perlin noise generator LPerlin1", "worldgen", "automatic_rename_candidate", "Preserve noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "getLPerlin2", V_112, "noise_context_lperlin2", "Perlin noise generator LPerlin2", "worldgen", "automatic_rename_candidate", "Preserve noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "getPerlin", V_112, "noise_context_perlin", "Perlin noise generator", "worldgen", "automatic_rename_candidate", "Preserve generator identity and overloaded get/set semantics where exposed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "getScale", V_112, "noise_context_scale", "Overworld noise scale parameter", "worldgen", "automatic_rename_candidate", "Preserve getter/setter overload semantics exposed through getScale().", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "setDepth", V_112, "noise_context_depth_write", "Overworld noise depth parameter", "worldgen", "adapter_required", "Preserve overloaded getDepth(value) setter behavior as well as the ordinary setter form.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.Context", "setLPerlin1", V_112, "noise_context_lperlin1_write", "Perlin noise generator LPerlin1", "worldgen", "adapter_required", "Preserve generator replacement and original deterministic sequence.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.Context.html"),
+    d!("InitNoiseGensEvent.ContextOverworld", "getForest", V_112, "overworld_noise_forest", "Overworld forest noise generator", "worldgen", "automatic_rename_candidate", "Preserve forest noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.ContextOverworld.html"),
+    d!("InitNoiseGensEvent.ContextOverworld", "getHeight", V_112, "overworld_noise_height", "Overworld height noise generator", "worldgen", "automatic_rename_candidate", "Preserve height noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.ContextOverworld.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -2102,14 +2169,65 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("WorldEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
-        "DecorateBiomeEvent" | "DecorateBiomeEvent.Decorate" | "DecorateBiomeEvent.Pre"
-        | "DecorateBiomeEvent.Post" | "OreGenEvent" | "OreGenEvent.Pre"
-        | "OreGenEvent.Post" | "OreGenEvent.GenerateMinable" | "BiomeEvent"
-        | "BiomeEvent.BiomeColor" | "BiomeEvent.GetGrassColor"
-        | "BiomeEvent.GetFoliageColor" | "BiomeEvent.GetWaterColor"
-        | "SaplingGrowTreeEvent" | "ChunkGeneratorEvent" | "PopulateChunkEvent"
-        | "WorldTypeEvent" => {
+        "DecorateBiomeEvent" => {
+            candidates.insert("DecorateBiomeEvent".to_owned());
             candidates.insert("Event".to_owned());
+        }
+        "DecorateBiomeEvent.Decorate" | "DecorateBiomeEvent.Pre" | "DecorateBiomeEvent.Post" => {
+            candidates.insert("DecorateBiomeEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "OreGenEvent" => {
+            candidates.insert("OreGenEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "OreGenEvent.GenerateMinable" | "OreGenEvent.Pre" | "OreGenEvent.Post" => {
+            candidates.insert("OreGenEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "BiomeEvent" => {
+            candidates.insert("BiomeEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "BiomeEvent.BiomeColor" | "BiomeEvent.CreateDecorator"
+        | "BiomeEvent.GetVillageBlockID" => {
+            candidates.insert("BiomeEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "BiomeEvent.GetGrassColor" | "BiomeEvent.GetFoliageColor"
+        | "BiomeEvent.GetWaterColor" => {
+            candidates.insert("BiomeEvent.BiomeColor".to_owned());
+            candidates.insert("BiomeEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ChunkGeneratorEvent" => {
+            candidates.insert("ChunkGeneratorEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ChunkGeneratorEvent.InitNoiseField" | "ChunkGeneratorEvent.ReplaceBiomeBlocks"
+        | "PopulateChunkEvent" => {
+            candidates.insert("ChunkGeneratorEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "PopulateChunkEvent.Pre" | "PopulateChunkEvent.Post" | "PopulateChunkEvent.Populate" => {
+            candidates.insert("PopulateChunkEvent".to_owned());
+            candidates.insert("ChunkGeneratorEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "InitMapGenEvent" | "SaplingGrowTreeEvent" | "WorldTypeEvent" => {
+            candidates.insert("Event".to_owned());
+        }
+        "InitNoiseGensEvent" => {
+            candidates.insert("InitNoiseGensEvent".to_owned());
+            candidates.insert("WorldEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "InitNoiseGensEvent.ContextOverworld" => {
+            candidates.insert("InitNoiseGensEvent.Context".to_owned());
+            candidates.insert("InitNoiseGensEvent.ContextOverworld".to_owned());
+        }
+        "InitNoiseGensEvent.Context" => {
+            candidates.insert("InitNoiseGensEvent.Context".to_owned());
         }
         "AnvilUpdateEvent" | "AttachCapabilitiesEvent" | "CommandEvent"
         | "DifficultyChangeEvent" | "GameRuleChangeEvent" | "LootTableLoadEvent"
@@ -2590,7 +2708,7 @@ mod tests {
                              BlockEvent.CropGrowEvent.Pre grow,
                              ChunkDataEvent.Load chunk) {
                     heal.getEntityLiving();
-                    clone.getPlayer();
+                    clone.getEntityPlayer();
                     grow.getWorld();
                     chunk.getChunk();
                     chunk.getWorld();
@@ -2601,7 +2719,7 @@ mod tests {
         let has = |owner: &str, method: &str| found.iter()
             .any(|entry| entry.source_owner == owner && entry.source_method == method);
         assert!(has("LivingEvent", "getEntityLiving"));
-        assert!(has("PlayerEvent", "getPlayer"));
+        assert!(has("PlayerEvent", "getEntityPlayer"));
         assert!(has("BlockEvent", "getWorld"));
         assert!(has("ChunkEvent", "getChunk"));
         assert!(has("WorldEvent", "getWorld"));
@@ -2683,6 +2801,32 @@ mod tests {
             ("PlayerSPPushOutOfBlocksEvent", "setEntityBoundingBox"),
             ("RenderLivingEvent", "getPartialRenderTick"),
             ("RenderTooltipEvent.Color", "getOriginalBackground"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn forge_terrain_generation_methods_and_inheritance_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("BiomeEvent", "getBiome"),
+            ("BiomeEvent.GetVillageBlockID", "setReplacement"),
+            ("BiomeEvent.CreateDecorator", "setNewBiomeDecorator"),
+            ("DecorateBiomeEvent", "getChunkPos"),
+            ("DecorateBiomeEvent.Decorate", "getPlacementPos"),
+            ("OreGenEvent", "getRand"),
+            ("PopulateChunkEvent", "isHasVillageGenerated"),
+            ("PopulateChunkEvent.Populate", "getType"),
+            ("ChunkGeneratorEvent", "getGenerator"),
+            ("ChunkGeneratorEvent.InitNoiseField", "setNoisefield"),
+            ("ChunkGeneratorEvent.ReplaceBiomeBlocks", "getPrimer"),
+            ("InitMapGenEvent", "setNewGen"),
+            ("InitNoiseGensEvent", "getNewValues"),
+            ("InitNoiseGensEvent.ContextOverworld", "getHeight"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
