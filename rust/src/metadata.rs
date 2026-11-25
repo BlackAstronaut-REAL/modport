@@ -95,7 +95,7 @@ fn toml_string(text: &str, key: &str) -> String {
         .and_then(|c| c.get(1)).map(|m| m.as_str().trim().to_owned()).unwrap_or_default()
 }
 
-fn dependency_version_range(text: &str, dependency_id: &str) -> String {
+pub(crate) fn dependency_version_range(text: &str, dependency_id: &str) -> String {
     let mut in_dependency = false;
     let mut current_mod_id = String::new();
     let mut current_range = String::new();
