@@ -678,15 +678,30 @@ fn decode_java_string(value: &str) -> String {
     result
 }
 
+fn identifier_words(value: &str) -> Vec<String> {
+    humanize(value).split_whitespace().map(str::to_ascii_lowercase).collect()
+}
+
+fn identifier_has_any_word(value: &str, candidates: &[&str]) -> bool {
+    let words = identifier_words(value);
+    words.iter().any(|word| candidates.contains(&word.as_str()))
+}
+
+fn identifier_has_pair(value: &str, first: &str, second: &str) -> bool {
+    identifier_words(value).windows(2)
+        .any(|pair| pair[0] == first && pair[1] == second)
+}
+
 fn is_armor_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
     let behavior = source.source_text.to_ascii_lowercase();
     if ["extends armoritem", "extends itemarmor", "getarmormodel", "getarmortexture",
         "armortexture", "armormaterial", "equipmentslot", "equipment_slot"]
-        .iter().any(|token| behavior.contains(token)) { return true; }
-    let evidence = format!("{} {} {}", source.class_name.to_ascii_lowercase(),
-        source.superclass.to_ascii_lowercase(), source.registry_name.to_ascii_lowercase());
-    ["helmet", "chestplate", "leggings", "boots", "armor_piece", "armoritem", "itemarmor", "armor"]
-        .iter().any(|token| evidence.contains(token))
+        .iter().any(|token| behavior.contains(token)) {
+        return true;
+    }
+    [&source.class_name, &source.superclass, &source.registry_name].iter().any(|value| {
+        identifier_has_any_word(value, &["helmet", "chestplate", "leggings", "boots", "armor"])
+    })
 }
 
 fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
@@ -698,13 +713,18 @@ fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource
         "useanim.bow", "useanim.crossbow", "useanim.spear", "enumaction.bow",
         "performrangedattack", "rangedattack", "launchprojectile", "shoot(",
         "getdamagevsentity", "getattackdamage", "attackdamage", "weapondamage",
-    ].iter().any(|token| behavior.contains(token)) { return true; }
-    let evidence = format!("{} {} {}", source.class_name.to_ascii_lowercase(),
-        source.superclass.to_ascii_lowercase(), source.registry_name.to_ascii_lowercase());
-    ["itemsword", "itembow", "itemcrossbow", "itemtrident", "sword", "bow", "crossbow",
-        "trident", "dagger", "spear", "weapon", "battleaxe", "waraxe", "mace",
-        "greataxe", "greatsword", "halberd", "scythe"]
-        .iter().any(|token| evidence.contains(token))
+    ].iter().any(|token| behavior.contains(token)) {
+        return true;
+    }
+    [&source.class_name, &source.superclass, &source.registry_name].iter().any(|value| {
+        identifier_has_any_word(value, &[
+            "sword", "bow", "crossbow", "longbow", "shortbow", "trident",
+            "dagger", "spear", "weapon", "mace", "halberd", "scythe",
+            "battleaxe", "waraxe", "greatsword", "greataxe",
+        ]) || identifier_has_pair(value, "battle", "axe")
+            || identifier_has_pair(value, "war", "axe")
+            || identifier_has_pair(value, "great", "axe")
+    })
 }
 
 fn numeric_source_call(source: &str, methods: &[&str]) -> Option<f64> {
@@ -1779,6 +1799,31 @@ mod tests {
             source_text: String::new(),
         };
         assert!(is_armor_source(&armor));
+    }
+
+    #[test]
+    fn name_fallback_does_not_treat_rainbow_items_as_weapons() {
+        let rainbow = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemRainbowDye".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "rainbow_dye".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert!(!is_weapon_source(&rainbow));
+
+        let war_axe = mojmodelbridge::mcreator_equipment::EquipmentSource {
+            class_name: "ItemWarAxe".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "war_axe".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert!(is_weapon_source(&war_axe));
     }
 
     #[test]
