@@ -198,6 +198,10 @@ pub struct TextureIndex {
     pub roots: Vec<PathBuf>,
     pub shallow_roots: Vec<PathBuf>,
     pub png_files: Vec<PathBuf>,
+    /// Exact texture resource keys -> candidate files, built once per source tree.
+    png_by_resource: HashMap<String, Vec<PathBuf>>,
+    /// Lowercase PNG basename -> candidate files for namespace/layout fallbacks.
+    png_by_basename: HashMap<String, Vec<PathBuf>>,
     pub references: Vec<TextureReference>,
     pub records: Vec<SourceRecord>,
 }
@@ -210,6 +214,8 @@ impl TextureIndex {
             roots,
             shallow_roots,
             png_files: Vec::new(),
+            png_by_resource: HashMap::new(),
+            png_by_basename: HashMap::new(),
             references: Vec::new(),
             records: Vec::new(),
         };
@@ -220,6 +226,20 @@ impl TextureIndex {
     fn build(&mut self) -> Result<()> {
         self.png_files = iter_files(&self.roots, &self.shallow_roots, is_png);
         self.png_files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+
+        // Every later model texture reference used to walk every PNG and rebuild
+        // these keys. Precompute exact resource and basename lookups once instead.
+        self.png_by_resource.clear();
+        self.png_by_basename.clear();
+        for png in &self.png_files {
+            for key in texture_relative_candidates(png) {
+                self.png_by_resource.entry(key).or_default().push(png.clone());
+            }
+            if let Some(name) = png.file_name().and_then(|value| value.to_str()) {
+                self.png_by_basename.entry(name.to_ascii_lowercase())
+                    .or_default().push(png.clone());
+            }
+        }
 
         let files = iter_files(&self.roots, &self.shallow_roots, is_source);
         for path in files {
@@ -287,13 +307,19 @@ impl TextureIndex {
         let normalized = normalize_reference(reference);
         if !normalized.ends_with(".png") { return Vec::new(); }
         let name = Path::new(&normalized).file_name().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+        let exact = self.png_by_resource.get(&normalized);
+        let mut exact_paths = HashSet::<PathBuf>::new();
         let mut matches = Vec::new();
-        for png in &self.png_files {
-            let keys = texture_relative_candidates(png);
-            if keys.contains(&normalized) {
-                matches.push((png.clone(), 100_000.0, "exact resource path".to_owned()));
-            } else if png.file_name().and_then(|v| v.to_str()).map(|v| v.eq_ignore_ascii_case(&name)).unwrap_or(false) {
-                matches.push((png.clone(), 50_000.0, "exact resource basename".to_owned()));
+        if let Some(paths) = exact {
+            for path in paths {
+                exact_paths.insert(path.clone());
+                matches.push((path.clone(), 100_000.0, "exact resource path".to_owned()));
+            }
+        }
+        if let Some(paths) = self.png_by_basename.get(&name) {
+            for path in paths {
+                if exact_paths.contains(path) { continue; }
+                matches.push((path.clone(), 50_000.0, "exact resource basename".to_owned()));
             }
         }
         matches
@@ -456,6 +482,19 @@ mod tests {
     fn touch(path: &Path) {
         if let Some(parent) = path.parent() { fs::create_dir_all(parent).unwrap(); }
         fs::write(path, b"not-real-png-data").unwrap();
+    }
+
+    #[test]
+    fn preindexed_texture_lookup_keeps_exact_and_basename_fallbacks() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let texture = root.join("assets/demo/textures/entity/creature/creature.png");
+        touch(&texture);
+        let index = TextureIndex::new(&[root.to_path_buf()], &[]).unwrap();
+        let exact = index.match_reference("demo:textures/entity/creature/creature.png");
+        assert!(exact.iter().any(|(path, score, _)| path == &texture && *score == 100_000.0));
+        let basename = index.match_reference("other:entity/creature/creature.png");
+        assert!(basename.iter().any(|(path, score, _)| path == &texture && *score == 50_000.0));
     }
 
     #[test]
