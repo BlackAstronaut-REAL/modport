@@ -20,6 +20,9 @@ pub struct ViewerCube {
     /// scene's active texture, as with legacy ModelRenderer meshes.
     #[serde(default)]
     pub face_texture_indices: Option<[usize; 6]>,
+    /// Render as a two-sided textured plane rather than a six-sided cuboid.
+    #[serde(default)]
+    pub crossed_plane: bool,
     pub mirror: bool,
     pub name: String,
 }
@@ -132,6 +135,7 @@ impl ViewerScene {
                     uv_origin: [cube.uv_x as f32, cube.uv_y as f32],
                     face_uvs: None,
                     face_texture_indices: None,
+                    crossed_plane: false,
                     mirror: cube.mirror,
                     name: cube.name.clone(),
                 }
