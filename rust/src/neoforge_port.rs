@@ -19,7 +19,7 @@ use crate::metadata::{infer_mod_metadata, ModMetadata};
 use crate::mod_graph::{scan_mod_graph, EntityMetadata};
 use crate::mcreator_armor::{compiled_armor_stats, discover_armor_sources, source_armor_stats, ArmorSetSource};
 use crate::mcreator_block::{discover_block_sources, is_plant_source, source_block_properties, BlockSource};
-use crate::mcreator_equipment::{discover_equipment_sources, EquipmentSource};
+use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sources, source_tool_materials, EquipmentSource, ToolMaterialStats};
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
@@ -136,6 +136,25 @@ struct ItemRecord {
     source_text: String,
     stack_size: u32,
     kind: String,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ToolRecord {
+    id: String,
+    class_name: String,
+    source_path: String,
+    kind: String,
+    tier_field: String,
+    harvest_level: i32,
+    tag: String,
+    uses: u32,
+    efficiency: f32,
+    damage_bonus: f32,
+    enchantability: u32,
+    attribute_damage: f32,
+    attribute_speed: f32,
+    durability: u32,
     warnings: Vec<String>,
 }
 
@@ -262,6 +281,12 @@ pub fn port_to_neoforge(
         }
     }
 
+    let mut tool_materials = compiled_tool_materials(roots)?;
+    tool_materials.extend(source_tool_materials(roots, &source_mod_id));
+    let mut tool_records = collect_native_tools(&equipment, &tool_materials, &mut warnings);
+    for tool in &mut tool_records {
+        tool.source_path = prepared.display_source_path(&tool.source_path);
+    }
     let mut item_records = collect_items(&equipment, &armor_sources, &mut warnings);
     let mut block_records = collect_blocks(&block_sources, &mut warnings);
     for item in &mut item_records {
@@ -289,15 +314,16 @@ pub fn port_to_neoforge(
         &target_package,
         &target_mod_id,
         &item_records,
+        &tool_records,
         &block_records,
         &native_armors,
         &native_entities,
     )?;
     let generated_resource_files = write_native_resources(
-        &resources_root, &target_mod_id, &item_records, &block_records, &native_armors
+        &resources_root, &target_mod_id, &item_records, &tool_records, &block_records, &native_armors
     )?;
 
-    let items: Vec<NativeItemPlan> = item_records.iter().map(|item| NativeItemPlan {
+    let mut items: Vec<NativeItemPlan> = item_records.iter().map(|item| NativeItemPlan {
         registry_name: item.id.clone(),
         source_class: item.class_name.clone(),
         kind: item.kind.clone(),
@@ -306,6 +332,16 @@ pub fn port_to_neoforge(
         generated_as: "vanilla Item registration".to_owned(),
         warnings: item.warnings.clone(),
     }).collect();
+    items.extend(tool_records.iter().map(|tool| NativeItemPlan {
+        registry_name: tool.id.clone(),
+        source_class: tool.class_name.clone(),
+        kind: tool.kind.clone(),
+        stack_size: 1,
+        source_path: tool.source_path.clone(),
+        generated_as: native_tool_generated_kind(&tool.kind).to_owned(),
+        warnings: tool.warnings.clone(),
+    }));
+    items.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
 
     let blocks: Vec<NativeBlockPlan> = block_records.iter().map(|block| NativeBlockPlan {
         registry_name: block.id.clone(),
@@ -357,6 +393,9 @@ pub fn port_to_neoforge(
         format!("{} ({})", source.class_name, source.registry_name)
     }).collect();
 
+    if !tool_records.is_empty() {
+        warnings.push(format!("{} registered tool/weapon item(s) were emitted as native NeoForge tool classes; custom attack behavior, mining tags, repair ingredients, and special abilities may need further reconstruction.", tool_records.len()));
+    }
     if items.is_empty() && blocks.is_empty() {
         warnings.push("No registered Java/bytecode item or block subclasses were recovered. The project contains copied resources and source analysis only.".to_owned());
     }
@@ -423,7 +462,8 @@ pub fn port_to_neoforge(
         "behavior_fully_reconstructed": false,
         "analysis_file": "modport/port-analysis.json",
         "converted": {
-            "items": report.items.len(),
+            "items": report.items.iter().filter(|item| !["Sword", "Axe", "Pickaxe", "Shovel", "Hoe", "Bow", "Fishing Rod", "Shears"].contains(&item.kind.as_str())).count(),
+            "tools_and_weapons": report.items.iter().filter(|item| ["Sword", "Axe", "Pickaxe", "Shovel", "Hoe", "Bow", "Fishing Rod", "Shears"].contains(&item.kind.as_str())).count(),
             "blocks": report.blocks.len(),
             "armor_sets": report.armor_sets.len(),
             "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
@@ -574,7 +614,8 @@ fn collect_items(
     for source in equipment {
         // Armor is handled by the dedicated ArmorMaterial/ArmorItem path below;
         // do not accidentally register the same piece as a plain Item too.
-        if armor_classes.contains(&compact(&source.class_name)) {
+        if armor_classes.contains(&compact(&source.class_name))
+            || source.tool_type.as_deref().is_some_and(is_native_tool_kind) {
             continue;
         }
         let stack_size = stack_regex.captures(&source.source_text).and_then(|capture| capture.get(1))
@@ -806,6 +847,132 @@ fn find_armor_layer(namespace_root: &Path, bases: &[String], layer: usize) -> Op
     paths.into_iter().next()
 }
 
+
+fn is_native_tool_kind(kind: &str) -> bool {
+    matches!(kind, "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe" | "Bow" | "Fishing Rod" | "Shears")
+}
+
+fn native_tool_generated_kind(kind: &str) -> &'static str {
+    match kind {
+        "Sword" => "native SwordItem + SimpleTier",
+        "Axe" => "native AxeItem + SimpleTier",
+        "Pickaxe" => "native PickaxeItem + SimpleTier",
+        "Shovel" => "native ShovelItem + SimpleTier",
+        "Hoe" => "native HoeItem + SimpleTier",
+        "Bow" => "native BowItem",
+        "Fishing Rod" => "native FishingRodItem",
+        "Shears" => "native ShearsItem",
+        _ => "basic Item fallback",
+    }
+}
+
+fn collect_native_tools(
+    equipment: &[EquipmentSource],
+    material_stats: &BTreeMap<String, ToolMaterialStats>,
+    warnings: &mut Vec<String>,
+) -> Vec<ToolRecord> {
+    let numeric_field = |source: &str, names: &[&str]| -> Option<f64> {
+        for name in names {
+            let regex = Regex::new(&format!(
+                r"(?is)(?:this\s*\.\s*)?\b{}\s*=\s*(-?\d+(?:\.\d+)?)\s*[fFdD]?",
+                regex::escape(name)
+            )).ok()?;
+            if let Some(value) = regex.captures(source).and_then(|capture| capture.get(1))
+                .and_then(|value| value.as_str().parse::<f64>().ok()) {
+                if value.is_finite() { return Some(value); }
+            }
+        }
+        None
+    };
+    let durability_call = Regex::new(r"(?i)(?:setMaxDamage|func_77656_e|\.durability)\s*\(\s*(\d+)").expect("static durability regex");
+    let mut tools = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for source in equipment {
+        let Some(kind) = source.tool_type.as_deref().filter(|kind| is_native_tool_kind(kind)) else { continue };
+        let id = normalized_id(&source.registry_name);
+        if id.is_empty() || !seen.insert(id.clone()) {
+            if id.is_empty() { warnings.push(format!("Skipped tool {} because its registry ID was empty.", source.class_name)); }
+            continue;
+        }
+
+        let stats = material_stats.get(&compact(&id));
+        let tiered = matches!(kind, "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe");
+        let mut tool_warnings = Vec::new();
+        let source_durability = durability_call.captures(&source.source_text)
+            .and_then(|capture| capture.get(1))
+            .and_then(|value| value.as_str().parse::<u32>().ok())
+            .filter(|value| *value > 0);
+        let default_durability = match kind {
+            "Bow" => 384,
+            "Fishing Rod" => 64,
+            "Shears" => 238,
+            _ => 250,
+        };
+        let material_uses = stats.and_then(|value| value.uses).filter(|value| *value > 0).map(|value| value as u32);
+        let durability = source_durability.or(material_uses).unwrap_or(default_durability).clamp(1, 100_000);
+
+        if tiered && stats.is_none() {
+            tool_warnings.push("No associated source/compiled tool material was recovered; used conservative iron-like Tier values.".to_owned());
+        }
+        if tiered && stats.and_then(|value| value.harvest_level).is_none() {
+            tool_warnings.push("Tool harvest level was not recovered; assigned the iron-tool mining restriction tag.".to_owned());
+        }
+        if tiered {
+            tool_warnings.push("Custom incorrect-block tags and repair ingredients are not yet reconstructed; the generated tier uses a vanilla mining tag and iron ingot repairs.".to_owned());
+        }
+        if matches!(kind, "Bow" | "Fishing Rod" | "Shears") {
+            tool_warnings.push("The native vanilla item class preserves its core use mechanic, but custom legacy firing, fishing, shearing, durability, and event behavior is not ported.".to_owned());
+        }
+
+        let harvest_level = stats.and_then(|value| value.harvest_level).unwrap_or(2);
+        let tag = if harvest_level >= 3 { "DIAMOND" }
+            else if harvest_level == 2 { "IRON" } else { "STONE" };
+        let uses = material_uses.unwrap_or(250).clamp(1, 100_000);
+        let efficiency = stats.and_then(|value| value.efficiency).unwrap_or(4.0).clamp(0.0, 100.0) as f32;
+        let damage_bonus = stats.and_then(|value| value.damage).unwrap_or(1.0).clamp(-20.0, 100.0) as f32;
+        let enchantability = stats.and_then(|value| value.enchantability).unwrap_or(10).clamp(0, 100) as u32;
+        let (attribute_damage, attribute_speed) = match kind {
+            "Sword" => (3.0, -2.4),
+            "Axe" => (6.0, -3.1),
+            "Pickaxe" => (1.0, -2.8),
+            "Shovel" => (1.5, -3.0),
+            "Hoe" => (-3.0, 0.0),
+            _ => (0.0, 0.0),
+        };
+        if tiered {
+            if let Some(explicit) = numeric_field(&source.source_text, &["attackDamage", "weaponDamage", "damageVsEntity"]) {
+                if (explicit - damage_bonus as f64).abs() > 0.05 {
+                    tool_warnings.push(format!(
+                        "Recovered explicit attack damage {explicit}, but the precise legacy attribute split is ambiguous; emitted the documented vanilla {} attack attribute baseline.",
+                        kind.to_ascii_lowercase()
+                    ));
+                }
+            }
+        }
+
+        tools.push(ToolRecord {
+            id: id.clone(),
+            class_name: source.class_name.clone(),
+            source_path: source.source_path.clone(),
+            kind: kind.to_owned(),
+            tier_field: java_field_name(&id, "TIER"),
+            harvest_level,
+            tag: tag.to_owned(),
+            uses,
+            efficiency,
+            damage_bonus,
+            enchantability,
+            attribute_damage,
+            attribute_speed,
+            durability,
+            warnings: tool_warnings,
+        });
+    }
+
+    tools.sort_by(|a, b| a.id.cmp(&b.id));
+    tools
+}
 
 fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<BlockRecord> {
     let mut blocks = Vec::new();
