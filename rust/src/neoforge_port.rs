@@ -43,6 +43,7 @@ pub struct NativeItemPlan {
     pub rarity: Option<String>,
     pub fire_resistant: bool,
     pub craft_remainder: Option<String>,
+    pub no_repair: bool,
     pub generated_as: String,
     pub warnings: Vec<String>,
     pub method_mappings: Vec<ItemMethodMapping>,
@@ -197,6 +198,7 @@ struct ItemRecord {
     rarity: Option<String>,
     fire_resistant: bool,
     craft_remainder: Option<String>,
+    no_repair: bool,
     warnings: Vec<String>,
 }
 
@@ -496,9 +498,10 @@ pub fn port_to_neoforge(
         rarity: item.rarity.clone(),
         fire_resistant: item.fire_resistant,
         craft_remainder: item.craft_remainder.clone(),
+        no_repair: item.no_repair,
         generated_as: match (
             item.lore.is_empty(), item.food.is_some(), item.durability.is_some(),
-            item.rarity.is_some() || item.fire_resistant || item.craft_remainder.is_some()
+            item.rarity.is_some() || item.fire_resistant || item.craft_remainder.is_some() || item.no_repair
         ) {
             (false, true, _, _) => "native Item with FoodProperties and formatted legacy tooltip lore".to_owned(),
             (true, true, _, _) => "native Item with FoodProperties".to_owned(),
@@ -523,6 +526,7 @@ pub fn port_to_neoforge(
         rarity: None,
         fire_resistant: false,
         craft_remainder: None,
+        no_repair: false,
         generated_as: if tool.lore.is_empty() { native_tool_generated_kind(&tool.kind).to_owned() } else { format!("{} with formatted legacy tooltip lore", native_tool_generated_kind(&tool.kind)) },
         warnings: tool.warnings.clone(),
         method_mappings: equipment.iter()
@@ -902,6 +906,7 @@ struct RecoveredItemProperties {
     rarity: Option<String>,
     fire_resistant: bool,
     craft_remainder: Option<String>,
+    no_repair: bool,
 }
 
 fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties {
@@ -932,8 +937,11 @@ fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties 
         .captures(text)
         .and_then(|capture| capture.get(1))
         .map(|value| value.as_str().to_ascii_uppercase());
+    let no_repair = Regex::new(r"(?i)setNoRepair\s*\(\s*\)")
+        .expect("static no-repair regex")
+        .is_match(text);
 
-    RecoveredItemProperties { durability, rarity, fire_resistant, craft_remainder }
+    RecoveredItemProperties { durability, rarity, fire_resistant, craft_remainder, no_repair }
 }
 
 fn item_properties_java(item: &ItemRecord) -> String {
@@ -953,6 +961,9 @@ fn item_properties_java(item: &ItemRecord) -> String {
     }
     if let Some(remainder) = &item.craft_remainder {
         properties.push_str(&format!(".craftRemainder(Items.{remainder})"));
+    }
+    if item.no_repair {
+        properties.push_str(".setNoRepair()");
     }
     properties
 }
@@ -1023,6 +1034,7 @@ fn collect_items(
             rarity: item_properties.rarity,
             fire_resistant: item_properties.fire_resistant,
             craft_remainder: item_properties.craft_remainder,
+            no_repair: item_properties.no_repair,
             warnings: record_warnings,
         });
     }
@@ -3340,6 +3352,7 @@ mod tests {
             }
             public class RubyTool extends Item {
                 public RubyTool() {
+                    setNoRepair();
                     setMaxDamage(47);
                     setRarity(EnumRarity.RARE);
                     setFireResistant();
@@ -3356,12 +3369,15 @@ mod tests {
         assert_eq!(item.rarity.as_deref(), Some("RARE"));
         assert!(item.fire_resistant);
         assert_eq!(item.craft_remainder.as_deref(), Some("BUCKET"));
+        assert!(item.no_repair);
+        assert!(report.detected_item_methods.iter().any(|mapping| mapping.source_method == "setNoRepair"));
 
         let items = fs::read_to_string(output.join("src/main/java/com/modport/propertymod/registry/ModItems.java")).unwrap();
         assert!(items.contains(".durability(47)"));
         assert!(items.contains(".rarity(Rarity.RARE)"));
         assert!(items.contains(".fireResistant()"));
         assert!(items.contains(".craftRemainder(Items.BUCKET)"));
+        assert!(items.contains(".setNoRepair()"));
         assert!(items.contains("import net.minecraft.world.item.Rarity;\n"));
         assert!(items.contains("import net.minecraft.world.item.Items;\n"));
     }
