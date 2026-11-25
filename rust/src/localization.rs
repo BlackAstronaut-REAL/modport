@@ -258,7 +258,7 @@ mod tests {
         }"#).unwrap();
         let catalog = LocalizationCatalog::load(&[temp.path().to_path_buf()], &BTreeMap::new());
         assert_eq!(catalog.translated_name("ruby_ingot", "Ruby"), "Ruby Ingot");
-        assert_eq!(catalog.descriptions("ruby_ingot"), vec!["Shines & glows"]);
+        assert_eq!(catalog.descriptions("ruby_ingot"), vec![r"Shines \u0026 glows"]);
         assert_eq!(catalog.translated_name("ruby_ore", "Ore"), "Ruby Ore");
         assert_eq!(catalog.descriptions("ruby_ore"), vec!["Mined deep underground"]);
     }
@@ -269,7 +269,7 @@ mod tests {
         fs::write(temp.path().join("Names.java"), r#"
             class Names {
                 void init() {
-                    LanguageRegistry.instance().addNameForObject(RUBY, "en_US", "Ruby \\u0026 Gold");
+                    LanguageRegistry.instance().addNameForObject(RUBY, "en_US", "Ruby \u0026 Gold");
                     LanguageRegistry.instance().addStringLocalization("item.java_ruby.name", "en_US", "Java Ruby");
                 }
             }
