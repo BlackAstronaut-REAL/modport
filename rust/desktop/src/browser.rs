@@ -111,7 +111,10 @@ pub fn scan_mod_roots(roots: &[PathBuf]) -> Result<BrowserIndex> {
         for entry in WalkDir::new(source_root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
             if !entry.file_type().is_file() { continue; }
             let path = entry.path();
-            if path.components().any(|component| {
+            // Ignore generated subdirectories under a project root, but do not
+            // reject an explicitly selected compiled root such as build/classes/java/main.
+            let relative = path.strip_prefix(source_root).unwrap_or(path);
+            if relative.components().any(|component| {
                 matches!(component.as_os_str().to_string_lossy().to_ascii_lowercase().as_str(),
                     ".git" | ".gradle" | "build" | "target" | "node_modules")
             }) {
@@ -2574,12 +2577,13 @@ mod tests {
     #[test]
     fn scan_mod_roots_merges_model_sources_across_independent_roots() {
         let temp = tempfile::tempdir().unwrap();
-        let compiled = temp.path().join("compiled");
+        let compiled = temp.path().join("build").join("classes").join("java").join("main");
         let decompiled = temp.path().join("decompiled");
         let source = temp.path().join("source");
         fs::create_dir_all(&compiled).unwrap();
         fs::create_dir_all(&decompiled).unwrap();
         fs::create_dir_all(&source).unwrap();
+        fs::write(compiled.join("ModelCompiled.java"), "class ModelCompiled {}").unwrap();
         fs::write(decompiled.join("ModelAlpha.java"), "class ModelAlpha {}").unwrap();
         fs::write(source.join("ModelBeta.java"), "class ModelBeta {}").unwrap();
 
@@ -2590,7 +2594,8 @@ mod tests {
         ]).unwrap();
 
         assert_eq!(index.texture_roots.len(), 3);
-        assert_eq!(index.in_category("Models").len(), 2);
+        assert_eq!(index.in_category("Models").len(), 3);
+        assert!(index.entries.iter().any(|entry| entry.name == "Compiled"));
         assert!(index.entries.iter().any(|entry| entry.name == "Alpha"));
         assert!(index.entries.iter().any(|entry| entry.name == "Beta"));
         assert_eq!(index.root, Some(fs::canonicalize(compiled).unwrap()));
