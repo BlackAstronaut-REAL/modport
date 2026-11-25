@@ -2875,7 +2875,11 @@ mod tests {
         fs::write(source.join("src/main/java/demo/ModItems.java"), r#"
             public class ModItems {
                 public static final Item RUBY = new RubyItem();
-                public static void register() { GameRegistry.registerItem(RUBY, "ruby"); }
+                public static final Item RUBY_ORB = new RubyOrbItem();
+                public static void register() {
+                    GameRegistry.registerItem(RUBY, "ruby");
+                    GameRegistry.registerItem(RUBY_ORB, "ruby_orb");
+                }
             }
             public class RubyItem extends Item {
                 public RubyItem() { setMaxStackSize(16); }
@@ -2884,6 +2888,18 @@ mod tests {
                     tooltip.add(EnumChatFormatting.BOLD + "Power");
                     tooltip.add(ChatFormatting.ITALIC + "Rare");
                 }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/RubyOrbItem.java"), r#"
+            public class RubyOrbItem extends Item {
+                public void use(Level level, Player player) {
+                    RubyOrbProjectile projectile = new RubyOrbProjectile();
+                }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/RubyOrbProjectile.java"), r#"
+            public class RubyOrbProjectile extends EntityThrowable {
+                public RubyOrbProjectile() {}
             }
         "#).unwrap();
         fs::write(source.join("src/main/java/demo/ModBlocks.java"), r#"
@@ -2920,7 +2936,10 @@ mod tests {
 
         assert_eq!(report.source_mod_id, "oldmod");
         assert_eq!(report.target_mod_id, "oldmod");
-        assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby"]);
+        assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby", "ruby_orb"]);
+        assert_eq!(report.native_projectiles.len(), 1);
+        assert_eq!(report.native_projectiles[0].registry_name, "ruby_orb_projectile");
+        assert_eq!(report.native_projectiles[0].bound_item.as_deref(), Some("ruby_orb"));
         assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_flower", "ruby_ore"]);
         assert!(report.blocks.iter().find(|block| block.registry_name == "ruby_flower").unwrap().plant_like);
         let flower_model: Value = serde_json::from_slice(&fs::read(output.join("src/main/resources/assets/oldmod/models/block/ruby_flower.json")).unwrap()).unwrap();
@@ -2930,6 +2949,18 @@ mod tests {
         assert!(report.resource_files_copied >= 3);
         assert!(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/models/item/ruby.json").is_file());
+        let projectile_entity = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/entity/ConvertedProjectileRubyOrbProjectile.java")).unwrap();
+        assert!(projectile_entity.contains("extends ThrowableItemProjectile"));
+        assert!(projectile_entity.contains("ModItems.ITEM_RUBY_ORB.get()"));
+        let projectile_registry = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModEntities.java")).unwrap();
+        assert!(projectile_registry.contains("PROJECTILE_RUBY_ORB_PROJECTILE"));
+        let projectile_renderer = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/client/ModEntityRenderers.java")).unwrap();
+        assert!(projectile_renderer.contains("ThrownItemRenderer<ConvertedProjectileRubyOrbProjectile>::new"));
+        let projectile_launcher = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/item/ProjectileLauncherRubyOrb.java")).unwrap();
+        assert!(projectile_launcher.contains("InteractionResultHolder.sidedSuccess"));
+        assert!(projectile_launcher.contains("shootFromRotation"));
+        let items_with_projectile = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
+        assert!(items_with_projectile.contains("new com.modport.oldmod.item.ProjectileLauncherRubyOrb"));
         assert!(output.join("src/main/resources/assets/oldmod/blockstates/ruby_ore.json").is_file());
         let lore_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/item/LoreRuby.java")).unwrap();
         assert!(lore_java.contains("ChatFormatting.GOLD"));
@@ -2958,7 +2989,8 @@ mod tests {
         assert!(items_java.contains("new BlockItem"));
         let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
         assert_eq!(status["behavior_fully_reconstructed"], false);
-        assert_eq!(status["converted"]["items"], 1);
+        assert_eq!(status["converted"]["items"], 2);
+        assert_eq!(status["converted"]["throwable_projectiles"], 1);
         assert_eq!(status["converted"]["blocks"], 2);
     }
 
