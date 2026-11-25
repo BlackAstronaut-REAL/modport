@@ -432,15 +432,26 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|value| parent.ends_with(value)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if ["block/template_fence_post", "block/template_fence_side", "block/template_fence_gate",
-         "block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate", "block/fence"]
+    } else if parent.ends_with("block/template_fence_post") || parent.ends_with("block/fence_post") {
+        Some("fence_post")
+    } else if parent.ends_with("block/template_fence_side") || parent.ends_with("block/fence_side") {
+        Some("fence_side")
+    } else if parent.ends_with("block/template_fence_gate") || parent.ends_with("block/fence_gate") {
+        Some("fence_gate")
+    } else if ["block/fence_inventory", "block/fence"]
         .iter().any(|value| parent.ends_with(value)) {
         Some("fence")
-    } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
-        .iter().any(|value| parent.ends_with(value)) {
+    } else if parent.ends_with("block/template_wall_post") {
+        Some("wall_post")
+    } else if parent.ends_with("block/template_wall_side") {
+        Some("wall_side")
+    } else if parent.ends_with("block/wall_inventory") {
         Some("wall")
-    } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
-        .iter().any(|value| parent.ends_with(value)) {
+    } else if parent.ends_with("block/template_glass_pane_post") || parent.ends_with("block/pane_post") {
+        Some("pane_post")
+    } else if parent.ends_with("block/template_glass_pane_side") || parent.ends_with("block/pane_side") {
+        Some("pane_side")
+    } else if parent.ends_with("block/template_glass_pane") || parent.ends_with("block/pane") {
         Some("pane")
     } else if ["block/button", "block/template_button"]
         .iter().any(|value| parent.ends_with(value)) {
@@ -643,6 +654,21 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             ([-8.0, 0.0, -8.0], [8.0, 8.0, 8.0]),
             ([-8.0, -8.0, -8.0], [8.0, 0.0, 0.0]),
         ], texture_size)],
+        "fence_post" => vec![builtin_cube(
+            "fence_post", [-1.5, -8.0, -1.5], [1.5, 8.0, 1.5], [0.0; 3], texture_size,
+        )],
+        // One multipart fence arm points toward negative Z; the blockstate's
+        // Y quarter-turn places copies on the other connected sides.
+        "fence_side" => vec![builtin_multi_cube("fence_side", &[
+            ([-1.5, -1.0, -8.0], [1.5, 0.5, 1.5]),
+            ([-1.5, 3.0, -8.0], [1.5, 4.5, 1.5]),
+        ], texture_size)],
+        "fence_gate" => vec![builtin_multi_cube("fence_gate", &[
+            ([-7.0, -8.0, -1.0], [-5.5, 8.0, 1.0]),
+            ([5.5, -8.0, -1.0], [7.0, 8.0, 1.0]),
+            ([-5.5, -1.0, -1.0], [5.5, 0.5, 1.0]),
+            ([-5.5, 4.0, -1.0], [5.5, 5.5, 1.0]),
+        ], texture_size)],
         "fence" => vec![builtin_multi_cube("fence", &[
             ([-1.5, -8.0, -1.5], [1.5, 8.0, 1.5]),
             ([-7.0, -1.0, -1.5], [7.0, 0.5, 1.5]),
@@ -650,11 +676,23 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             ([-1.5, -1.0, -7.0], [1.5, 0.5, 7.0]),
             ([-1.5, 3.0, -7.0], [1.5, 4.5, 7.0]),
         ], texture_size)],
+        "wall_post" => vec![builtin_cube(
+            "wall_post", [-2.0, -8.0, -2.0], [2.0, 6.0, 2.0], [0.0; 3], texture_size,
+        )],
+        "wall_side" => vec![builtin_multi_cube("wall_side", &[
+            ([-2.0, -4.0, -8.0], [2.0, 0.0, 2.0]),
+        ], texture_size)],
         "wall" => vec![builtin_multi_cube("wall", &[
             ([-2.0, -8.0, -2.0], [2.0, 6.0, 2.0]),
             ([-8.0, -4.0, -2.0], [8.0, 0.0, 2.0]),
             ([-2.0, -4.0, -8.0], [2.0, 0.0, 8.0]),
         ], texture_size)],
+        "pane_post" => vec![builtin_cube(
+            "pane_post", [-1.0, -8.0, -1.0], [1.0, 8.0, 1.0], [0.0; 3], texture_size,
+        )],
+        "pane_side" => vec![builtin_cube(
+            "pane_side", [-1.0, -8.0, -8.0], [1.0, 8.0, 1.0], [0.0; 3], texture_size,
+        )],
         "pane" => vec![builtin_multi_cube("pane", &[
             ([-1.0, -8.0, -8.0], [1.0, 8.0, 8.0]),
             ([-8.0, -8.0, -1.0], [8.0, 8.0, 1.0]),
@@ -1117,6 +1155,24 @@ mod tests {
         let top_step = &stairs.nodes[0].cubes[1];
         let step_uvs = top_step.face_uvs.unwrap();
         assert_ne!(step_uvs[0], [0.0, 0.0, 16.0, 16.0]);
+    }
+
+    #[test]
+    fn multipart_builtin_parents_render_only_their_own_component_geometry() {
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_fence_post", "oak_fence_post"), Some("fence_post"));
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_fence_side", "oak_fence_side"), Some("fence_side"));
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_wall_post", "cobblestone_wall_post"), Some("wall_post"));
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_wall_side", "cobblestone_wall_side"), Some("wall_side"));
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_glass_pane_post", "glass_pane_post"), Some("pane_post"));
+        assert_eq!(shape_for_builtin_parent("minecraft:block/template_glass_pane_side", "glass_pane_side"), Some("pane_side"));
+
+        let size = [16, 16];
+        assert_eq!(builtin_block_nodes("fence_post", size)[0].cubes.len(), 1);
+        assert_eq!(builtin_block_nodes("fence_side", size)[0].cubes.len(), 2);
+        assert_eq!(builtin_block_nodes("wall_post", size)[0].cubes.len(), 1);
+        assert_eq!(builtin_block_nodes("wall_side", size)[0].cubes.len(), 1);
+        assert_eq!(builtin_block_nodes("pane_post", size)[0].cubes.len(), 1);
+        assert_eq!(builtin_block_nodes("pane_side", size)[0].cubes.len(), 1);
     }
 
     #[test]
