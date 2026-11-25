@@ -2,7 +2,7 @@ use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, C
 use rayon::prelude::*;
 use regex::Regex;
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct ToolMaterialStats {
@@ -590,7 +590,6 @@ pub fn build_tool_element(
 
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
