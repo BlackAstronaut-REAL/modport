@@ -958,7 +958,10 @@ fn show_json_field_editor(ui: &mut egui::Ui, label: &str, value: &mut serde_json
             egui::CollapsingHeader::new(label).default_open(true).show(ui, |ui| {
                 for (index, field) in values.iter_mut().enumerate() {
                     if let Value::String(text) = field {
-                        ui.label(format!("• {text}"));
+                        ui.horizontal(|ui| {
+                            ui.label(format!("[{index}]"));
+                            changed |= ui.text_edit_singleline(text).changed();
+                        });
                     } else {
                         changed |= show_json_field_editor(ui, &format!("[{index}]"), field);
                     }
@@ -988,8 +991,10 @@ fn show_json_field_editor(ui: &mut egui::Ui, label: &str, value: &mut serde_json
         }
         Value::Bool(flag) => ui.checkbox(flag, label).changed(),
         Value::String(text) => {
-            ui.label(format!("{label}: {text}"));
-            false
+            ui.horizontal(|ui| {
+                ui.label(label);
+                ui.text_edit_singleline(text).changed()
+            }).inner
         }
         Value::Null => {
             ui.label(format!("{label}: not recovered"));
