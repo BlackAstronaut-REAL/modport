@@ -3593,6 +3593,42 @@ const DEFINITIONS: &[Definition] = &[
     d!("EnumFacing", "getYOffset", V_ALL, "facing_y_offset", "Direction signed Y offset", "geometry", "Preserve -1/0/1 axis component.", "net/minecraft/util/EnumFacing.html"),
     d!("EnumFacing", "getZOffset", V_ALL, "facing_z_offset", "Direction signed Z offset", "geometry", "Preserve -1/0/1 axis component.", "net/minecraft/util/EnumFacing.html"),
 
+    // NBTTagCompound typed access, merge, UUID and identity operations.
+    d!("NBTTagCompound", "copy", V_ALL, "nbt_compound_copy", "Deep copy of compound and nested tags", "persistence", "Preserve recursive child copies and insertion-ordered compound key behavior.", "net/minecraft/nbt/NBTTagCompound.html"),
+    d!("NBTTagCompound", "getSize", V_112, "nbt_compound_size", "Compound tag entry count", "persistence", "Preserve number of keys including nested compounds/lists as one entry.", "net/minecraft/nbt/NBTTagCompound.html"),
+    d!("NBTTagCompound", "getTagId", V_112, "nbt_get_tag_id", "NBT tag type identifier for compound key", "persistence", "Preserve 0 for missing key and NBTBase type IDs for present tags.", "net/minecraft/nbt/NBTTagCompound.html"),
+    d!("NBTTagCompound", "merge", V_ALL, "nbt_compound_merge", "Recursive compound merge", "persistence", "Preserve recursive tag merge semantics, replacement of mismatched types, and mutation of receiver.", "net/minecraft/nbt/NBTTagCompound.html"),
+
+    // NBTTagList typed element reads/writes and list mutation operations.
+    d!("NBTTagList", "getDoubleAt", V_112, "nbt_list_get_double", "Double element lookup by index", "persistence", "Preserve numeric conversion semantics for stored numeric NBT subtype.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "getFloatAt", V_ALL, "nbt_list_get_float", "Float element lookup by index", "persistence", "Preserve numeric conversion semantics and default value for invalid index/type.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "getIntAt", V_ALL, "nbt_list_get_int", "Integer element lookup by index", "persistence", "Preserve numeric conversion semantics and default value for invalid index/type.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "getLongAt", V_112, "nbt_list_get_long", "Long element lookup by index", "persistence", "Preserve numeric conversion semantics for stored numeric NBT subtype.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "getTagAt", V_112, "nbt_list_get_tag", "NBT list raw element lookup", "persistence", "Preserve exact NBT subtype and index behavior.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "getTagType", V_112, "nbt_list_element_type", "NBT list element type ID", "persistence", "Preserve 0 for empty list and first element's ID for populated lists.", "net/minecraft/nbt/NBTTagList.html"),
+    d!("NBTTagList", "set", V_112, "nbt_list_set", "NBT list indexed element replacement", "persistence", "Preserve list element type and index bounds; replacing with another tag type may be ignored.", "net/minecraft/nbt/NBTTagList.html"),
+
+    // NBTBase common contract and primitive array tags.
+    d!("NBTBase", "getString", V_112, "nbt_base_string_representation", "NBT debug/string serialization", "persistence", "Preserve SNBT formatting and escaping; not the same as NBTTagString#getString value.", "net/minecraft/nbt/NBTBase.html"),
+    d!("NBTTagIntArray", "getIntArray", V_112, "nbt_int_array_values", "Integer array tag backing values", "persistence", "Preserve raw array ordering and array copy/mutability behavior.", "net/minecraft/nbt/NBTTagIntArray.html"),
+    d!("NBTTagLongArray", "getLongArray", V_112, "nbt_long_array_values", "Long array tag backing values", "persistence", "Preserve raw long array ordering and large numeric values.", "net/minecraft/nbt/NBTTagLongArray.html"),
+    d!("NBTTagString", "getString", V_ALL, "nbt_string_value", "String tag payload", "persistence", "Preserve unescaped raw string value separately from SNBT debug formatting.", "net/minecraft/nbt/NBTTagString.html"),
+
+    // DataFixer interfaces allow mods to register and invoke world/item/entity
+    // migration steps for saved data from older versions.
+    d!("IDataFixer", "process", V_112, "data_fixer_process", "NBT data migration by FixTypes", "persistence", "Preserve FixTypes, source data version and chained registered fixes; migration may return a replaced compound.", "net/minecraft/util/datafix/IDataFixer.html"),
+    d!("IDataFixer", "registerFix", V_112, "data_fixer_register_fix", "DataFixer registration for FixTypes", "persistence", "Preserve type, version ordering and IFixableData instance.", "net/minecraft/util/datafix/IDataFixer.html"),
+    d!("IDataFixer", "registerWalker", V_112, "data_fixer_register_walker", "Nested NBT data walker registration", "persistence", "Preserve FixTypes, version and IDataWalker ordering for nested item/entity/chunk fields.", "net/minecraft/util/datafix/IDataFixer.html"),
+    d!("IFixableData", "fixTagCompound", V_112, "data_fixer_tag_migration", "Versioned NBT compound migration callback", "persistence", "Preserve version argument and in-place/replacement tag semantics.", "net/minecraft/util/datafix/IFixableData.html"),
+    d!("IDataWalker", "process", V_112, "data_fixer_nested_walk", "Recursive nested NBT data fix traversal", "persistence", "Preserve fixer instance, FixTypes and nested NBT list/compound traversal ordering.", "net/minecraft/util/datafix/IDataWalker.html"),
+    d!("WorldSavedData", "markDirty", V_ALL, "world_saved_data_mark_dirty", "Saved data dirty-state update", "persistence", "Preserve dirty flag and world save scheduling; data is not persisted until the owning MapStorage saves.", "net/minecraft/world/storage/WorldSavedData.html"),
+    d!("WorldSavedData", "readFromNBT", V_ALL, "world_saved_data_nbt_read", "WorldSavedData deserialize callback", "persistence", "Preserve custom NBT schema and invoked lifecycle after storage loads the matching ID.", "net/minecraft/world/storage/WorldSavedData.html"),
+    d!("WorldSavedData", "setDirty", V_112, "world_saved_data_dirty_write", "WorldSavedData dirty flag setter", "persistence", "Preserve explicit dirty state mutation and deferred save behavior.", "net/minecraft/world/storage/WorldSavedData.html"),
+    d!("WorldSavedData", "writeToNBT", V_ALL, "world_saved_data_nbt_write", "WorldSavedData serialize callback", "persistence", "Preserve custom NBT schema and exact tag data returned to MapStorage.", "net/minecraft/world/storage/WorldSavedData.html"),
+    d!("MapStorage", "getOrLoadData", V_ALL, "map_storage_load_or_create", "Saved data load by class and ID", "persistence", "Preserve storage ID, class cast and null when no saved entry exists.", "net/minecraft/world/storage/MapStorage.html"),
+    d!("MapStorage", "setData", V_ALL, "map_storage_register_data", "Saved data registration/update", "persistence", "Preserve ID key and object identity; replacing a key changes future saves.", "net/minecraft/world/storage/MapStorage.html"),
+    d!("MapStorage", "saveAllData", V_ALL, "map_storage_save_all", "All WorldSavedData serialization", "persistence", "Preserve dirty-only save behavior, storage ordering and exception handling.", "net/minecraft/world/storage/MapStorage.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5450,6 +5486,26 @@ mod tests {
             ("AxisAlignedBB", "intersects"), ("AxisAlignedBB", "hasNaN"),
             ("RayTraceResult", "getHitVec"), ("RayTraceResult", "getTypeOfHit"),
             ("EnumFacing", "getDirectionVec"), ("EnumFacing", "getRotation"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn nbt_and_saved_data_persistence_contracts_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("NBTTagCompound", "merge"), ("NBTTagCompound", "getUniqueId"),
+            ("NBTTagCompound", "setUniqueId"), ("NBTTagCompound", "getTagId"),
+            ("NBTTagList", "appendTag"), ("NBTTagList", "getCompoundTagAt"),
+            ("NBTTagList", "getTagType"), ("NBTTagList", "removeTag"),
+            ("NBTBase", "copy"), ("NBTBase", "getId"),
+            ("NBTTagIntArray", "getIntArray"), ("NBTTagLongArray", "getLongArray"),
+            ("IDataFixer", "process"), ("IDataFixer", "registerWalker"),
+            ("IFixableData", "fixTagCompound"), ("IDataWalker", "process"),
+            ("WorldSavedData", "markDirty"), ("WorldSavedData", "writeToNBT"),
+            ("MapStorage", "getOrLoadData"), ("MapStorage", "saveAllData"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
