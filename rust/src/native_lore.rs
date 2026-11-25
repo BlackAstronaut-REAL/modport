@@ -5,7 +5,12 @@
 //! and retain vanilla formatting codes for faithful native tooltip rendering.
 
 use regex::Regex;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::OnceLock;
+use walkdir::WalkDir;
 
 static TOOLTIP_ADD: OnceLock<Regex> = OnceLock::new();
 static FORMATTING: OnceLock<Regex> = OnceLock::new();
@@ -133,6 +138,123 @@ fn decode_java_string(raw: &str) -> String {
         }
     }
     output
+}
+
+pub fn extract_language_descriptions(
+    source_roots: &[PathBuf],
+    registry: &str,
+    source_modid: &str,
+) -> Vec<String> {
+    let mut descriptions = BTreeMap::<String, Vec<String>>::new();
+    let mut language_files = Vec::new();
+    let mut java_files = Vec::new();
+
+    for root in source_roots {
+        if !root.exists() { continue; }
+        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+            if !entry.file_type().is_file() { continue; }
+            let path = entry.into_path();
+            let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+            if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("lang"))
+                && path.file_stem().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("en_us")) {
+                language_files.push(path);
+            } else if name.eq_ignore_ascii_case("en_us.json") {
+                language_files.push(path);
+            } else if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("java")) {
+                java_files.push(path);
+            }
+        }
+    }
+    language_files.sort();
+    java_files.sort();
+
+    for path in language_files {
+        let Ok(bytes) = fs::read(&path) else { continue };
+        if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("json")) {
+            let Ok(Value::Object(values)) = serde_json::from_slice::<Value>(&bytes) else { continue };
+            for (key, value) in values {
+                if let Some(value) = value.as_str() {
+                    add_description(&mut descriptions, &key, value);
+                }
+            }
+        } else {
+            let text = String::from_utf8_lossy(&bytes);
+            for line in text.lines() {
+                let line = line.trim_start_matches('\u{feff}').trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                let Some((key, value)) = line.split_once('=') else { continue };
+                add_description(&mut descriptions, key, value);
+            }
+        }
+    }
+
+    // Older Forge code often creates localization entries in Java instead of
+    // packaging en_US.lang. Recover the string-localization form as well.
+    let localize = Regex::new(
+        r#"(?is)\baddStringLocalization\s*\(\s*["']([^"']+)["']\s*,\s*["'](?:en_US|en_us)["']\s*,\s*["']((?:\\.|[^"'\\])*)["']\s*\)"#
+    ).expect("static Java localization regex");
+    for path in java_files {
+        let Ok(bytes) = fs::read(path) else { continue };
+        let source = crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes));
+        for capture in localize.captures_iter(&source) {
+            let key = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+            let value = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+            add_description(&mut descriptions, key, &decode_java_string(value));
+        }
+    }
+
+    let compact = compact_registry(registry);
+    let mut variants = vec![compact.clone()];
+    for suffix in ["ingot", "ore", "block", "item", "tool", "sword", "staff", "bow", "helmet", "chestplate", "leggings", "boots"] {
+        if compact.ends_with(suffix) && compact.len() > suffix.len() {
+            variants.push(compact[..compact.len() - suffix.len()].to_owned());
+        }
+    }
+    let mut result = Vec::new();
+    for variant in variants {
+        if let Some(values) = descriptions.get(&variant) {
+            for value in values {
+                if !result.contains(value) { result.push(value.clone()); }
+            }
+        }
+    }
+    let _ = source_modid;
+    result
+}
+
+fn add_description(
+    descriptions: &mut BTreeMap<String, Vec<String>>,
+    translation_key: &str,
+    value: &str,
+) {
+    if value.trim().is_empty() { return; }
+    let lowered = translation_key.trim().to_ascii_lowercase();
+    let tokens: Vec<&str> = lowered.split(['.', ':']).filter(|token| !token.is_empty()).collect();
+    let is_description = tokens.iter().any(|token| {
+        matches!(*token, "desc" | "description" | "tooltip" | "info")
+    });
+    if !is_description { return; }
+
+    let mut candidates: Vec<&str> = tokens.clone();
+    if candidates.last().is_some_and(|token| {
+        matches!(*token, "name" | "desc" | "description" | "tooltip")
+    }) {
+        candidates.pop();
+    }
+    for candidate in candidates.into_iter()
+        .filter(|token| !matches!(*token, "item" | "tile" | "block" | "entity" | "biome" | "dimension" | "tooltip"))
+        .rev().take(2)
+    {
+        let key = compact_registry(candidate);
+        if key.is_empty() { continue; }
+        let values = descriptions.entry(key).or_default();
+        let clean = value.trim().to_owned();
+        if !values.contains(&clean) { values.push(clean); }
+    }
+}
+
+fn compact_registry(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -268,6 +390,28 @@ mod tests {
                 "§eUnique",
             ]
         );
+    }
+
+    #[test]
+    fn recovers_legacy_language_description_keys_and_java_localization_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("source");
+        let lang = root.join("assets/demo/lang/en_US.lang");
+        std::fs::create_dir_all(lang.parent().unwrap()).unwrap();
+        std::fs::write(&lang, "item.ruby_sword.desc=First translated line\nitem.ruby_sword.tooltip=Second translated line\nitem.ruby_sword.name=Ruby Sword\n").unwrap();
+        let json_lang = root.join("assets/demo/lang/en_us.json");
+        std::fs::write(&json_lang, r#"{"item.ruby_sword.description":"Third translated line","item.ruby_sword.name":"Ruby Sword"}"#).unwrap();
+        std::fs::write(root.join("Localization.java"), r#"
+            LanguageRegistry.instance().addStringLocalization("item.ruby_sword.info", "en_US", "Fourth translated line");
+        "#).unwrap();
+
+        let lore = extract_language_descriptions(&[root], "ruby_sword", "demo");
+        assert_eq!(lore, vec![
+            "First translated line",
+            "Second translated line",
+            "Third translated line",
+            "Fourth translated line",
+        ]);
     }
 
     #[test]
