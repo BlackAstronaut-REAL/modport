@@ -736,8 +736,7 @@ impl MojModelBridgeApp {
             for category in browser::CATEGORIES {
                 let count = self.browser.in_category(category).len();
                 let label = format!("{category}  ({count})");
-                if ui.selectable_label(self.category == *category, label).clicked() {
-                    self.category = (*category).to_owned();
+                if ui.selectable_value(&mut self.category, (*category).to_owned(), label).changed() {
                     self.item_search.clear();
                     self.selected_entry = None;
                     self.scene = None;
