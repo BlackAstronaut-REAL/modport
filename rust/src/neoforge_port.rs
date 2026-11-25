@@ -579,50 +579,86 @@ fn write_native_registries(
     ])
 }
 
-fn generate_blocks_java(package: &str, mod_id: &str, blocks: &[BlockRecord]) -> String {
-    let mut body = format!(
-        "package {package}.registry;\\n\\nimport {package}.NeoForgeMod;\\nimport net.minecraft.world.level.block.Block;\\nimport net.minecraft.world.level.block.state.BlockBehaviour;\\nimport net.neoforged.bus.api.IEventBus;\\nimport net.neoforged.neoforge.registries.DeferredBlock;\\nimport net.neoforged.neoforge.registries.DeferredRegister;\\n\\npublic final class ModBlocks {{\\n    public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(NeoForgeMod.MOD_ID);\\n"
-    );
+fn generate_blocks_java(package: &str, _mod_id: &str, blocks: &[BlockRecord]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredBlock;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModBlocks {{
+    public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(NeoForgeMod.MOD_ID);
+"#);
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK");
         let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
         let resistance = block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
         let light = block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32;
+        let light_property = if light > 0 {
+            format!(".lightLevel(state -> {light})")
+        } else {
+            String::new()
+        };
         body.push_str(&format!(
-            "    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock(\\"{}\\", BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F){});\\n",
-            block.id,
-            if light > 0 { format!(".lightLevel(state -> {light})") } else { String::new() }
+            r#"    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock("{id}", BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F){light_property});
+"#,
+            id = block.id
         ));
     }
-    body.push_str("\\n    private ModBlocks() {}\\n\\n    public static void register(IEventBus modEventBus) {\\n        BLOCKS.register(modEventBus);\\n    }\\n}\\n");
-    let _ = mod_id;
+    body.push_str(r#"
+    private ModBlocks() {}
+
+    public static void register(IEventBus modEventBus) {
+        BLOCKS.register(modEventBus);
+    }
+}
+"#);
     body
 }
+fn generate_items_java(package: &str, _mod_id: &str, items: &[ItemRecord], blocks: &[BlockRecord]) -> String {
+    let mut body = format!(r#"package {package}.registry;
 
-fn generate_items_java(package: &str, mod_id: &str, items: &[ItemRecord], blocks: &[BlockRecord]) -> String {
-    let mut body = format!(
-        "package {package}.registry;\\n\\nimport {package}.NeoForgeMod;\\nimport net.minecraft.world.item.BlockItem;\\nimport net.minecraft.world.item.Item;\\nimport net.neoforged.bus.api.IEventBus;\\nimport net.neoforged.neoforge.registries.DeferredItem;\\nimport net.neoforged.neoforge.registries.DeferredRegister;\\n\\npublic final class ModItems {{\\n    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(NeoForgeMod.MOD_ID);\\n"
-    );
+import {package}.NeoForgeMod;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredItem;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModItems {{
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(NeoForgeMod.MOD_ID);
+"#);
     for item in items {
         let field = java_field_name(&item.id, "ITEM");
         body.push_str(&format!(
-            "    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem(\\"{}\\", new Item.Properties().stacksTo({}));\\n",
-            item.id, item.stack_size
+            r#"    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem("{id}", new Item.Properties().stacksTo({stack_size}));
+"#,
+            id = item.id,
+            stack_size = item.stack_size
         ));
     }
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK_ITEM");
         let block_field = java_field_name(&block.id, "BLOCK");
         body.push_str(&format!(
-            "    public static final DeferredItem<BlockItem> {field} = ITEMS.register(\\"{}\\", () -> new BlockItem(ModBlocks.{block_field}.get(), new Item.Properties()));\\n",
-            block.id
+            r#"    public static final DeferredItem<BlockItem> {field} = ITEMS.register("{id}", () -> new BlockItem(ModBlocks.{block_field}.get(), new Item.Properties()));
+"#,
+            id = block.id
         ));
     }
-    body.push_str("\\n    private ModItems() {}\\n\\n    public static void register(IEventBus modEventBus) {\\n        ITEMS.register(modEventBus);\\n    }\\n}\\n");
-    let _ = mod_id;
+    body.push_str(r#"
+    private ModItems() {}
+
+    public static void register(IEventBus modEventBus) {
+        ITEMS.register(modEventBus);
+    }
+}
+"#);
     body
 }
-
 fn write_native_resources(
     resources_root: &Path,
     mod_id: &str,
@@ -705,13 +741,8 @@ fn find_texture_reference(textures_root: &Path, mod_id: &str, registry_id: &str,
     });
     let path = candidates.first()?;
     let relative = path.strip_prefix(textures_root).ok()?.with_extension("");
-    Some(format!(
-        "{}:{}",
-        "TARGET_NAMESPACE_SENTINEL",
-        relative.to_string_lossy().replace('\\', "/")
-    ))
+    Some(format!("{mod_id}:{}", relative.to_string_lossy().replace('\\', "/")))
 }
-
 fn write_json_file(path: &Path, value: &Value) -> Result<()> {
     if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
     fs::write(path, format!("{}\n", serde_json::to_string_pretty(value)?))
