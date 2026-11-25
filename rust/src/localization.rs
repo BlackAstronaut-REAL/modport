@@ -279,7 +279,9 @@ impl CreativeTabCatalog {
 }
 
 fn simple_java_name(value: &str) -> String {
-    value.rsplit('.').next().unwrap_or(value).split('
+    value.rsplit('.').next().unwrap_or(value).trim().to_owned()
+}
+
 fn direct_creative_tab(source: &str) -> Option<String> {
     let pattern = Regex::new(
         r"\b(?:setCreativeTab|func_77637_a|func_149647_a)\s*\(\s*(?:CreativeTabs|CreativeModeTabs)\.([A-Za-z_$][\w$]*)"
