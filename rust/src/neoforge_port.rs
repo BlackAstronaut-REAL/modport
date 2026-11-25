@@ -398,6 +398,7 @@ pub fn port_to_neoforge(
         stack_size: 1,
         source_path: tool.source_path.clone(),
         lore: tool.lore.clone(),
+        food: None,
         generated_as: if tool.lore.is_empty() { native_tool_generated_kind(&tool.kind).to_owned() } else { format!("{} with formatted legacy tooltip lore", native_tool_generated_kind(&tool.kind)) },
         warnings: tool.warnings.clone(),
     }));
