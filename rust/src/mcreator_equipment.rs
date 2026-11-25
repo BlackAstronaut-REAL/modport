@@ -1017,9 +1017,8 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
     let mut results = BTreeMap::<String, ToolMaterialStats>::new();
 
-    for info in compiled.classes.values() {
-        let Ok(bytes) = fs::read(&info.path) else { continue; };
-        let Ok(class) = ClassFile::parse(&bytes) else { continue; };
+    for class in compiled.parsed_classes.values() {
+        let class = class.as_ref();
 
         // These maps deliberately outlive an individual method. Old Forge mods
         // often initialize stat objects, register tool materials, instantiate

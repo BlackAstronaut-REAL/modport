@@ -758,9 +758,8 @@ pub fn compiled_armor_stats(source_roots: &[PathBuf]) -> Result<BTreeMap<String,
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
     let mut result = BTreeMap::<String, BTreeMap<String, f64>>::new();
 
-    for info in compiled.classes.values() {
-        let Ok(bytes) = fs::read(&info.path) else { continue; };
-        let Ok(class) = crate::bytecode::ClassFile::parse(&bytes) else { continue; };
+    for class in compiled.parsed_classes.values() {
+        let class = class.as_ref();
         for method in &class.methods {
             let Some(code) = method.code.as_ref() else { continue; };
             let Ok(instructions) = crate::bytecode::decode_instructions(&code.code) else { continue; };

@@ -31,6 +31,8 @@ pub struct CompiledRegistryIndex {
     pub registries: BTreeMap<String, BTreeSet<String>>,
     /// JVM owner#field -> concrete class assigned to that static field.
     pub field_classes: BTreeMap<String, String>,
+    /// Decoded class files retained so downstream exporters can share them.
+    pub parsed_classes: HashMap<String, Arc<ClassFile>>,
     pub warnings: Vec<String>,
     /// Keeps archive-extracted class files alive while downstream exporters
     /// consume the paths recorded in `classes`.
@@ -113,7 +115,7 @@ fn pop_n(stack: &mut Vec<Value>, count: usize) -> Vec<Value> {
 fn lambda_class(
     class: &ClassFile,
     instruction: &Instruction,
-    parsed_classes: &HashMap<String, ClassFile>,
+    parsed_classes: &HashMap<String, Arc<ClassFile>>,
 ) -> Option<String> {
     let cp_index = u16_at(&instruction.operands, 0)?;
     let (bootstrap_index, _, _) = class.invoke_dynamic(cp_index)?;
@@ -146,7 +148,7 @@ fn lambda_class(
 
 fn static_field_assignments(
     class: &ClassFile,
-    parsed_classes: &HashMap<String, ClassFile>,
+    parsed_classes: &HashMap<String, Arc<ClassFile>>,
 ) -> BTreeMap<String, String> {
     let owner = class.this_name().unwrap_or("");
     let mut output = BTreeMap::new();
@@ -280,7 +282,7 @@ fn record_registration_call(
 fn scan_registrations(
     class: &ClassFile,
     field_classes: &BTreeMap<String, String>,
-    parsed_classes: &HashMap<String, ClassFile>,
+    parsed_classes: &HashMap<String, Arc<ClassFile>>,
     output: &mut BTreeMap<String, BTreeSet<String>>,
 ) {
     for method in &class.methods {
@@ -513,7 +515,7 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
         })
         .collect();
 
-    let mut parsed = HashMap::<String, ClassFile>::new();
+    let mut parsed = HashMap::<String, Arc<ClassFile>>::new();
     for (path, result) in parsed_results {
         let class = match result {
             Ok(value) => value,
@@ -537,7 +539,7 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
                 && !path.file_stem().is_some_and(|stem| stem.to_string_lossy().contains('$'))
         }).unwrap_or(true);
         if replace { index.classes.insert(name, info); }
-        parsed.insert(internal, class);
+        parsed.insert(internal, Arc::new(class));
     }
 
     let mut fields = BTreeMap::<String, String>::new();
@@ -551,6 +553,7 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
     for class in parsed.values() {
         scan_registrations(class, &fields, &parsed, &mut index.registries);
     }
+    index.parsed_classes = parsed.clone();
     if let Ok(mut guard) = cache.lock() {
         guard.insert(cache_key, (fingerprint, index.clone()));
     }
