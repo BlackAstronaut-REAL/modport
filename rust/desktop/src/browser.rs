@@ -304,7 +304,10 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let (legacy_model_source, legacy_model_textures) =
             find_linked_legacy_block_model(&all_files, &source.source_text);
         let mut texture_paths = legacy_model_textures;
-        for path in &resource_model_sources {
+        if let Some(path) = resource_model_source.as_ref() {
+            append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
+        }
+        for path in &additional_resource_model_sources {
             append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
         }
         let icon_path = find_texture_reference(&all_files, &texture_refs)
@@ -2393,7 +2396,13 @@ mod tests {
             fs::write(model, r#"{"parent":"minecraft:block/cube_all"}"#).unwrap();
         }
         let files = vec![state.clone(), post.clone(), side.clone(), weighted];
-        assert_eq!(resolve_blockstate_models(&files, &state), vec![post, side]);
+        assert_eq!(
+            resolve_blockstate_models(&files, &state),
+            vec![
+                BlockstateModelRef { path: post, rotation: [0, 0] },
+                BlockstateModelRef { path: side, rotation: [0, 90] },
+            ]
+        );
         assert_eq!(find_block_model_sources(&files, "connected_fence").0.len(), 2);
     }
 
