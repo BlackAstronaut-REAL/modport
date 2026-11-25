@@ -63,8 +63,11 @@ pub struct BrowserIndex {
 
 impl BrowserIndex {
     pub fn in_category(&self, category: &str) -> Vec<usize> {
+        let category = category.trim();
         self.entries.iter().enumerate()
-            .filter_map(|(index, entry)| (entry.category == category).then_some(index))
+            .filter_map(|(index, entry)| {
+                entry.category.trim().eq_ignore_ascii_case(category).then_some(index)
+            })
             .collect()
     }
 }
@@ -1943,6 +1946,42 @@ fn humanize(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn browser_test_entry(category: &str, name: &str) -> BrowserEntry {
+        BrowserEntry {
+            category: category.to_owned(),
+            name: name.to_owned(),
+            detail: String::new(),
+            icon_kind: IconKind::Texture,
+            icon_path: None,
+            model_source: None,
+            resource_model_source: None,
+            resource_model_rotation: [0, 0],
+            additional_resource_model_sources: Vec::new(),
+            additional_resource_model_rotations: Vec::new(),
+            texture_paths: Vec::new(),
+            render_shape: None,
+            lore: Vec::new(),
+            components_json: "{}".to_owned(),
+            metadata_json: "{}".to_owned(),
+        }
+    }
+
+    #[test]
+    fn category_filter_returns_only_matching_entries_case_insensitively() {
+        let index = BrowserIndex {
+            entries: vec![
+                browser_test_entry("Weapons", "Ruby Sword"),
+                browser_test_entry("Tools", "Ruby Pickaxe"),
+                browser_test_entry("tools", "Ruby Axe"),
+                browser_test_entry("Items", "Ruby Gem"),
+            ],
+            ..BrowserIndex::default()
+        };
+        assert_eq!(index.in_category("weapons"), vec![0]);
+        assert_eq!(index.in_category("Tools"), vec![1, 2]);
+        assert_eq!(index.in_category(" Food "), Vec::<usize>::new());
+    }
 
     #[test]
     fn recovers_source_armor_material_stats_and_special_enchant_levels() {
