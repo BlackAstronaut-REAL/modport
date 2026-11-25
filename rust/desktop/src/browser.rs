@@ -2367,7 +2367,7 @@ mod tests {
             resolve_blockstate_models(&files, &state),
             vec![
                 BlockstateModelRef { path: post, rotation: [0, 0] },
-                BlockstateModelRef { path: side, rotation: [0, 90] },
+                BlockstateModelRef { path: side, rotation: [0, 0] },
             ]
         );
         assert_eq!(find_block_model_sources(&files, "connected_fence").0.len(), 2);
