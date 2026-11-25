@@ -1323,8 +1323,11 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if ["block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate"]
-        .iter().any(|candidate| parent.ends_with(candidate)) {
+    } else if [
+        "block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory",
+        "block/fence_gate", "block/template_fence_post", "block/template_fence_side",
+        "block/template_fence_gate",
+    ].iter().any(|candidate| parent.ends_with(candidate)) {
         Some("fence")
     } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
@@ -2253,6 +2256,17 @@ mod tests {
             source_text: String::new(),
         };
         assert_eq!(infer_legacy_block_shape(&stone), "cube");
+    }
+
+    #[test]
+    fn recognizes_vanilla_template_fence_model_parents() {
+        for parent in [
+            "minecraft:block/template_fence_post",
+            "minecraft:block/template_fence_side",
+            "minecraft:block/template_fence_gate",
+        ] {
+            assert_eq!(block_shape_for_parent(parent, "oak_fence"), Some("fence"));
+        }
     }
 
     #[test]
