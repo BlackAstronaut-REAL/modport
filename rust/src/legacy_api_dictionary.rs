@@ -7,7 +7,7 @@
 
 use regex::Regex;
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 const V_ALL: &[&str] = &["1.7.10", "1.8.9", "1.12.2"];
@@ -480,6 +480,113 @@ fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
     }
 }
 
+fn invocation_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\b(?P<receiver>[A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*\("
+    ).expect("static legacy API invocation regex"))
+}
+
+fn typed_variable_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\b(?P<owner>[A-Za-z_$][A-Za-z0-9_$.]*)\s+(?P<variable>[A-Za-z_$][A-Za-z0-9_$]*)\s*(?:[;=,)\[])"
+    ).expect("static legacy API typed-variable regex"))
+}
+
+fn inheritance_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\b(?:extends|implements)\s+(?P<owner>[A-Za-z_$][A-Za-z0-9_$.]*)"
+    ).expect("static legacy API inheritance regex"))
+}
+
+fn owner_candidates(owner: &str) -> BTreeSet<String> {
+    let short = owner.rsplit('.').next().unwrap_or(owner);
+    let mut candidates = BTreeSet::new();
+    candidates.insert(short.to_owned());
+    match short {
+        "ItemFood" | "ItemArmor" | "ItemTool" | "ItemSword" | "ItemBow" | "ItemHoe"
+        | "ItemBlock" | "ItemShears" | "ItemPickaxe" | "ItemSpade" | "ItemAxe" => {
+            candidates.insert("Item".to_owned());
+        }
+        "BlockContainer" | "BlockFalling" | "BlockBush" | "BlockDoor" | "BlockLiquid"
+        | "BlockDynamicLiquid" | "BlockStaticLiquid" | "BlockCrops" | "BlockFlower"
+        | "BlockOre" | "BlockRedstone" => {
+            candidates.insert("Block".to_owned());
+        }
+        "EntityLivingBase" => {
+            candidates.insert("Entity".to_owned());
+        }
+        "EntityLiving" | "EntityCreature" | "EntityAgeable" | "EntityAnimal"
+        | "EntityMob" | "EntityPlayer" | "EntityPlayerMP" | "EntityVillager"
+        | "EntityWaterMob" | "EntityFlying" => {
+            candidates.insert("Entity".to_owned());
+            candidates.insert("EntityLivingBase".to_owned());
+        }
+        "WorldServer" | "WorldClient" => {
+            candidates.insert("World".to_owned());
+        }
+        "TileEntityLockable" | "TileEntityChest" | "TileEntityFurnace"
+        | "TileEntityMobSpawner" | "TileEntitySign" => {
+            candidates.insert("TileEntity".to_owned());
+        }
+        _ => {}
+    }
+    candidates
+}
+
+/// Identify API calls using the declared receiver type or a static API owner.
+/// This supplements method-override detection so ItemStack/NBT/World/registry
+/// calls inside ordinary methods can be normalized too.
+pub fn map_legacy_api_usages(source: &str, version: Option<&str>) -> Vec<LegacyApiMethodMapping> {
+    let Some(version) = version.map(canonical_version).transpose_option() else {
+        return Vec::new();
+    };
+
+    let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
+    let mut receivers = BTreeMap::<String, BTreeSet<String>>::new();
+    for capture in typed_variable_regex().captures_iter(source) {
+        let (Some(owner), Some(variable)) = (capture.name("owner"), capture.name("variable")) else { continue; };
+        let candidates = owner_candidates(owner.as_str());
+        if candidates.iter().any(|candidate| known_owners.contains(candidate.as_str())) {
+            receivers.entry(variable.as_str().to_owned()).or_default().extend(candidates);
+        }
+    }
+
+    let mut implicit_owners = BTreeSet::new();
+    for capture in inheritance_regex().captures_iter(source) {
+        if let Some(owner) = capture.name("owner") {
+            implicit_owners.extend(owner_candidates(owner.as_str()));
+        }
+    }
+
+    let mut matched = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
+    for capture in invocation_regex().captures_iter(source) {
+        let (Some(receiver), Some(method)) = (capture.name("receiver"), capture.name("name")) else { continue; };
+        let receiver = receiver.as_str();
+        let method = method.as_str();
+        let owners = if known_owners.contains(receiver) {
+            owner_candidates(receiver)
+        } else if receiver == "this" || receiver == "super" {
+            implicit_owners.clone()
+        } else {
+            receivers.get(receiver).cloned().unwrap_or_default()
+        };
+        if owners.is_empty() { continue; }
+
+        for definition in DEFINITIONS.iter().filter(|entry| {
+            entry.method == method
+                && owners.contains(entry.owner)
+                && version.map(|v| entry.versions.contains(&v)).unwrap_or(true)
+        }) {
+            matched.entry((definition.owner.to_owned(), definition.method.to_owned()))
+                .or_insert_with(|| to_mapping(definition));
+        }
+    }
+    matched.into_values().collect()
+}
+
 fn declaration_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
@@ -599,7 +706,28 @@ mod tests {
     }
 
     #[test]
-    fn mappings_include_versioned_javadoc_sources() {
+        #[test]
+    fn detects_typed_call_sites_without_confusing_same_named_methods() {
+        let source = r#"
+            class Example {
+                void use(ItemStack stack, NBTTagCompound tag, World world) {
+                    stack.getItem();
+                    tag.getInteger("charge");
+                    world.setBlock(1, 2, 3, block);
+                    GameRegistry.registerItem(item, "example");
+                    helper.updateTask();
+                }
+            }
+        "#;
+        let found = map_legacy_api_usages(source, Some("1.12.2"));
+        assert!(found.iter().any(|entry| entry.source_owner == "ItemStack" && entry.source_method == "getItem"));
+        assert!(found.iter().any(|entry| entry.source_owner == "NBTTagCompound" && entry.source_method == "getInteger"));
+        assert!(found.iter().any(|entry| entry.source_owner == "World" && entry.source_method == "setBlock"));
+        assert!(found.iter().any(|entry| entry.source_owner == "GameRegistry" && entry.source_method == "registerItem"));
+        assert!(!found.iter().any(|entry| entry.source_method == "updateTask"));
+    }
+
+fn mappings_include_versioned_javadoc_sources() {
         let item = legacy_api_dictionary_for_version("1.7.10").into_iter()
             .find(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick")
             .unwrap();
