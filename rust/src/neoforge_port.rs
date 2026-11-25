@@ -3007,6 +3007,75 @@ mod tests {
     }
 
     #[test]
+    fn generates_native_slab_and_stair_models_and_blockstate_variants() {
+        let temp = tempdir().unwrap();
+        let resources = temp.path().join("resources");
+        let texture_root = resources.join("assets/shapes/textures/block");
+        fs::create_dir_all(&texture_root).unwrap();
+        fs::write(texture_root.join("ruby_slab.png"), b"slab texture").unwrap();
+        fs::write(texture_root.join("ruby_stairs.png"), b"stairs texture").unwrap();
+
+        let make_block = |id: &str, class_name: &str, shape: &str| BlockRecord {
+            id: id.to_owned(),
+            class_name: class_name.to_owned(),
+            source_path: format!("src/{class_name}.java"),
+            properties: Map::new(),
+            plant_like: false,
+            shape: shape.to_owned(),
+            warnings: Vec::new(),
+        };
+        let blocks = vec![
+            make_block("ruby_slab", "RubySlab", "slab"),
+            make_block("ruby_stairs", "RubyStairs", "stairs"),
+        ];
+        let generated = write_native_resources(&resources, "shapes", &[], &[], &blocks, &[]).unwrap();
+
+        let slab_states: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/blockstates/ruby_slab.json")).unwrap()
+        ).unwrap();
+        assert_eq!(slab_states["variants"]["type=bottom"]["model"], "shapes:block/ruby_slab");
+        assert_eq!(slab_states["variants"]["type=top"]["model"], "shapes:block/ruby_slab_top");
+        assert_eq!(slab_states["variants"]["type=double"]["model"], "shapes:block/ruby_slab_double");
+
+        let slab: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_slab.json")).unwrap()
+        ).unwrap();
+        let slab_top: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_slab_top.json")).unwrap()
+        ).unwrap();
+        let slab_double: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_slab_double.json")).unwrap()
+        ).unwrap();
+        assert_eq!(slab["parent"], "minecraft:block/slab");
+        assert_eq!(slab_top["parent"], "minecraft:block/slab_top");
+        assert_eq!(slab_double["parent"], "minecraft:block/cube_all");
+
+        let stairs_states: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/blockstates/ruby_stairs.json")).unwrap()
+        ).unwrap();
+        let variants = stairs_states["variants"].as_object().unwrap();
+        assert_eq!(variants.len(), 40);
+        assert_eq!(variants["facing=east,half=bottom,shape=straight"]["model"], "shapes:block/ruby_stairs");
+        assert_eq!(variants["facing=north,half=top,shape=inner_left"]["model"], "shapes:block/ruby_stairs_inner");
+        assert_eq!(variants["facing=south,half=bottom,shape=outer_right"]["model"], "shapes:block/ruby_stairs_outer");
+
+        let stairs: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_stairs.json")).unwrap()
+        ).unwrap();
+        let inner: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_stairs_inner.json")).unwrap()
+        ).unwrap();
+        let outer: Value = serde_json::from_slice(
+            &fs::read(resources.join("assets/shapes/models/block/ruby_stairs_outer.json")).unwrap()
+        ).unwrap();
+        assert_eq!(stairs["parent"], "minecraft:block/stairs");
+        assert_eq!(inner["parent"], "minecraft:block/inner_stairs");
+        assert_eq!(outer["parent"], "minecraft:block/outer_stairs");
+        assert!(generated.iter().any(|path| path.ends_with("blockstates/ruby_stairs.json")));
+        assert!(resources.join("assets/shapes/models/item/ruby_stairs.json").is_file());
+    }
+
+    #[test]
     fn ports_registered_items_blocks_and_resources_from_java_source() {
         let temp = tempdir().unwrap();
         let source = temp.path().join("old_mod");
