@@ -112,8 +112,9 @@ pub fn discover_block_entities(
     ).expect("static block-entity registration regex");
     let mut output = Vec::new();
     let mut seen = BTreeSet::new();
+    let source_files = java_files(roots);
 
-    for path in java_files(roots) {
+    for path in &source_files {
         let Ok(source) = fs::read_to_string(&path) else { continue };
         for capture in registration.captures_iter(&source) {
             let Some(raw_id) = capture.get(1).map(|value| value.as_str()) else { continue };
@@ -151,8 +152,8 @@ pub fn discover_block_entities(
     let legacy_registration = Regex::new(
         r#"(?i)GameRegistry\s*\.\s*registerTileEntity\s*\(\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*\.class\s*,\s*"([^"]+)""#
     ).expect("static legacy tile entity registration regex");
-    for path in java_files(roots) {
-        let Ok(source) = fs::read_to_string(&path) else { continue };
+    for path in &source_files {
+        let Ok(source) = fs::read_to_string(path) else { continue };
         for capture in legacy_registration.captures_iter(&source) {
             let Some(raw_class) = capture.get(1).map(|value| value.as_str()) else { continue };
             let Some(raw_id) = capture.get(2).map(|value| value.as_str()) else { continue };
@@ -160,7 +161,7 @@ pub fn discover_block_entities(
             let registry_name = normalize_registry(raw_id);
             let mut associated_blocks = BTreeSet::new();
             for (block_id, block_class) in blocks {
-                let block_source = java_files(roots).into_iter().find(|candidate| {
+                let block_source = source_files.iter().find(|candidate| {
                     candidate.file_stem().and_then(|value| value.to_str())
                         .is_some_and(|name| name.eq_ignore_ascii_case(block_class))
                 });
