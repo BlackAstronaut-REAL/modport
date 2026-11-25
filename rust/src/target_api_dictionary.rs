@@ -322,6 +322,15 @@ const DEFINITIONS: &[Definition] = &[
     t!("Slot", "remove", "ItemStack remove(int)", "menus", "Extract up to the requested count and preserve slot callbacks.", "net/minecraft/world/inventory/Slot.html", "Slot#decrStackSize"),
     t!("Slot", "setChanged", "void setChanged()", "menus", "Notify the slot/container that its contents changed.", "net/minecraft/world/inventory/Slot.html", "Slot#onSlotChanged"),
 
+    // Config values and server/client menu opening.
+    t!("ModConfigSpec.ConfigValue", "get", "T get()", "config", "Read a validated config value from its registered spec.", "net/neoforged/neoforge/common/ModConfigSpec.ConfigValue.html", "Property#getBoolean; Property#getInt; Property#getDouble; Property#getString"),
+    t!("ModConfigSpec.BooleanValue", "get", "Boolean get()", "config", "Read a validated boolean config value.", "net/neoforged/neoforge/common/ModConfigSpec.BooleanValue.html", "Property#getBoolean"),
+    t!("ModConfigSpec.IntValue", "get", "Integer get()", "config", "Read a validated integer config value.", "net/neoforged/neoforge/common/ModConfigSpec.IntValue.html", "Property#getInt"),
+    t!("ModConfigSpec.DoubleValue", "get", "Double get()", "config", "Read a validated floating-point config value.", "net/neoforged/neoforge/common/ModConfigSpec.DoubleValue.html", "Property#getDouble"),
+    t!("MenuProvider", "createMenu", "AbstractContainerMenu createMenu(int, Inventory, Player)", "menus", "Create the server-authoritative menu with container id, player inventory and player.", "net/minecraft/world/MenuProvider.html", "IGuiHandler#getServerGuiElement"),
+    t!("NetworkHooks", "openScreen", "void openScreen(ServerPlayer, MenuProvider, BlockPos)", "menus", "Open a server-authoritative menu and synchronize its type/data to the client.", "net/neoforged/neoforge/network/NetworkHooks.html", "NetworkRegistry#registerGuiHandler"),
+    t!("MenuScreens", "register", "void register(MenuType<T>, ScreenConstructor<T, ?>)", "client_gui", "Associate a registered MenuType with its client Screen factory.", "net/minecraft/client/gui/screens/MenuScreens.html", "IGuiHandler#getClientGuiElement"),
+
     // Attributes, data components, effects and world generation.
     t!("AttributeSupplier.Builder", "add", "Builder add(Attribute, double)", "living_attributes", "Register base entity attributes when constructing EntityType attribute suppliers.", "net/minecraft/world/entity/ai/attributes/AttributeSupplier.html", "EntityLiving#applyEntityAttributes"),
     t!("AttributeInstance", "addPermanentModifier", "void addPermanentModifier(AttributeModifier)", "living_attributes", "Preserve modifier UUID/key, amount, operation and permanence.", "net/minecraft/world/entity/ai/attributes/AttributeInstance.html", "EntityLivingBase#getEntityAttribute"),
