@@ -322,6 +322,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
                 uv_origin: [0.0; 2],
                 face_uvs: Some(face_uvs),
                 face_texture_indices: Some(face_texture_indices),
+                crossed_plane: false,
                 mirror: false,
                 name: format!("element_{element_index}"),
             }],
@@ -472,10 +473,30 @@ fn builtin_cube(
             uv_origin: [0.0; 2],
             face_uvs: Some([[0.0, 0.0, width, height]; 6]),
             face_texture_indices: None,
+            crossed_plane: false,
             mirror: false,
             name: format!("{name}_cube"),
         }],
     }
+}
+
+fn builtin_cross_plane(
+    name: &str,
+    rotation: [f32; 3],
+    texture_size: [u32; 2],
+) -> ViewerNode {
+    let mut node = builtin_cube(
+        name,
+        [-7.5, -8.0, 0.0],
+        [7.5, 8.0, 0.0],
+        rotation,
+        texture_size,
+    );
+    if let Some(cube) = node.cubes.first_mut() {
+        cube.crossed_plane = true;
+        cube.name = format!("{name}_plane");
+    }
+    node
 }
 
 fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
@@ -509,20 +530,8 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             texture_size,
         )],
         "plant" => vec![
-            builtin_cube(
-                "plant_front",
-                [-7.5, -8.0, -0.18],
-                [7.5, 8.0, 0.18],
-                [0.0, 45.0_f32.to_radians(), 0.0],
-                texture_size,
-            ),
-            builtin_cube(
-                "plant_back",
-                [-7.5, -8.0, -0.18],
-                [7.5, 8.0, 0.18],
-                [0.0, -45.0_f32.to_radians(), 0.0],
-                texture_size,
-            ),
+            builtin_cross_plane("plant_front", [0.0, 45.0_f32.to_radians(), 0.0], texture_size),
+            builtin_cross_plane("plant_back", [0.0, -45.0_f32.to_radians(), 0.0], texture_size),
         ],
         _ => Vec::new(),
     }
