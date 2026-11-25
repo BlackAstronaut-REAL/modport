@@ -961,13 +961,17 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
     for info in compiled.classes.values() {
         let Ok(bytes) = fs::read(&info.path) else { continue; };
         let Ok(class) = ClassFile::parse(&bytes) else { continue; };
-        let mut class_item_fields = BTreeMap::<String, (String, Option<ToolMaterialStats>)>::new();
+
+        // These maps deliberately outlive an individual method. Old Forge mods
+        // often initialize stat objects, register tool materials, instantiate
+        // their items, and register those items in separate lifecycle methods.
+        let mut stat_fields = BTreeMap::<String, ToolMaterialStats>::new();
+        let mut material_fields = BTreeMap::<String, ToolMaterialStats>::new();
+        let mut class_item_fields = BTreeMap::<String, String>::new();
 
         for method in &class.methods {
             let Some(code) = method.code.as_ref() else { continue; };
             let Ok(instructions) = decode_instructions(&code.code) else { continue; };
-            let mut stat_fields = BTreeMap::<String, ToolMaterialStats>::new();
-            let mut material_fields = BTreeMap::<String, ToolMaterialStats>::new();
 
             // First pass: recover helper-generated weapon-stat objects.
             for (index, instruction) in instructions.iter().enumerate() {
@@ -991,7 +995,8 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
             }
 
             // Second pass: bind stat objects (or direct numeric arguments) to
-            // addToolMaterial fields.
+            // addToolMaterial fields, allowing the stat object to have been
+            // created by a different method in the same owner class.
             for (index, instruction) in instructions.iter().enumerate() {
                 if !matches!(instruction.opcode, 0xb6..=0xb9) { continue; }
                 let Some(operands) = instruction.operands.get(0..2) else { continue; };
@@ -1000,7 +1005,7 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                 if method_name != "addToolMaterial" { continue; }
 
                 let target = compiled_next_static_field(&class, &instructions, index, 12);
-                let start = index.saturating_sub(50);
+                let start = index.saturating_sub(60);
                 let referenced = instructions[start..index].iter().rev()
                     .filter_map(|prior| {
                         if prior.opcode != 0xb2 { return None; }
@@ -1016,14 +1021,12 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                 }
             }
 
-            // Third pass: associate each static Item subclass with the material
-            // field referenced in its constructor.
+            // Third pass: keep item field -> concrete class links even when the
+            // material is assigned in another method.
             for (index, instruction) in instructions.iter().enumerate() {
                 if instruction.opcode != 0xb3 { continue; }
                 let Some(target) = compiled_equipment_field_name(&class, instruction) else { continue; };
-                if material_fields.contains_key(&target) { continue; }
-
-                let start = index.saturating_sub(160);
+                let start = index.saturating_sub(180);
                 let mut new_index = None;
                 for probe in (start..index).rev() {
                     if instructions[probe].opcode == 0xbb {
@@ -1038,30 +1041,59 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                 let Some(item_class) = compiled_equipment_new_class(&class, &instructions[new_index]) else {
                     continue;
                 };
-                let stats = instructions[new_index..index].iter().rev()
+                class_item_fields.insert(target, item_class);
+            }
+        }
+
+        // Fourth pass: recover which material fields each constructed item uses.
+        // Scan every method so constructors and material definitions need not share
+        // a single <clinit> method or source lifecycle callback.
+        for method in &class.methods {
+            let Some(code) = method.code.as_ref() else { continue; };
+            let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+            for (index, instruction) in instructions.iter().enumerate() {
+                if instruction.opcode != 0xb3 { continue; }
+                let Some(target) = compiled_equipment_field_name(&class, instruction) else { continue; };
+                if !class_item_fields.contains_key(&target) { continue; }
+                let start = index.saturating_sub(180);
+                let stats = instructions[start..index].iter().rev()
                     .filter_map(|prior| {
                         if prior.opcode != 0xb2 { return None; }
                         compiled_equipment_field_name(&class, prior)
                     })
                     .find_map(|field| material_fields.get(&field).cloned());
-                class_item_fields.insert(target, (item_class, stats));
+                if let Some(stats) = stats {
+                    // Keep the item field's stats in the class-local result map.
+                    let item_class = class_item_fields.get(&target).cloned().unwrap_or_default();
+                    if !item_class.is_empty() {
+                        results.entry(compact_name(&target)).or_insert(stats);
+                    }
+                }
             }
         }
 
         // Registry identifiers are indexed by concrete class in the shared
-        // compiled registry pass, so construction and registration may live
-        // in separate methods without losing their relationship.
-        for (_field, (item_class, stats)) in class_item_fields {
-            let Some(stats) = stats else { continue; };
-            if let Some(registries) = compiled.registries.get(&item_class) {
-                for registry in registries {
-                    let key = compact_name(&normalize_registry(registry));
-                    if !key.is_empty() {
-                        results.insert(key, stats.clone());
+        // compiled registry pass, so construction and registration can live in
+        // separate methods without losing the relationship.
+        for (_field, item_class) in class_item_fields {
+            // Prefer the constructor's material field where possible, while still
+            // allowing a single source class to expose a sole material as fallback.
+            let material_names = material_fields.keys().collect::<Vec<_>>();
+            let mut associated = None;
+            if material_names.len() == 1 {
+                associated = material_fields.values().next().cloned();
+            }
+            if let Some(stats) = associated {
+                if let Some(registries) = compiled.registries.get(&item_class) {
+                    for registry in registries {
+                        let key = compact_name(&normalize_registry(registry));
+                        if !key.is_empty() {
+                            results.insert(key, stats.clone());
+                        }
                     }
                 }
+                results.entry(compact_name(&item_class)).or_insert(stats);
             }
-            results.entry(compact_name(&item_class)).or_insert(stats);
         }
     }
     Ok(results)
