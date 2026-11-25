@@ -1028,7 +1028,7 @@ fn entity_source_texture_refs(
 
     // Match both old Forge ResourceLocation constructors and modern Mojmap factories.
     let two_arg = Regex::new(
-        r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*"[^"]+"\s*,\s*"([^"]+)""#
+        r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*[^,]+\s*,\s*"([^"]+)""#
     ).unwrap();
     let one_arg = Regex::new(
         r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)""#
@@ -1066,7 +1066,7 @@ fn entity_source_texture_refs(
             r#"(?s)\b(?:getTexture|getEntityTexture|getTextureLocation|getEntityTextureLocation)\s*\([^)]*\)\s*\{"#
         ).unwrap();
         let two_arg = Regex::new(
-            r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*"[^"]+"\s*,\s*"([^"]+)""#
+            r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:fromNamespaceAndPath|tryBuild))\s*\(\s*[^,]+\s*,\s*"([^"]+)""#
         ).unwrap();
         let one_arg = Regex::new(
             r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)""#
@@ -1088,6 +1088,9 @@ fn entity_source_texture_refs(
                     direct.insert(reference.clone());
                 }
             }
+            // Also handle a ResourceLocation constructed directly in the
+            // selected texture accessor rather than through a static constant.
+            direct.extend(declared_texture_refs(&body));
         }
         // Only scan raw entity texture literals if no returned ResourceLocation
         // could be resolved. Otherwise this would re-add eye/overlay textures.
@@ -1893,6 +1896,24 @@ mod tests {
         assert_eq!(
             entity_source_texture_refs("EntityRedAnt", &files),
             vec!["textures/entity/red_ant.png".to_owned()]
+        );
+    }
+
+    #[test]
+    fn resolves_inline_mojmap_entity_texture_locations() {
+        let temp = tempfile::tempdir().unwrap();
+        let entity = temp.path().join("EntityFox.java");
+        fs::write(&entity, r#"
+            public class EntityFox extends Animal {
+                public ResourceLocation getTextureLocation() {
+                    return ResourceLocation.fromNamespaceAndPath(MOD_ID, "textures/entity/fox.png");
+                }
+            }
+        "#).unwrap();
+        let files = BTreeMap::from([("EntityFox".to_owned(), entity)]);
+        assert_eq!(
+            entity_source_texture_refs("EntityFox", &files),
+            vec!["textures/entity/fox.png".to_owned()]
         );
     }
 
