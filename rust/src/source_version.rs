@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 use walkdir::WalkDir;
 
-use crate::metadata::ModMetadata;
+use crate::metadata::{dependency_version_range, infer_mod_metadata, ModMetadata};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct VersionEvidence {
@@ -91,13 +91,6 @@ fn forge_version_pattern() -> &'static Regex {
     })
 }
 
-fn dependency_range_pattern() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(r#"(?i)versionRange\s*=\s*["']\s*[\[(]\s*(1\.\d+(?:\.\d+)?)"#)
-            .expect("static Minecraft dependency range regex")
-    })
-}
 
 fn canonical_mc_version(value: &str) -> Option<&'static str> {
     let found = version_pattern().captures(value)?.get(1)?.as_str();
@@ -236,23 +229,23 @@ fn inspect_build_text(path: &Path, text: &str, evidence: &mut Vec<VersionEvidenc
     if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
         name.eq_ignore_ascii_case("mods.toml") || name.eq_ignore_ascii_case("neoforge.mods.toml")
     }) {
-        for capture in dependency_range_pattern().captures_iter(text) {
-            if let Some(version) = capture.get(1) {
-                add_evidence(
-                    evidence,
-                    version.as_str(),
-                    format!("{source_path} Minecraft dependency range"),
-                    "medium",
-                    format!("Minecraft dependency range begins at {}", version.as_str()),
-                    92,
-                );
-            }
+        let minecraft_range = dependency_version_range(text, "minecraft");
+        if let Some(version) = version_pattern().captures(&minecraft_range).and_then(|capture| capture.get(1)) {
+            add_evidence(
+                evidence,
+                version.as_str(),
+                format!("{source_path} Minecraft dependency range"),
+                "high",
+                format!("Minecraft dependency range for mod metadata begins at {}", version.as_str()),
+                118,
+            );
         }
     }
 
     for capture in neoforge_version_pattern().captures_iter(text) {
         if let Some(version) = capture.get(1) {
-            if let Some(minecraft) = dependency_range_pattern().captures(text).and_then(|value| value.get(1)) {
+            let minecraft_range = dependency_version_range(text, "minecraft");
+            if let Some(minecraft) = version_pattern().captures(&minecraft_range).and_then(|value| value.get(1)) {
                 add_evidence(
                     evidence,
                     minecraft.as_str(),
@@ -355,7 +348,19 @@ pub fn detect_source_version(
         metadata_evidence(metadata, &mut evidence);
     }
 
+    // Every supplied root can be a separate mod/library/archive. Collect its
+    // own metadata so a primary root without a loader declaration does not hide
+    // the Minecraft version declared by a companion root.
     for root in roots {
+        let root_metadata = infer_mod_metadata(root);
+        if !root_metadata.source.is_empty()
+            && (root_metadata.minecraft_version != ""
+                || root_metadata.forge_version != ""
+                || root_metadata.neoforge_version != "")
+        {
+            metadata_evidence(&root_metadata, &mut evidence);
+        }
+
         for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
             if !entry.file_type().is_file() { continue; }
             let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
@@ -393,7 +398,8 @@ pub fn detect_source_version(
     let mut result = SourceVersionDetection {
         minecraft_version: String::new(),
         api_release: String::new(),
-        loader_family: metadata.map(|value| value.loader_family.clone()).unwrap_or_default(),
+        loader_family: metadata.map(|value| value.loader_family.clone()).filter(|value| !value.is_empty())
+            .unwrap_or_default(),
         loader_version: metadata
             .map(|value| if !value.forge_version.is_empty() { value.forge_version.clone() } else { value.neoforge_version.clone() })
             .unwrap_or_default(),
@@ -431,6 +437,15 @@ pub fn detect_source_version(
     result.confidence = evidence_confidence(top.1.min(u16::MAX as u32) as u16).to_owned();
     result.status = "detected".to_owned();
 
+    if result.loader_family.is_empty() {
+        result.loader_family = if result.evidence.iter().any(|item| item.source.to_ascii_lowercase().contains("neoforge")) {
+            "NeoForge".to_owned()
+        } else if result.evidence.iter().any(|item| item.detail.contains("Forge version") || item.source.to_ascii_lowercase().contains("forge")) {
+            "Forge".to_owned()
+        } else {
+            String::new()
+        };
+    }
     if result.loader_version.is_empty() {
         if let Some(loader) = result.evidence.iter().find(|item| {
             item.minecraft_version == result.minecraft_version && item.detail.contains("Forge version")
@@ -504,6 +519,21 @@ mod tests {
         assert_eq!(detected.api_release, "1.21.1");
         assert_eq!(detected.loader_family, "NeoForge");
         assert_eq!(detected.loader_version, "21.1.100");
+    }
+
+    #[test]
+    fn considers_metadata_from_every_supplied_source_root() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        fs::write(first.path().join("mcmod.info"), r#"[{"modid":"first","name":"First","version":"1.0","mcversion":"1.7.10"}]"#).unwrap();
+        fs::write(second.path().join("mcmod.info"), r#"[{"modid":"second","name":"Second","version":"1.0","mcversion":"1.12.2"}]"#).unwrap();
+        let detected = detect_source_version(
+            &[first.path().to_path_buf(), second.path().to_path_buf()],
+            None
+        );
+        assert_eq!(detected.status, "ambiguous");
+        assert!(detected.evidence.iter().any(|item| item.minecraft_version == "1.7.10"));
+        assert!(detected.evidence.iter().any(|item| item.minecraft_version == "1.12.2"));
     }
 
     #[test]
