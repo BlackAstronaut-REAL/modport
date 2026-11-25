@@ -224,6 +224,31 @@ fn source_index(paths: &[PathBuf]) -> BTreeMap<String, Vec<PathBuf>> {
     result
 }
 
+fn compiled_class_is_entity(
+    class_name: &str,
+    classes: &BTreeMap<String, crate::compiled_registry::CompiledClassInfo>,
+) -> bool {
+    const ENTITY_BASES: &[&str] = &[
+        "Entity", "EntityLiving", "EntityLivingBase", "EntityCreature", "EntityAgeable",
+        "EntityAnimal", "EntityMob", "EntityWaterMob", "EntityFlying",
+        "LivingEntity", "Mob", "Monster", "PathfinderMob", "Animal", "TamableAnimal",
+        "FlyingMob", "WaterAnimal", "AmbientCreature", "AgeableMob", "MobEntity",
+    ];
+    let mut current = class_name.to_owned();
+    let mut visited = HashSet::new();
+    for _ in 0..24 {
+        if !visited.insert(current.clone()) { break; }
+        let Some(info) = classes.get(simple_name(&current)) else { return false; };
+        let parent = simple_name(&info.superclass);
+        if ENTITY_BASES.iter().any(|base| parent.eq_ignore_ascii_case(base)) {
+            return true;
+        }
+        if parent.is_empty() { return false; }
+        current = info.superclass.clone();
+    }
+    false
+}
+
 fn registry_names(java_paths: &[PathBuf]) -> BTreeMap<String, String> {
     let mut result = BTreeMap::new();
     let modern = Regex::new(
@@ -1241,6 +1266,14 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     for (entity, name) in registry_names(&java_paths) {
         entity_registry.insert(entity, name);
     }
+    // The compiled generic registry scanner also sees modern RegistryObject
+    // registrations. Keep only classes whose bytecode hierarchy is entity-like.
+    for (class, names) in &compiled_content.registries {
+        if !compiled_class_is_entity(class, &compiled_content.classes) { continue; }
+        if let Some(name) = names.iter().next() {
+            entity_registry.entry(class.clone()).or_insert_with(|| name.clone());
+        }
+    }
     let mut registry = entity_registry.clone();
     for (class, names) in &compiled_content.registries {
         if let Some(name) = names.iter().next() {
@@ -1540,6 +1573,33 @@ mod tests {
         assert_eq!(metadata.attack_damage, 12.0);
         assert_eq!(metadata.follow_range, 32.0);
         assert_eq!(metadata.armor, 6.0);
+    }
+
+    #[test]
+    fn recognizes_compiled_entity_subclasses_but_not_item_subclasses() {
+        use crate::compiled_registry::CompiledClassInfo;
+        let classes = BTreeMap::from([
+            ("CustomMobBase".to_owned(), CompiledClassInfo {
+                class_name: "CustomMobBase".to_owned(),
+                superclass: "net/minecraft/world/entity/monster/Monster".to_owned(),
+                access_flags: 0,
+                path: PathBuf::new(),
+            }),
+            ("FrostBeast".to_owned(), CompiledClassInfo {
+                class_name: "FrostBeast".to_owned(),
+                superclass: "demo/CustomMobBase".to_owned(),
+                access_flags: 0,
+                path: PathBuf::new(),
+            }),
+            ("AncientSword".to_owned(), CompiledClassInfo {
+                class_name: "AncientSword".to_owned(),
+                superclass: "net/minecraft/world/item/SwordItem".to_owned(),
+                access_flags: 0,
+                path: PathBuf::new(),
+            }),
+        ]);
+        assert!(compiled_class_is_entity("FrostBeast", &classes));
+        assert!(!compiled_class_is_entity("AncientSword", &classes));
     }
 
     #[test]
