@@ -911,6 +911,29 @@ mod tests {
     }
 
     #[test]
+    fn builtin_texture_mapping_preserves_partial_geometry_uvs() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model_dir = root.join("assets/demo/models/block");
+        let texture_dir = root.join("assets/demo/textures/block");
+        fs::create_dir_all(&model_dir).unwrap();
+        fs::create_dir_all(&texture_dir).unwrap();
+        let side = texture_dir.join("side.png");
+        RgbaImage::new(16, 16).save(&side).unwrap();
+        let model = model_dir.join("stone_slab.json");
+        fs::write(
+            &model,
+            r#"{"parent":"minecraft:block/slab","textures":{"side":"demo:block/side","bottom":"demo:block/side","top":"demo:block/side"}}"#,
+        ).unwrap();
+
+        let (scene, textures) = load_block_model(&model, &[root.to_path_buf()]).unwrap();
+        assert_eq!(textures, vec![side]);
+        let uv = scene.nodes[0].cubes[0].face_uvs.unwrap();
+        assert_eq!(uv[0], [0.0, 8.0, 16.0, 16.0]);
+        assert_eq!(uv[3], [0.0, 0.0, 16.0, 16.0]);
+    }
+
+    #[test]
     fn synthetic_partial_cubes_use_geometry_derived_face_uvs() {
         let (slab, _) = synthetic_block_preview("Stone Slab", "slab_bottom", None).unwrap();
         let uvs = slab.nodes[0].cubes[0].face_uvs.unwrap();
