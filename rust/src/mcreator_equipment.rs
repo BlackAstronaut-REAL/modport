@@ -1300,19 +1300,20 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
 
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
     let mut compiled_texts = HashMap::<String, String>::new();
+    // Build the simple-name fallback map from retained classes in one linear pass.
+    for parsed in compiled.parsed_classes.values() {
+        let internal = parsed.this_name().unwrap_or("");
+        let simple = internal.rsplit('/').next().unwrap_or("").rsplit('$').next().unwrap_or("");
+        if !simple.is_empty() {
+            compiled_texts.entry(simple.to_owned())
+                .or_insert_with(|| compiled_equipment_getter_stubs(parsed));
+        }
+    }
     for (class, info) in &compiled.classes {
         class_paths.entry(class.clone()).or_insert_with(|| info.path.clone());
         class_parents.entry(class.clone()).or_insert_with(|| info.superclass.clone());
         if info.access_flags & 0x0400 != 0 {
             abstract_classes.insert(class.clone());
-        }
-        if let Some(internal) = compiled.parsed_classes.iter().find_map(|(internal, parsed)| {
-            let simple = parsed.this_name().unwrap_or("").rsplit('/').next().unwrap_or("");
-            (simple.rsplit('$').next().unwrap_or(simple) == class).then_some(internal)
-        }) {
-            if let Some(parsed) = compiled.parsed_classes.get(internal) {
-                compiled_texts.insert(class.clone(), compiled_equipment_getter_stubs(parsed));
-            }
         }
     }
 
@@ -1997,6 +1998,30 @@ mod equipment_discovery_tests {
         assert_eq!(report.records[0].texture, "plain_icon");
         assert!(workspace.join("src/main/resources/assets/converted/textures/item/plain_icon.png").is_file());
         assert!(!report.warnings.iter().any(|warning| warning.contains("No source icon texture found")));
+    }
+
+    #[test]
+    fn recovers_compiled_only_item_texture_string_constants() {
+        let class = ClassFile {
+            minor_version:0,
+            major_version:52,
+            access_flags:0,
+            this_class:0,
+            super_class:0,
+            interfaces:Vec::new(),
+            constant_pool:vec![
+                None,
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("textures/items/bertha.png".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::String { string_index:1 }),
+            ],
+            fields:Vec::new(),
+            methods:Vec::new(),
+            attributes:Vec::new(),
+            bootstrap_methods:Vec::new(),
+        };
+        let stubs = compiled_equipment_getter_stubs(&class);
+        let references = declared_equipment_texture_refs(&stubs);
+        assert_eq!(references, vec!["textures/items/bertha.png"]);
     }
 
     #[test]
