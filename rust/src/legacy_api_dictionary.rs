@@ -5376,7 +5376,7 @@ mod tests {
             e.source_owner == owner && e.source_method == method);
         for (owner, method) in [
             ("Chunk", "getBlockState"), ("Chunk", "setBlockState"),
-            ("Chunk", "getTileEntity"), ("Chunk", "getPersistentChunkIterator"),
+            ("Chunk", "getTileEntity"), ("Chunk", "getInhabitedTime"),
             ("Chunk", "onLoad"), ("Chunk", "onUnload"),
             ("ChunkPrimer", "findGroundBlockIdx"), ("ChunkPrimer", "setBlockState"),
             ("ExtendedBlockStorage", "setSkyLight"), ("ExtendedBlockStorage", "setBlockLight"),
