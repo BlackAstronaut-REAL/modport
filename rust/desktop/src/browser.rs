@@ -39,6 +39,8 @@ pub struct BrowserEntry {
     pub render_shape: Option<String>,
     pub lore: Vec<String>,
     pub components_json: String,
+    /// Recovered attributes, flags, and AI data; this is not item lore.
+    pub metadata_json: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -107,19 +109,27 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     };
 
     // Registered mobs are taken from the existing registration graph.
+    // Registered mobs are discovered independently of client renderer registrations.
     for (entity_name, entity) in &graph.entities {
         let registration = graph.registrations.iter()
             .find(|registration| registration.entity_class == *entity_name);
+        let entity_source_path = graph.java_files.get(entity_name)
+            .or_else(|| graph.class_files.get(entity_name)).cloned();
+        let texture_refs = entity_source_path.as_ref()
+            .filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("java")))
+            .and_then(|path| fs::read_to_string(path).ok())
+            .map(|source| declared_texture_refs(&source)).unwrap_or_default();
         let model_source = registration.and_then(|registration| {
             let model = registration.model_class.rsplit(['.', '/', '$']).next().unwrap_or("");
             graph.java_files.get(model).or_else(|| graph.class_files.get(model)).cloned()
+        }).or_else(|| {
+            let suffix = entity_name.strip_prefix("Entity").unwrap_or(entity_name);
+            let model = format!("Model{suffix}");
+            graph.java_files.get(&model).or_else(|| graph.class_files.get(&model)).cloned()
         });
-        let icon_path = registration.and_then(|registration| {
-            find_texture_reference(&all_files, &registration.texture_refs)
-        });
-        let entity_source_path = graph.java_files.get(entity_name)
-            .or_else(|| graph.class_files.get(entity_name)).cloned();
-        let (mob_lore, mob_components) = mob_component_metadata(entity, entity_source_path.as_deref());
+        let icon_path = find_texture_reference(&all_files, &texture_refs)
+            .or_else(|| registration.and_then(|registration| find_texture_reference(&all_files, &registration.texture_refs)));
+        let (mob_lore, mob_metadata) = mob_component_metadata(entity, entity_source_path.as_deref());
         add(BrowserEntry {
             category: "Mobs".to_owned(),
             name: if entity.display_name.is_empty() { humanize(entity_name) } else { entity.display_name.clone() },
@@ -134,7 +144,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             texture_paths: icon_path.into_iter().collect(),
             render_shape: None,
             lore: mob_lore,
-            components_json: mob_components,
+            components_json: "{}".to_owned(),
+            metadata_json: mob_metadata,
         });
     }
 
@@ -142,10 +153,12 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     // evidence, never from texture filename substrings.
     for source in &equipment {
         let registry = normalize_registry(&source.registry_name);
-        let category = if is_weapon_source(source) {
-            "Weapons"
-        } else if is_food_source(&source.source_text, &source.superclass) {
+        let category = if is_food_source(&source.source_text, &source.superclass) {
             "Food"
+        } else if is_armor_source(source) {
+            "Armor"
+        } else if is_weapon_source(source) {
+            "Weapons"
         } else if source.element_type == "tool" {
             "Tools"
         } else {
@@ -162,9 +175,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             .or_else(|| find_linked_java_model(&all_files, &source.source_text, false));
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
-        let (source_properties, source_property_lore) =
+        let (source_properties, _) =
             item_source_properties(source, tool_materials.get(&compact(&registry)));
-        append_unique(&mut lore, &source_property_lore);
         let mut components = find_item_components(&all_files, &registry)
             .unwrap_or_else(|| serde_json::json!({}));
         if let Some(object) = components.as_object_mut() {
@@ -193,6 +205,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             render_shape: None,
             lore,
             components_json,
+            metadata_json: "{}".to_owned(),
         });
     }
 
@@ -280,6 +293,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             render_shape: Some(render_shape),
             lore,
             components_json,
+            metadata_json: "{}".to_owned(),
         });
     }
 
@@ -319,6 +333,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             render_shape: if category == "Blocks" { Some("orphan texture".to_owned()) } else { None },
             lore,
             components_json,
+            metadata_json: "{}".to_owned(),
         });
     }
 
@@ -330,6 +345,9 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         let linked = graph.registrations.iter().any(|registration| {
             registration.model_class.rsplit(['.', '/', '$']).next()
                 .map(|name| name.eq_ignore_ascii_case(stem)).unwrap_or(false)
+        }) || graph.entities.keys().any(|entity_class| {
+            let suffix = entity_class.strip_prefix("Entity").unwrap_or(entity_class);
+            stem.eq_ignore_ascii_case(&format!("Model{suffix}"))
         });
         if linked { continue; }
         add(BrowserEntry {
@@ -344,6 +362,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             render_shape: None,
             lore: Vec::new(),
             components_json: "{}".to_owned(),
+            metadata_json: "{}".to_owned(),
         });
     }
 
@@ -449,22 +468,7 @@ fn mob_component_metadata(entity: &EntityMetadata, source_path: Option<&Path>) -
         }
     }).unwrap_or_default();
     let special = has_special_ability_evidence(&source, &entity.ai_classes);
-    let mut lore = vec![
-        format!("Health: {}", format_stat(entity.health)),
-        format!("Attack damage: {}", format_stat(entity.attack_damage)),
-        format!("Armor: {}", format_stat(entity.armor)),
-        format!("Movement speed: {}", format_stat(entity.movement_speed)),
-        format!("Follow range: {}", format_stat(entity.follow_range)),
-        format!("Size: {} × {}", format_stat(entity.width), format_stat(entity.height)),
-        format!("Experience: {}", entity.xp),
-        format!("Special abilities: {}", if special { "true" } else { "false" }),
-    ];
-    if entity.fire_immune { lore.push("Fire immune: true".to_owned()); }
-    if entity.water_mob { lore.push("Water mob: true".to_owned()); }
-    if entity.flying_mob { lore.push("Flying mob: true".to_owned()); }
-    if !entity.ai_classes.is_empty() {
-        lore.push(format!("AI goals: {}", entity.ai_classes.join(", ")));
-    }
+    let lore = Vec::new();
     let components = serde_json::json!({
         "entity": {
             "registry": entity.registry_name,
@@ -663,21 +667,33 @@ fn decode_java_string(value: &str) -> String {
     result
 }
 
+fn is_armor_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
+    let behavior = source.source_text.to_ascii_lowercase();
+    if ["extends armoritem", "extends itemarmor", "getarmormodel", "getarmortexture",
+        "armortexture", "armormaterial", "equipmentslot", "equipment_slot"]
+        .iter().any(|token| behavior.contains(token)) { return true; }
+    let evidence = format!("{} {} {}", source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(), source.registry_name.to_ascii_lowercase());
+    ["helmet", "chestplate", "leggings", "boots", "armor_piece", "armoritem", "itemarmor"]
+        .iter().any(|token| evidence.contains(token))
+}
+
 fn is_weapon_source(source: &mojmodelbridge::mcreator_equipment::EquipmentSource) -> bool {
     if matches!(source.tool_type.as_deref(), Some("Sword" | "Bow" | "Crossbow" | "Trident" | "Staff" | "Dagger" | "Spear" | "Mace")) {
         return true;
     }
-    let evidence = format!(
-        "{} {} {}",
-        source.class_name.to_ascii_lowercase(),
-        source.superclass.to_ascii_lowercase(),
-        source.registry_name.to_ascii_lowercase(),
-    );
-    [
-        "itemsword", "itembow", "itemcrossbow", "itemtrident",
-        "sword", "bow", "crossbow", "trident", "dagger", "spear",
-        "weapon", "battleaxe", "waraxe", "mace",
-    ].iter().any(|token| evidence.contains(token))
+    let behavior = source.source_text.to_ascii_lowercase();
+    if source.element_type != "tool" && [
+        "useanim.bow", "useanim.crossbow", "useanim.spear", "enumaction.bow",
+        "performrangedattack", "rangedattack", "launchprojectile", "shoot(",
+        "getdamagevsentity", "getattackdamage", "attackdamage", "weapondamage",
+    ].iter().any(|token| behavior.contains(token)) { return true; }
+    let evidence = format!("{} {} {}", source.class_name.to_ascii_lowercase(),
+        source.superclass.to_ascii_lowercase(), source.registry_name.to_ascii_lowercase());
+    ["itemsword", "itembow", "itemcrossbow", "itemtrident", "sword", "bow", "crossbow",
+        "trident", "dagger", "spear", "weapon", "battleaxe", "waraxe", "mace",
+        "greataxe", "greatsword", "halberd", "scythe"]
+        .iter().any(|token| evidence.contains(token))
 }
 
 fn numeric_source_call(source: &str, methods: &[&str]) -> Option<f64> {
@@ -1879,9 +1895,7 @@ mod tests {
             warnings: Vec::new(),
         };
         let (lore, components) = mob_component_metadata(&entity, Some(&source));
-        assert!(lore.iter().any(|line| line == "Health: 120"));
-        assert!(lore.iter().any(|line| line == "Attack damage: 14"));
-        assert!(lore.iter().any(|line| line == "Special abilities: true"));
+        assert!(lore.is_empty(), "mob stats must never be exposed as item lore");
         let json: Value = serde_json::from_str(&components).unwrap();
         assert_eq!(json["attributes"]["max_health"], 120.0);
         assert_eq!(json["attributes"]["attack_damage"], 14.0);
