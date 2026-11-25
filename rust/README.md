@@ -15,7 +15,7 @@ cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path
 cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/decompiled-source --mod-id modern_mod --mod-name "Modern Mod" --package com.example.modern
 ```
 
-This is a partial converter, not a full behavior translator. Entity classes currently use conservative `PathfinderMob` placeholders and generic goals; exact AI and custom models/renderers are not recovered. Projectile classes are inventoried but not emitted as fully functional custom projectiles. Custom item/block methods, special food effects, crop growth, block-entity logic, arbitrary procedures/events, networking, capabilities, custom loot conditions, and mod-specific interactions remain pending or are called out as warnings. The status file deliberately keeps `behavior_fully_reconstructed: false`; unsupported logic is not silently reported as converted.
+This is a partial converter, not a full behavior translator. Entity classes currently use conservative `PathfinderMob` placeholders and generic goals; exact AI and custom models/renderers are not recovered. Throwable-family projectiles can be emitted as `ThrowableItemProjectile` placeholders with a generated launcher and thrown-item renderer when a registered generic item is linked. Arrow, fireball, and specialized projectile families remain inventoried only; custom impact effects, damage, explosions, pickup rules, and physics are not reconstructed. Custom item/block methods, special food effects, crop growth, block-entity logic, arbitrary procedures/events, networking, capabilities, custom loot conditions, and mod-specific interactions remain pending or are called out as warnings. The status file deliberately keeps `behavior_fully_reconstructed: false`; unsupported logic is not silently reported as converted.
 
 
 ### Current native content coverage
@@ -29,7 +29,8 @@ This is a partial converter, not a full behavior translator. Entity classes curr
 | Blocks | Basic blocks, BlockItems, hardness, resistance, light, sound, mining requirements, loot and simple fallback models |
 | Block entities | Source-detected BlockEntityType registrations, owning EntityBlock subclasses, and placeholder BlockEntity classes; storage/ticking/menus pending |
 | Plants | Cross-model/non-collision fallback; growth and special placement remain pending |
-| Entities | Registered entity placeholders with recovered attributes, conservative goals and fallback renderer |
+| Entities | Registered living-entity placeholders with recovered attributes, conservative goals and fallback renderer |
+| Projectiles | Throwable-family entities, linked launchers, and thrown-item renderer; arrows/fireballs and custom impact logic pending |
 | Recipes/resources | JSON and common legacy Java recipes, namespace remapping, legacy result/ore recipe migration, asset/data import |
 | Lore/localization | Legacy § formatting codes, en_US language files, and Java localization strings |
 
