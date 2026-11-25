@@ -750,6 +750,7 @@ pub fn export_blocks_to_workspace(
         .collect();
     let template=definition_template(&workspace_root)?;
     let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
 
     let mut report=BlockWorkspaceExportReport{
         workspace_file:workspace_file.clone(),discovered:discovered.len(),exported:0,skipped:0,records:Vec::new(),warnings:Vec::new()
@@ -811,8 +812,16 @@ pub fn export_blocks_to_workspace(
         }
 
         let (mut element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv,&field_registry_map);
+        let display = localization.translated_name(&registry, &block_display(&registry));
         if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
             apply_block_sound_bindings(definition, &source.source_text, &source.registry_name, &workspace);
+            if definition.contains_key("name") {
+                definition.insert("name".to_owned(), json!(display));
+            }
+            let information = localization.item_information(&source.source_text, &registry);
+            if !information.is_empty() && definition.contains_key("specialInformation") {
+                definition.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
         }
         if source.source_text.trim().is_empty() {
             warnings.push("Block class and registry ID were recovered from compiled bytecode only; source-defined state properties, hardness, drops, and special behavior may need manual reconstruction.".to_owned());
@@ -849,8 +858,10 @@ pub fn export_blocks_to_workspace(
         if !workspace.get("language_map").is_some_and(Value::is_object){workspace["language_map"]=json!({});}
         if !workspace["language_map"].get("en_us").is_some_and(Value::is_object){workspace["language_map"]["en_us"]=json!({});}
         let language=workspace["language_map"]["en_us"].as_object_mut().unwrap();
-        language.insert(format!("block.{target_modid}.{registry}"),json!(block_display(&registry)));
-        language.insert(format!("block.{target_modid}.{element_name}"),json!(block_display(&registry)));
+        language.insert(format!("block.{target_modid}.{registry}"),json!(display));
+        language.insert(format!("block.{target_modid}.{registry}.name"),json!(display));
+        language.insert(format!("block.{target_modid}.{element_name}"),json!(display));
+        language.insert(format!("block.{target_modid}.{element_name}.name"),json!(display));
 
         report.exported+=1;
         report.warnings.extend(warnings.clone());
