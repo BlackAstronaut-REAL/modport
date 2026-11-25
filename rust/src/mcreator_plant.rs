@@ -255,6 +255,8 @@ pub fn export_plants_to_workspace(
         .filter(crate::mcreator_block::is_plant_source)
         .collect();
     let template = plant_template(&workspace_root)?;
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
     let mut report = PlantWorkspaceExportReport {
         workspace_file: workspace_file.clone(),
         discovered: discovered.len(),
@@ -325,7 +327,17 @@ pub fn export_plants_to_workspace(
             .strip_prefix("Block").or_else(|| source.class_name.strip_prefix("Plant"))
             .unwrap_or(&source.class_name);
         let element_name = unique_plant_name(&pascal(class_base), &mut used_names);
-        let (element, warnings) = build_plant_element(&template, &source, &model_info, &texture, imported_fv);
+        let (mut element, warnings) = build_plant_element(&template, &source, &model_info, &texture, imported_fv);
+        let display = localization.translated_name(&registry, &display_name(&registry));
+        if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
+            if definition.contains_key("name") {
+                definition.insert("name".to_owned(), json!(display));
+            }
+            let information = localization.item_information(&source.source_text, &registry);
+            if !information.is_empty() && definition.contains_key("specialInformation") {
+                definition.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
+        }
         let element_path = output_elements.join(format!("{element_name}.mod.json"));
         fs::write(&element_path, format!("{}\n", serde_json::to_string_pretty(&element)?))
             .with_context(|| format!("Writing plant element {}", element_path.display()))?;
@@ -365,7 +377,7 @@ pub fn export_plants_to_workspace(
             workspace["language_map"]["en_us"] = json!({});
         }
         workspace["language_map"]["en_us"].as_object_mut().unwrap()
-            .insert(format!("block.{target_modid}.{registry}"), json!(display_name(&registry)));
+            .insert(format!("block.{target_modid}.{registry}"), json!(display.clone()));
 
         report.exported += 1;
         report.warnings.extend(warnings.clone());
