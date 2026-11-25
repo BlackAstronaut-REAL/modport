@@ -1248,7 +1248,7 @@ fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<Bl
         let mut block_warnings = Vec::new();
         block_warnings.push("Custom block methods, state properties, interactions, drops and tick behavior are not copied; this entry uses a simple native Block.".to_owned());
         if plant_like {
-            block_warnings.push("Plant-like source detected; growth, placement and cross-model rendering are not yet reconstructed.".to_owned());
+            block_warnings.push("Plant-like source detected; a cross-model and non-collision fallback is emitted, but growth and special placement behavior remain pending.".to_owned());
         }
         let id = normalized_id(&source.registry_name);
         if id.is_empty() {
@@ -2527,6 +2527,7 @@ mod tests {
         assert_eq!(report.target_mod_id, "oldmod");
         assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby"]);
         assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_flower", "ruby_ore"]);
+        assert!(report.blocks.iter().find(|block| block.registry_name == "ruby_flower").unwrap().plant_like);
         let flower_model: Value = serde_json::from_slice(&fs::read(output.join("src/main/resources/assets/oldmod/models/block/ruby_flower.json")).unwrap()).unwrap();
         assert_eq!(flower_model["parent"], "minecraft:block/cross");
         assert_eq!(flower_model["textures"]["cross"], "oldmod:block/ruby_flower");
