@@ -2353,7 +2353,7 @@ mod tests {
         ).unwrap()).unwrap();
         assert_eq!(loot["pools"][0]["entries"][0]["name"], "oldmod:ruby_ore");
         let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
-        assert!(items_java.contains("registerSimpleItem(\"ruby\""));
+        assert!(items_java.contains("ITEMS.register(\"ruby\""));
         assert!(items_java.contains("new BlockItem"));
         let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
         assert_eq!(status["behavior_fully_reconstructed"], false);
