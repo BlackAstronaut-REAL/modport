@@ -2444,6 +2444,42 @@ const DEFINITIONS: &[Definition] = &[
     d!("IThrowableEntity", "getThrower", V_17_18, "throwable_entity_owner_read", "Projectile thrower/creator entity", "projectiles", "Preserve nullable owner entity identity; distinguish thrower from current attack target and projectile shooter data.", "cpw/mods/fml/common/registry/IThrowableEntity.html"),
     d!("IThrowableEntity", "setThrower", V_17_18, "throwable_entity_owner_write", "Projectile thrower/creator entity", "projectiles", "Preserve owner assignment timing before spawn serialization and damage attribution.", "cpw/mods/fml/common/registry/IThrowableEntity.html"),
 
+    // Forge 1.12 custom model loading and model baking interfaces.
+    d!("ICustomModelLoader", "accepts", V_112, "custom_model_loader_accepts", "Custom model loader resource predicate", "client_models", "Preserve ResourceLocation namespace/path matching and loader precedence; only the first accepting loader should claim a model.", "net/minecraftforge/client/model/ICustomModelLoader.html"),
+    d!("ICustomModelLoader", "loadModel", V_112, "custom_model_loader_load", "Custom model loader resource parsing", "client_models", "Preserve checked exceptions and ResourceLocation variant semantics; ModelResourceLocation may pass through blockstate loading.", "net/minecraftforge/client/model/ICustomModelLoader.html"),
+    d!("ICustomModelLoader", "onResourceManagerReload", V_112, "custom_model_loader_reload", "IResourceManagerReloadListener model loader cache invalidation", "client_models", "Preserve resource manager identity and reload timing; clear caches and re-read model resources after pack changes.", "net/minecraftforge/client/model/ICustomModelLoader.html"),
+
+    // IModel is the legacy Forge model abstraction before IBakedModel output.
+    d!("IModel", "asVanillaModel", V_112, "forge_model_vanilla_projection", "Optional ModelBlock projection", "client_models", "Preserve Optional.empty for models that cannot be represented by vanilla ModelBlock; do not force conversion.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "bake", V_112, "forge_model_bake", "IModel to IBakedModel geometry compilation", "client_models", "Preserve model state, VertexFormat, texture getter and quad ordering; this is where geometry/UV transforms become baked output.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "getClip", V_112, "forge_model_animation_clip", "Animation IClip lookup by name", "client_models_animation", "Preserve named clip lookup and Optional empty behavior; animation clips are not model textures or model dependencies.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "getDefaultState", V_112, "forge_model_default_state", "IModelState default transform", "client_models", "Preserve default transform and model-part state used during bake.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "getDependencies", V_112, "forge_model_dependencies", "Model ResourceLocation dependencies", "client_models", "Preserve every dependent model resource and recursive loader ordering.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "getTextures", V_112, "forge_model_textures", "Model texture ResourceLocation dependencies", "client_models", "Preserve all referenced texture resources so stitch registration includes nested/custom model textures.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "gui3d", V_112, "forge_model_gui_3d_flag", "Model display GUI depth flag", "client_models", "Preserve fluent immutable-model return behavior and 2D-vs-3D item display metadata.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "process", V_112, "forge_model_custom_data", "Model variant custom-data processing", "client_models", "Preserve custom key/value map, unknown-key tolerance and independent returned model instance.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "retexture", V_112, "forge_model_retexture", "Model texture override diff", "client_models", "The map is a diff, may contain empty-string texture removal, and must produce an independent model so repeated retextures do not mutate the original.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "smoothLighting", V_112, "forge_model_smooth_lighting", "Model smooth-lighting flag", "client_models", "Preserve fluent immutable-model semantics and the baked vertex lighting difference.", "net/minecraftforge/client/model/IModel.html"),
+    d!("IModel", "uvlock", V_112, "forge_model_uvlock", "Model UV lock transform flag", "client_models", "Preserve texture orientation under block-state rotation; do not conflate with arbitrary UV remapping.", "net/minecraftforge/client/model/IModel.html"),
+
+    // Renderer factories and dimension sky/world renderers.
+    d!("IRenderFactory", "createRenderFor", V_112, "entity_render_factory", "Entity renderer creation for RenderManager", "client_render", "Preserve renderer-manager identity, entity generic type and factory invocation timing.", "net/minecraftforge/fml/client/registry/IRenderFactory.html"),
+    d!("IRenderHandler", "render", V_112, "dimension_custom_sky_or_cloud_render", "WorldProvider custom render handler", "client_render", "Preserve partialTicks, WorldClient and Minecraft instance; execute on render thread with dimension-specific ordering.", "net/minecraftforge/client/IRenderHandler.html"),
+    d!("IRenderContextHandler", "afterRenderContext", V_112, "legacy_after_render_context", "Deprecated Forge render context callback", "client_render", "This interface was documented as never used and deprecated for removal; preserve only if source directly implements/calls it.", "net/minecraftforge/client/IRenderContextHandler.html"),
+    d!("IRenderContextHandler", "beforeRenderContext", V_112, "legacy_before_render_context", "Deprecated Forge render context callback", "client_render", "This interface was documented as never used and deprecated for removal; preserve only if source directly implements/calls it.", "net/minecraftforge/client/IRenderContextHandler.html"),
+
+    // JSON data-driven crafting extension points.
+    d!("IConditionFactory", "parse", V_112, "recipe_condition_factory_parse", "JSON BooleanSupplier condition factory", "recipes", "Preserve JsonContext and JsonObject; return a lazy BooleanSupplier because the condition may be evaluated separately from parsing.", "net/minecraftforge/common/crafting/IConditionFactory.html"),
+    d!("IIngredientFactory", "parse", V_112, "recipe_ingredient_factory_parse", "JSON Ingredient factory", "recipes", "Preserve JsonContext constants and JSON object; return an Ingredient compatible with recipe matching and serialization.", "net/minecraftforge/common/crafting/IIngredientFactory.html"),
+    d!("IRecipeFactory", "parse", V_112, "recipe_factory_parse", "JSON IRecipe factory", "recipes", "Preserve JsonContext and recipe JSON; return custom recipe implementation with matching, crafting result and remainder behavior.", "net/minecraftforge/common/crafting/IRecipeFactory.html"),
+
+    // Command selectors can inject custom per-command Entity predicates.
+    d!("IEntitySelectorFactory", "createPredicates", V_112, "entity_selector_factory_predicates", "Custom command entity selector predicates", "commands", "Preserve argument map, main selector, sender and origin Vec3d; return an ordered non-null predicate list evaluated for each selector command.", "net/minecraftforge/fml/common/IEntitySelectorFactory.html"),
+
+    // Client item/block tint interfaces are implemented by mod color handlers.
+    d!("IBlockColor", "colorMultiplier", V_112, "block_color_multiplier", "Block-state tint index color handler", "client_render", "Preserve nullable world/position, tintIndex and ARGB output; null context is valid for inventory/item rendering.", "net/minecraft/client/renderer/color/IBlockColor.html"),
+    d!("IItemColor", "colorMultiplier", V_112, "item_color_multiplier", "ItemStack tint index color handler", "client_render", "Preserve exact stack NBT/components and tintIndex; output is packed ARGB and different tint layers may represent different item regions.", "net/minecraft/client/renderer/color/IItemColor.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3911,6 +3947,34 @@ mod tests {
         assert!(has(&v17, "IThrowableEntity", "getThrower"));
         assert!(has(&v18, "IThrowableEntity", "setThrower"));
         assert!(!has(&v112, "IThrowableEntity", "getThrower"));
+    }
+
+
+    #[test]
+    fn forge_model_recipe_and_render_interfaces_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("ICustomModelLoader", "accepts"),
+            ("ICustomModelLoader", "loadModel"),
+            ("ICustomModelLoader", "onResourceManagerReload"),
+            ("IModel", "bake"),
+            ("IModel", "getDependencies"),
+            ("IModel", "getTextures"),
+            ("IModel", "retexture"),
+            ("IModel", "getClip"),
+            ("IRenderFactory", "createRenderFor"),
+            ("IRenderHandler", "render"),
+            ("IConditionFactory", "parse"),
+            ("IIngredientFactory", "parse"),
+            ("IRecipeFactory", "parse"),
+            ("IEntitySelectorFactory", "createPredicates"),
+            ("IBlockColor", "colorMultiplier"),
+            ("IItemColor", "colorMultiplier"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
     }
 
     #[test]
