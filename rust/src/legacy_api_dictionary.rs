@@ -2146,9 +2146,18 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("Event".to_owned());
         }
         "LivingSpawnEvent.AllowDespawn" | "LivingSpawnEvent.CheckSpawn"
-        | "LivingSpawnEvent.SpecialSpawn" | "LivingSpawnEvent" | "LootingLevelEvent"
-        | "PotionColorCalculationEvent" | "ZombieEvent.SummonAidEvent" => {
+        | "LivingSpawnEvent.SpecialSpawn" => {
             candidates.insert("LivingSpawnEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "LootingLevelEvent" | "PotionColorCalculationEvent" => {
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ZombieEvent.SummonAidEvent" => {
             candidates.insert("ZombieEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
@@ -2164,13 +2173,6 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "ZombieEvent" | "PotionEvent" | "PotionEvent.PotionAddedEvent"
         | "PotionEvent.PotionApplicableEvent" | "PotionEvent.PotionExpiryEvent"
         | "PotionEvent.PotionRemoveEvent" => {
-            candidates.insert("LivingEvent".to_owned());
-            candidates.insert("EntityEvent".to_owned());
-            candidates.insert("Event".to_owned());
-        }
-        "PlayerEvent.NameFormat" | "PlayerEvent.LoadFromFile" | "PlayerEvent.SaveToFile"
-        | "PlayerEvent.Visibility" | "AttackEntityEvent" => {
-            candidates.insert("PlayerEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
