@@ -2202,6 +2202,58 @@ const DEFINITIONS: &[Definition] = &[
     // Rendering registration includes eager renderer-map population.
     d!("RenderingRegistry", "loadEntityRenderers", V_112, "rendering_registry_load_entities", "EntityRenderer registry initialization", "client_render", "adapter_required", "Overloads accept renderer map with optional RenderManager; preserve renderer factory invocation and entity class registration ordering.", "net/minecraftforge/fml/client/registry/RenderingRegistry.html"),
 
+    // Core IForgeRegistry query and registration contract.
+    d!("IForgeRegistry", "containsKey", V_112, "forge_registry_contains_key", "ResourceLocation registry membership", "registration", "Preserve namespaced key equality and registry stage semantics.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "containsValue", V_112, "forge_registry_contains_value", "Registry entry membership by object", "registration", "Preserve registry entry identity/equality semantics.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getEntries", V_112, "forge_registry_entries", "ResourceLocation-to-entry registry map", "registration", "Preserve key/value pairs and map iteration semantics.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getKey", V_112, "forge_registry_key", "Registry entry ResourceLocation lookup", "registration", "Preserve null for unregistered values and canonical key after remapping.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getKeys", V_112, "forge_registry_keys", "Registry ResourceLocation key set", "registration", "Preserve namespaced identifiers and key set view semantics.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getRegistrySuperType", V_112, "forge_registry_super_type", "Registry entry class type", "registration", "Preserve exact runtime entry base class used by generic registry lookup.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getSlaveMap", V_112, "forge_registry_slave_map", "Registry-dependent secondary index map", "registration", "Preserve ResourceLocation slave-map key and requested Class<T>; null if map absent.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "getValues", V_112, "forge_registry_values_deprecated", "Registry value List snapshot", "registration", "Deprecated copying list; preserve snapshot/copy behavior rather than returning the live collection.", "net/minecraftforge/registries/IForgeRegistry.html"),
+    d!("IForgeRegistry", "registerAll", V_112, "forge_registry_register_all", "Bulk IForgeRegistryEntry registration", "registration", "registration_adapter_required", "Preserve array order and failure/partial registration semantics.", "net/minecraftforge/registries/IForgeRegistry.html"),
+
+    // Mutability extension exposed by IForgeRegistryModifiable.
+    d!("IForgeRegistryModifiable", "clear", V_112, "forge_registry_clear", "Registry full clear operation", "registration", "manual_adapter_required", "Preserve clear callbacks, registry lock state and all associated delegate/map invalidation.", "net/minecraftforge/registries/IForgeRegistryModifiable.html"),
+    d!("IForgeRegistryModifiable", "isLocked", V_112, "forge_registry_locked_predicate", "Registry mutation lock", "registration", "automatic_rename_candidate", "Preserve frozen/locked state and whether registration is currently permitted.", "net/minecraftforge/registries/IForgeRegistryModifiable.html"),
+    d!("IForgeRegistryModifiable", "remove", V_112, "forge_registry_remove", "Registry entry removal by ResourceLocation", "registration", "manual_adapter_required", "Preserve removed entry, callback and delegate state; runtime removal can invalidate saved-world references.", "net/minecraftforge/registries/IForgeRegistryModifiable.html"),
+
+    // ForgeRegistry implementation adds legacy numeric IDs, snapshots and
+    // explicit freeze/unfreeze controls on top of IForgeRegistry.
+    d!("ForgeRegistry", "freeze", V_112, "forge_registry_freeze", "ForgeRegistry mutation barrier", "registration", "adapter_required", "Freeze prevents mutation outside registration lifecycle; retain timing and later registry sync behavior.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "getID", V_112, "forge_registry_legacy_id_lookup", "Legacy numeric registry ID", "registration", "manual_adapter_required", "Overloads accept ResourceLocation or entry; numeric IDs are compatibility state and not stable replacement identifiers.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "getMissingEvent", V_112, "forge_registry_missing_event", "RegistryEvent.MissingMappings construction", "registration", "manual_adapter_required", "Internal registry compatibility helper; preserve missing key map and remap stage when source uses it reflectively.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "getRaw", V_112, "forge_registry_legacy_raw_lookup", "Deprecated numeric ID registry lookup", "registration", "manual_adapter_required", "Deprecated numeric-ID lookup; retain behavior only when source specifically depends on raw legacy ID mappings.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "getValue", V_112, "forge_registry_get_value_by_id", "Deprecated numeric ID registry lookup", "registration", "manual_adapter_required", "Class also has integer ID overload; preserve ID map lookup separately from ResourceLocation lookup.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "loadIds", V_112, "forge_registry_load_legacy_ids", "Registry numeric ID snapshot restore", "registration", "manual_adapter_required", "Preserve overrides, missing/remapped ID arrays, old registry and registry key when applying world-save registry state.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "makeSnapshot", V_112, "forge_registry_snapshot", "ForgeRegistry.Snapshot serialized registry state", "registration", "adapter_required", "Preserve IDs, names, owners, aliases and blocked entries for world compatibility.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "setSlaveMap", V_112, "forge_registry_slave_map_write", "Registry-dependent secondary index registration", "registration", "adapter_required", "Preserve namespace key and registry map value identity; secondary maps may be rebuilt on reload.", "net/minecraftforge/registries/ForgeRegistry.html"),
+    d!("ForgeRegistry", "unfreeze", V_112, "forge_registry_unfreeze", "ForgeRegistry mutation barrier release", "registration", "manual_adapter_required", "Preserve explicit unlock timing; do not map to permanent mutable registry behavior.", "net/minecraftforge/registries/ForgeRegistry.html"),
+
+    // RegistryBuilder is the supported public construction API for custom
+    // Forge registries; its fluent chain affects validation and sync behavior.
+    d!("RegistryBuilder", "add", V_112, "registry_builder_add_callback", "IForgeRegistry callback registration", "registration", "automatic_rename_candidate", "Overloads add AddCallback/ClearCallback/CreateCallback/ValidateCallback; preserve callback order and callback category.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "addCallback", V_112, "registry_builder_add_callback_object", "Registry callback object reflection", "registration", "adapter_required", "Preserve callback instance identity and reflection-discovered callback methods.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "allowModification", V_112, "registry_builder_allow_modifications", "Registry mutability policy", "registration", "automatic_rename_candidate", "Preserve whether registry supports modifications outside initial registration stage.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "create", V_112, "registry_builder_create", "Custom IForgeRegistry creation", "registration", "registration_adapter_required", "Preserve registry type, name, ID range, callbacks, default key, missing/dummy factories and override/save flags.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "disableOverrides", V_112, "registry_builder_disable_overrides", "Registry override policy", "registration", "automatic_rename_candidate", "Preserve whether mod-owned entries may override another namespace's registry values.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "disableSaving", V_112, "registry_builder_disable_saving", "Registry world-save persistence policy", "registration", "automatic_rename_candidate", "Preserve registry save-to-disk setting; custom registries often need world-saved ID snapshots.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "set", V_112, "registry_builder_factory_set", "IForgeRegistry dummy/missing factories", "registration", "adapter_required", "Overloads accept DummyFactory or MissingFactory; preserve different behavior for unknown registry values and missing network values.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "setDefaultKey", V_112, "registry_builder_default_key", "Default registry ResourceLocation", "registration", "automatic_rename_candidate", "Preserve optional default key and default-entry resolution for missing values.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "setIDRange", V_112, "registry_builder_id_range", "Legacy registry ID range", "registration", "adapter_required", "Preserve min/max ID bounds for compatibility ID allocation.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "setMaxID", V_112, "registry_builder_max_id", "Legacy registry ID maximum", "registration", "automatic_rename_candidate", "Preserve max ID bound while retaining the default/minimum values.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "setName", V_112, "registry_builder_name", "Custom registry ResourceLocation", "registration", "automatic_rename_candidate", "Preserve exact registry namespace/path identity.", "net/minecraftforge/registries/RegistryBuilder.html"),
+    d!("RegistryBuilder", "setType", V_112, "registry_builder_entry_type", "Custom registry entry class", "registration", "automatic_rename_candidate", "Preserve generic registry supertype used for entry validation and lookup.", "net/minecraftforge/registries/RegistryBuilder.html"),
+
+    // SimpleNetworkWrapper sends typed messages to exact recipients.
+    d!("SimpleNetworkWrapper", "getPacketFrom", V_112, "network_packet_from_message", "Packet from IMessage payload", "networking", "automatic_rename_candidate", "Preserve discriminator registration and packet codec; used for tile entity description packet paths.", "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"),
+    d!("SimpleNetworkWrapper", "sendToAllTracking", V_112, "network_send_to_tracking", "IMessage entity/chunk tracker recipients", "networking", "automatic_rename_candidate", "Overloads target tracked Entity or TargetPoint; preserve watcher set and tracking lifecycle.", "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"),
+    d!("SimpleNetworkWrapper", "sendToDimension", V_112, "network_send_to_dimension", "IMessage dimension broadcast", "networking", "automatic_rename_candidate", "Preserve numeric dimension ID resolution and connected recipients in that dimension.", "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"),
+
+    // IMessage serialization contract and packet context.
+    d!("MessageContext", "getClientHandler", V_112, "network_context_client_handler", "NetHandlerPlayClient", "networking", "automatic_rename_candidate", "Valid only for client-side message context; preserve wrong-side/null handling.", "net/minecraftforge/fml/common/network/simpleimpl/MessageContext.html"),
+    d!("MessageContext", "getServerHandler", V_112, "network_context_server_handler", "NetHandlerPlayServer", "networking", "automatic_rename_candidate", "Valid only for server-side message context; preserve wrong-side/null handling.", "net/minecraftforge/fml/common/network/simpleimpl/MessageContext.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3537,6 +3589,30 @@ mod tests {
             ("FMLInterModComms.IMCMessage", "getFunctionValue"),
             ("FMLInterModComms.IMCMessage", "isResourceLocationMessage"),
             ("RenderingRegistry", "loadEntityRenderers"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn forge_registry_and_simple_network_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("IForgeRegistry", "registerAll"),
+            ("IForgeRegistry", "getSlaveMap"),
+            ("IForgeRegistryModifiable", "remove"),
+            ("ForgeRegistry", "makeSnapshot"),
+            ("ForgeRegistry", "loadIds"),
+            ("RegistryBuilder", "setIDRange"),
+            ("RegistryBuilder", "create"),
+            ("SimpleNetworkWrapper", "registerMessage"),
+            ("SimpleNetworkWrapper", "sendToAllTracking"),
+            ("IMessage", "fromBytes"),
+            ("IMessageHandler", "onMessage"),
+            ("MessageContext", "getServerHandler"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
