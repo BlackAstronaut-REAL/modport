@@ -1148,6 +1148,30 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityPlayer", "resetCooldown", V_112, "player_attack_cooldown_reset", "Player#resetAttackStrengthTicker", "combat", "automatic_rename_candidate", "Reset attack cooldown at the same interaction point as the source behavior.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "trySleep", V_112, "player_sleep_attempt", "Player#startSleepInBed", "player_abilities", "adapter_required", "Preserve sleep result enum, bed position, dimension and hostile-nearby checks.", "net/minecraft/entity/player/EntityPlayer.html"),
 
+    // PlayerCapabilities: movement permissions and persistent ability state.
+    d!("PlayerCapabilities", "getFlySpeed", V_ALL, "player_flight_speed_read", "Abilities#getFlyingSpeed", "player_abilities", "automatic_rename_candidate", "Preserve configured flight speed separately from the current flying flag.", "net/minecraft/entity/player/PlayerCapabilities.html"),
+    d!("PlayerCapabilities", "getWalkSpeed", V_112, "player_walk_speed_read", "Abilities#getWalkingSpeed", "player_abilities", "automatic_rename_candidate", "Preserve configured walking speed and server-side ability synchronization.", "net/minecraft/entity/player/PlayerCapabilities.html"),
+    d!("PlayerCapabilities", "setPlayerWalkSpeed", V_112, "player_walk_speed_write", "Abilities#setWalkingSpeed", "player_abilities", "adapter_required", "Preserve walking speed changes and ability packet updates.", "net/minecraft/entity/player/PlayerCapabilities.html"),
+    d!("PlayerCapabilities", "readCapabilitiesFromNBT", V_ALL, "player_abilities_nbt_read", "Abilities / Player persistent data", "persistence", "adapter_required", "Preserve creative, invulnerability, flight permission, flying state, edit permission and movement speeds.", "net/minecraft/entity/player/PlayerCapabilities.html"),
+    d!("PlayerCapabilities", "writeCapabilitiesToNBT", V_ALL, "player_abilities_nbt_write", "Abilities / Player persistent data", "persistence", "adapter_required", "Serialize all capability flags and movement speeds without conflating permission and active state.", "net/minecraft/entity/player/PlayerCapabilities.html"),
+
+    // FoodStats: exhaustion, saturation and food-state persistence.
+    d!("FoodStats", "addExhaustion", V_ALL, "food_exhaustion_add", "FoodData#addExhaustion", "food", "automatic_rename_candidate", "Preserve exhaustion accumulation, saturation depletion and server tick order.", "net/minecraft/util/FoodStats.html"),
+    d!("FoodStats", "setFoodLevel", V_ALL, "food_level_write", "FoodData#setFoodLevel", "food", "automatic_rename_candidate", "Preserve clamping and food-level update behavior.", "net/minecraft/util/FoodStats.html"),
+    d!("FoodStats", "setFoodSaturationLevel", V_ALL, "food_saturation_write", "FoodData#setSaturation", "food", "automatic_rename_candidate", "Preserve saturation clamping and interaction with exhaustion.", "net/minecraft/util/FoodStats.html"),
+    d!("FoodStats", "onUpdate", V_ALL, "food_tick", "FoodData#tick", "food", "adapter_required", "Preserve regeneration, starvation, difficulty and exhaustion/saturation thresholds.", "net/minecraft/util/FoodStats.html"),
+    d!("FoodStats", "readNBT", V_ALL, "food_state_nbt_read", "FoodData#readAdditionalSaveData", "persistence", "adapter_required", "Preserve food level, saturation, exhaustion and timer state.", "net/minecraft/util/FoodStats.html"),
+    d!("FoodStats", "writeNBT", V_ALL, "food_state_nbt_write", "FoodData#addAdditionalSaveData", "persistence", "adapter_required", "Serialize food level, saturation, exhaustion and timer state.", "net/minecraft/util/FoodStats.html"),
+
+    // Item cooldowns: per-item ability lockouts and client feedback.
+    d!("CooldownTracker", "hasCooldown", V_112, "item_cooldown_active", "ItemCooldowns#isOnCooldown", "player_abilities", "automatic_rename_candidate", "Preserve per-item cooldown lookup and item identity.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "getCooldown", V_112, "item_cooldown_fraction", "ItemCooldowns#getCooldownPercent", "player_abilities", "adapter_required", "Preserve partial-tick interpolation for cooldown overlays and ability timing.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "tick", V_112, "item_cooldown_tick", "ItemCooldowns#tick", "player_abilities", "adapter_required", "Preserve per-tick expiration, callback timing and synchronization.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "setCooldown", V_112, "item_cooldown_set", "ItemCooldowns#addCooldown", "player_abilities", "adapter_required", "Preserve duration in ticks and replacement behavior for existing cooldowns.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "removeCooldown", V_112, "item_cooldown_remove", "ItemCooldowns#removeCooldown", "player_abilities", "automatic_rename_candidate", "Remove the matching item's cooldown and preserve removal notification behavior.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "notifyOnSet", V_112, "item_cooldown_started_hook", "ItemCooldowns#onCooldownStarted", "player_abilities", "adapter_required", "Preserve client HUD feedback and packet/event timing when a cooldown begins.", "net/minecraft/util/CooldownTracker.html"),
+    d!("CooldownTracker", "notifyOnRemove", V_112, "item_cooldown_ended_hook", "ItemCooldowns#onCooldownEnded", "player_abilities", "adapter_required", "Preserve client HUD feedback and packet/event timing when a cooldown ends.", "net/minecraft/util/CooldownTracker.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
