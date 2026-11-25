@@ -417,7 +417,7 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|value| parent.ends_with(value)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if ["block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence"]
+    } else if ["block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate", "block/fence"]
         .iter().any(|value| parent.ends_with(value)) {
         Some("fence")
     } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
@@ -426,6 +426,12 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
         .iter().any(|value| parent.ends_with(value)) {
         Some("pane")
+    } else if ["block/button", "block/template_button"]
+        .iter().any(|value| parent.ends_with(value)) {
+        Some("button")
+    } else if ["block/lever", "block/template_orientable"]
+        .iter().any(|value| parent.ends_with(value)) && stem.contains("lever") {
+        Some("lever")
     } else if ["block/door_bottom", "block/door_top", "block/template_door"]
         .iter().any(|value| parent.ends_with(value)) {
         Some("door")
@@ -626,6 +632,11 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             ([-8.0, -8.0, -1.0], [8.0, 8.0, 1.0]),
         ], texture_size)],
         "door" => vec![builtin_cube("door", [-8.0, -8.0, -1.0], [8.0, 8.0, 1.0], [0.0; 3], texture_size)],
+        "button" => vec![builtin_cube("button", [-3.0, -3.0, -8.0], [3.0, 1.0, -6.0], [0.0; 3], texture_size)],
+        "lever" => vec![builtin_multi_cube("lever", &[
+            ([-4.0, -8.0, -4.0], [4.0, -6.0, 4.0]),
+            ([-1.0, -6.0, -1.0], [1.0, 4.0, 1.0]),
+        ], texture_size)],
         "trapdoor_bottom" => vec![builtin_cube("trapdoor", [-8.0, -8.0, -8.0], [8.0, -5.0, 8.0], [0.0; 3], texture_size)],
         "trapdoor_top" => vec![builtin_cube("trapdoor", [-8.0, 5.0, -8.0], [8.0, 8.0, 8.0], [0.0; 3], texture_size)],
         "torch" => vec![builtin_cube(
@@ -877,6 +888,22 @@ mod tests {
         let (scene, resolved_textures) = load_block_model(&derived, &[root.to_path_buf()]).unwrap();
         assert_eq!(scene.nodes.len(), 2);
         assert_eq!(resolved_textures, vec![texture_path]);
+    }
+
+    #[test]
+    fn synthesizes_stairs_slabs_fences_and_panes_from_builtin_parents() {
+        let (slab, _) = synthetic_block_preview("Stone Slab", "slab_bottom", None).unwrap();
+        assert_eq!(slab.nodes[0].cubes[0].min[1], -8.0);
+        assert_eq!(slab.nodes[0].cubes[0].max[1], 0.0);
+
+        let (stairs, _) = synthetic_block_preview("Stone Stairs", "stairs", None).unwrap();
+        assert_eq!(stairs.nodes[0].cubes.len(), 2);
+
+        let (fence, _) = synthetic_block_preview("Oak Fence", "fence", None).unwrap();
+        assert_eq!(fence.nodes[0].cubes.len(), 5);
+
+        let (pane, _) = synthetic_block_preview("Glass Pane", "pane", None).unwrap();
+        assert_eq!(pane.nodes[0].cubes.len(), 2);
     }
 
     #[test]
