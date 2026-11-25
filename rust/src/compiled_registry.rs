@@ -479,26 +479,31 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
     }
 
     let mut index = CompiledRegistryIndex::default();
-    for archive_path in archives {
-        let extraction = match Builder::new().prefix("mojmodelbridge-classes-").tempdir() {
-            Ok(value) => Arc::new(value),
-            Err(error) => {
-                index.warnings.push(format!(
-                    "Could not create temporary class extraction for {}: {error}",
-                    archive_path.display()
-                ));
-                continue;
-            }
+    // Archive extraction is independent by input JAR. Extract concurrently into
+    // isolated temp directories, then merge in sorted archive order so warning
+    // order and duplicate-class precedence remain deterministic.
+    let extracted_archives: Vec<_> = archives.par_iter().map(|archive_path| {
+        let extraction = Builder::new().prefix("mojmodelbridge-classes-").tempdir()
+            .map(Arc::new)
+            .map_err(|error| format!("Could not create temporary class extraction: {error}"));
+        let Ok(extraction) = extraction else {
+            return (archive_path.clone(), Err(extraction.unwrap_err()));
         };
-        match extract_archive_classes(&archive_path, extraction.path(), &mut paths) {
-            Ok(()) => {
+        let mut extracted_paths = Vec::new();
+        match extract_archive_classes(archive_path, extraction.path(), &mut extracted_paths) {
+            Ok(()) => Ok((archive_path.clone(), extraction, extracted_paths)),
+            Err(error) => Err((archive_path.clone(), format!("Could not index compiled classes: {error}"))),
+        }
+    }).collect();
+
+    for result in extracted_archives {
+        match result {
+            Ok((_archive_path, extraction, mut extracted_paths)) => {
+                paths.append(&mut extracted_paths);
                 index.archive_extractions.push(extraction);
             }
-            Err(error) => {
-                index.warnings.push(format!(
-                    "Could not index compiled classes from {}: {error}",
-                    archive_path.display()
-                ));
+            Err((archive_path, error)) => {
+                index.warnings.push(format!("{} for {}", error, archive_path.display()));
             }
         }
     }
