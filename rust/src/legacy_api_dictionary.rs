@@ -4569,6 +4569,97 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         }
         _ => {}
     }
+    // Resolve enclosing event base classes for nested event types. The
+    // earlier short-name match handles top-level owners, but nested names
+    // such as PlayerEvent.Clone have a short name of only "Clone". Keep the
+    // package-qualified prefix when available and add the real base owner.
+    for cut in 1..parts.len() {
+        let prefix_short = parts[cut - 1];
+        let prefix = parts[..cut].join(".");
+        match prefix_short {
+            "PlayerEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("PlayerEvent".to_owned());
+                candidates.insert("LivingEvent".to_owned());
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "LivingEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("LivingEvent".to_owned());
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "EntityEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "BlockEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("BlockEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "WorldEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("WorldEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "ChunkDataEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("ChunkDataEvent".to_owned());
+                candidates.insert("ChunkEvent".to_owned());
+                candidates.insert("WorldEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "ChunkEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("ChunkEvent".to_owned());
+                candidates.insert("WorldEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "ChunkWatchEvent" | "ExplosionEvent" | "EntityViewRenderEvent"
+            | "GuiScreenEvent" | "RenderTooltipEvent" | "RenderGameOverlayEvent"
+            | "ColorHandlerEvent" | "RenderLivingEvent" | "DecorateBiomeEvent"
+            | "OreGenEvent" | "BiomeEvent" | "ChunkGeneratorEvent" => {
+                candidates.insert(prefix);
+                candidates.insert(prefix_short.to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "PlayerContainerEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("PlayerEvent".to_owned());
+                candidates.insert("LivingEvent".to_owned());
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "PopulateChunkEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("PopulateChunkEvent".to_owned());
+                candidates.insert("ChunkGeneratorEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "ZombieEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("ZombieEvent".to_owned());
+                candidates.insert("LivingEvent".to_owned());
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "PotionEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("PotionEvent".to_owned());
+                candidates.insert("LivingEvent".to_owned());
+                candidates.insert("EntityEvent".to_owned());
+                candidates.insert("Event".to_owned());
+            }
+            "InitNoiseGensEvent" => {
+                candidates.insert(prefix);
+                candidates.insert("InitNoiseGensEvent.Context".to_owned());
+            }
+            _ => {}
+        }
+    }
     if short.starts_with("EntityAI") {
         candidates.insert("EntityAIBase".to_owned());
     }
