@@ -365,6 +365,87 @@ fn number_after(source: &str, patterns: &[&str]) -> Option<f64> {
     None
 }
 
+/// Extract source-authored block settings for the desktop content editor.
+/// These values mirror the fields used by the native MCreator block builder,
+/// but remain separate metadata so the browser does not present them as lore.
+pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
+    let text = &source.source_text;
+    let mut properties = Map::new();
+
+    let hardness = number_after(text, &[
+        r"\.strength\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+        r"\.hardness\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+        r"\bsetHardness\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+    ]).unwrap_or(1.0).max(0.0);
+    let resistance = number_after(text, &[
+        r"\.strength\s*\(\s*-?\d+(?:\.\d+)?[fFdD]?\s*,\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+        r"\.resistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+        r"\bsetResistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+    ]).unwrap_or(1.0).max(0.0);
+    let light = number_after(text, &[
+        r"\.lightLevel\s*\(\s*\(\s*\)\s*->\s*(?:\(\s*)?(-?\d+)",
+        r"\bsetLightLevel\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+    ]).unwrap_or(0.0).max(0.0);
+
+    properties.insert("hardness".to_owned(), json!(hardness));
+    properties.insert("resistance".to_owned(), json!(resistance));
+    properties.insert("light_level".to_owned(), json!(light));
+    properties.insert(
+        "has_gravity".to_owned(),
+        json!(text.contains("SandBlock") || text.contains("FallingBlock")),
+    );
+    properties.insert(
+        "waterloggable".to_owned(),
+        json!(text.contains("waterlogged") || text.contains("WATERLOGGED")),
+    );
+    properties.insert("has_block_item".to_owned(), json!(true));
+    properties.insert("max_stack_size".to_owned(), json!(64));
+    properties.insert(
+        "requires_correct_tool".to_owned(),
+        json!(text.contains("setHarvestLevel") || text.contains("requiresCorrectToolForDrops")),
+    );
+    properties.insert(
+        "random_ticks".to_owned(),
+        json!(text.contains("randomTicks") || text.contains("tickRandomly")),
+    );
+    properties.insert(
+        "replaceable".to_owned(),
+        json!(text.contains("replaceable") || text.contains("REPLACEABLE")),
+    );
+    if let Some(value) = number_after(text, &[r"\bsetLightOpacity\s*\(\s*(\d+)\s*\)"]) {
+        properties.insert("light_opacity".to_owned(), json!(value as i64));
+    }
+
+    let sound = if text.contains("SoundType.WOOD") || text.contains("woodSoundType") {
+        Some("WOOD")
+    } else if text.contains("SoundType.METAL") {
+        Some("METAL")
+    } else if text.contains("SoundType.GLASS") {
+        Some("GLASS")
+    } else if text.contains("SoundType.STONE") {
+        Some("STONE")
+    } else {
+        None
+    };
+    if let Some(sound) = sound {
+        properties.insert("step_sound".to_owned(), json!(sound));
+    }
+
+    let destroy_tool = if text.contains("BlockTags.MINEABLE_WITH_PICKAXE") || text.contains("pickaxe") {
+        Some("Pickaxe")
+    } else if text.contains("BlockTags.MINEABLE_WITH_AXE") || text.contains("axe") {
+        Some("Axe")
+    } else if text.contains("BlockTags.MINEABLE_WITH_SHOVEL") || text.contains("shovel") {
+        Some("Shovel")
+    } else {
+        None
+    };
+    if let Some(tool) = destroy_tool {
+        properties.insert("destroy_tool".to_owned(), json!(tool));
+    }
+    Value::Object(properties).as_object().cloned().unwrap_or_default()
+}
+
 fn block_display(registry: &str) -> String {
     registry.split(|ch: char| !ch.is_ascii_alphanumeric())
         .filter(|word| !word.is_empty())
@@ -676,6 +757,37 @@ mod tests{
         let found=discover_block_sources(&[root.to_path_buf()]).unwrap();
         assert_eq!(found.len(),1);
         assert!(is_plant_source(&found[0]));
+    }
+
+    #[test]
+    fn exposes_source_block_properties_as_editable_metadata() {
+        let source = BlockSource {
+            class_name: "GlowStoneBlock".to_owned(),
+            superclass: "FallingBlock".to_owned(),
+            registry_name: "glow_stone".to_owned(),
+            source_path: "GlowStoneBlock.java".to_owned(),
+            source_text: r#"
+                new BlockBehaviour.Properties()
+                    .strength(3.5F, 12.0F)
+                    .lightLevel(() -> 11)
+                    .requiresCorrectToolForDrops()
+                    .randomTicks()
+                    .sound(SoundType.METAL);
+                setLightOpacity(4);
+                BlockTags.MINEABLE_WITH_PICKAXE;
+                waterlogged = true;
+            "#.to_owned(),
+        };
+        let properties = source_block_properties(&source);
+        assert_eq!(properties["hardness"], 3.5);
+        assert_eq!(properties["resistance"], 12.0);
+        assert_eq!(properties["light_level"], 11.0);
+        assert_eq!(properties["has_gravity"], true);
+        assert_eq!(properties["requires_correct_tool"], true);
+        assert_eq!(properties["random_ticks"], true);
+        assert_eq!(properties["step_sound"], "METAL");
+        assert_eq!(properties["light_opacity"], 4);
+        assert_eq!(properties["destroy_tool"], "Pickaxe");
     }
 
     #[test]
