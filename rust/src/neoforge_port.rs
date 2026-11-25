@@ -28,6 +28,7 @@ use crate::native_lore::{extract_legacy_lore, lore_component_expressions, Legacy
 use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
 use crate::legacy_api_dictionary::{map_legacy_api_methods, map_legacy_api_usages, LegacyApiMethodMapping};
 use crate::source_version::{detect_source_version, SourceVersionDetection};
+use crate::target_api_dictionary::{target_api_dictionary, TargetApiMethod};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -143,6 +144,7 @@ pub struct NeoForgePortReport {
     pub items: Vec<NativeItemPlan>,
     pub detected_item_methods: Vec<ItemMethodMapping>,
     pub detected_legacy_api_methods: Vec<LegacyApiMethodMapping>,
+    pub target_api_knowledge: Vec<TargetApiMethod>,
     pub blocks: Vec<NativeBlockPlan>,
     pub block_entities: Vec<NativeBlockEntityPlan>,
     pub entities: Vec<NativeEntityPlan>,
@@ -675,6 +677,7 @@ pub fn port_to_neoforge(
             counts
         });
     let analysis_file = output_root.join("modport/port-analysis.json");
+    let target_api_knowledge = target_api_dictionary();
     let report = NeoForgePortReport {
         conversion_state: "partial_native_content_export".to_owned(),
         behavior_fully_reconstructed: false,
@@ -688,6 +691,7 @@ pub fn port_to_neoforge(
         items,
         detected_item_methods,
         detected_legacy_api_methods,
+        target_api_knowledge,
         blocks,
         block_entities: native_block_entities,
         entities,
@@ -748,6 +752,7 @@ pub fn port_to_neoforge(
         "recognized_but_pending": {
             "legacy_item_methods": report.detected_item_methods.len(),
             "legacy_api_methods": report.detected_legacy_api_methods.len(),
+            "target_api_reference_symbols": report.target_api_knowledge.len(),
             "custom_entity_ai_and_models": report.entities.len(),
             "block_entity_storage_ticking_menus_and_logic": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
