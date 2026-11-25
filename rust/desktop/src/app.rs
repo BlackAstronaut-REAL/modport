@@ -1,6 +1,7 @@
 use crate::browser::{self, BrowserEntry, BrowserIndex, IconKind};
 use crate::renderer::{self, Camera};
 use crate::tooltip;
+use crate::project::{self, ProjectSources};
 use eframe::egui::{self, Color32, FontFamily, RichText, TextureHandle, TextureOptions};
 use image::RgbaImage;
 use mojmodelbridge::pipeline::load_model_preview;
@@ -60,6 +61,9 @@ pub struct MojModelBridgeApp {
     active_page: String,
     sidebar_collapsed: bool,
     root_path: String,
+    project_sources: ProjectSources,
+    active_project_manifest: Option<PathBuf>,
+    active_project_name: String,
     scan_status: String,
     browser: BrowserIndex,
     category: String,
@@ -68,6 +72,7 @@ pub struct MojModelBridgeApp {
     selected_error: String,
 
     scene: Option<ViewerScene>,
+    sprite_3d_preview: bool,
     texture_paths: Vec<PathBuf>,
     selected_texture: usize,
     texture_images: Vec<RgbaImage>,
@@ -198,17 +203,22 @@ impl MojModelBridgeApp {
             style.visuals.window_corner_radius = egui::CornerRadius::same(8);
         });
 
+        let recent_project = project::load_recent_project();
         Self {
-            active_page: "Dashboard".to_owned(),
+            active_page: "Project Converter".to_owned(),
             sidebar_collapsed: false,
             root_path: String::new(),
-            scan_status: "No mod loaded".to_owned(),
+            project_sources: recent_project.as_ref().map(|saved| saved.sources.clone()).unwrap_or_default(),
+            active_project_manifest: recent_project.as_ref().map(|saved| saved.manifest_path.clone()),
+            active_project_name: recent_project.as_ref().map(|saved| saved.name.clone()).unwrap_or_default(),
+            scan_status: if recent_project.is_some() { "Saved project found · choose Update to rescan".to_owned() } else { "No project loaded".to_owned() },
             browser: BrowserIndex::default(),
             category: "Mobs".to_owned(),
             item_search: String::new(),
             selected_entry: None,
             selected_error: String::new(),
             scene: None,
+            sprite_3d_preview: false,
             texture_paths: Vec::new(),
             selected_texture: 0,
             texture_images: Vec::new(),
@@ -230,35 +240,99 @@ impl MojModelBridgeApp {
         }
     }
 
+    fn apply_browser_index(&mut self, context: &egui::Context, index: BrowserIndex) {
+        let display = index.display_name.clone();
+        let count = index.entries.len();
+        self.browser = index;
+        self.active_page = "Content Browser".to_owned();
+        self.scan_status = format!("Indexed {count} assets · {display}");
+        self.selected_entry = None;
+        self.scene = None;
+        self.sprite_3d_preview = false;
+        self.texture_paths.clear();
+        self.texture_images.clear();
+        self.preview_image = None;
+        self.preview_texture = None;
+        self.selected_error.clear();
+        self.item_search.clear();
+        self.category = browser::CATEGORIES.iter()
+            .copied()
+            .find(|category| !self.browser.in_category(category).is_empty())
+            .unwrap_or("Mobs").to_owned();
+        if let Some(first) = self.browser.in_category(&self.category).first().copied() {
+            self.activate_entry(context, first);
+        }
+    }
+
     fn scan(&mut self, context: &egui::Context) {
         let root = PathBuf::from(self.root_path.trim());
         match browser::scan_mod(&root) {
-            Ok(index) => {
-                let display = index.display_name.clone();
-                let count = index.entries.len();
-                self.browser = index;
-                self.active_page = "Content Browser".to_owned();
-                self.scan_status = format!("Indexed {count} assets · {display}");
-                self.selected_entry = None;
-                self.scene = None;
-                self.texture_paths.clear();
-                self.texture_images.clear();
-                self.preview_image = None;
-                self.preview_texture = None;
-                self.selected_error.clear();
-                self.category = browser::CATEGORIES.iter()
-                    .copied()
-                    .find(|category| !self.browser.in_category(category).is_empty())
-                    .unwrap_or("Mobs").to_owned();
-                if let Some(first) = self.browser.in_category(&self.category).first().copied() {
-                    self.activate_entry(context, first);
-                }
-            }
+            Ok(index) => self.apply_browser_index(context, index),
             Err(error) => {
                 self.scan_status = "Scan failed".to_owned();
                 self.selected_error = format!("{error:#}");
             }
         }
+    }
+
+    fn scan_project_sources(&mut self, context: &egui::Context) {
+        let roots = self.project_sources.paths();
+        if roots.is_empty() {
+            self.selected_error = "Select at least one Compiled, Decompiled, or Source folder.".to_owned();
+            return;
+        }
+        match browser::scan_mod_roots(&roots) {
+            Ok(index) => {
+                let display = index.display_name.clone();
+                self.apply_browser_index(context, index);
+                match project::save_project(&display, &self.project_sources) {
+                    Ok(manifest) => {
+                        self.active_project_name = display.clone();
+                        self.active_project_manifest = Some(manifest);
+                        self.scan_status = format!("Project parsed · {} assets · {display}", self.browser.entries.len());
+                    }
+                    Err(error) => {
+                        self.scan_status = format!("Parsed {} assets · project could not be saved", self.browser.entries.len());
+                        self.selected_error = format!("Project manifest could not be saved: {error:#}");
+                    }
+                }
+            }
+            Err(error) => {
+                self.scan_status = "Project scan failed".to_owned();
+                self.selected_error = format!("{error:#}");
+            }
+        }
+    }
+
+    fn update_current_project(&mut self, context: &egui::Context) {
+        let Some(manifest) = self.active_project_manifest.clone() else {
+            self.scan_project_sources(context);
+            return;
+        };
+        match project::load_project(&manifest) {
+            Ok(saved) => {
+                self.project_sources = saved.sources;
+                self.active_project_name = saved.name;
+                self.scan_project_sources(context);
+            }
+            Err(error) => {
+                self.selected_error = format!("Could not load saved project sources: {error:#}");
+            }
+        }
+    }
+
+    fn rebuild_sprite_preview(&mut self) {
+        let Some(path) = self.texture_paths.get(self.selected_texture).cloned() else { return; };
+        let Some(image) = self.texture_images.get(self.selected_texture).cloned() else { return; };
+        self.scene = Some(crate::resource_model::sprite_preview_scene(
+            &self.draft_name,
+            &path,
+            &image,
+        ));
+        self.preview_texture = None;
+        self.playing = false;
+        self.selected_animation = 0;
+        self.animation_time = 0.0;
     }
 
     fn load_legacy_model_preview(&mut self, entry: &BrowserEntry, source: &Path) -> anyhow::Result<()> {
@@ -293,6 +367,7 @@ impl MojModelBridgeApp {
         self.components_json = entry.components_json.clone();
         self.metadata_json = entry.metadata_json.clone();
         self.scene = None;
+        self.sprite_3d_preview = false;
         self.texture_paths.clear();
         self.texture_images.clear();
         self.selected_texture = 0;
@@ -473,6 +548,7 @@ impl MojModelBridgeApp {
 
                 let navigation = [
                     ("Dashboard", "⌂"),
+                    ("Project Converter", "⇄"),
                     ("Porter", "⇢"),
                     ("Content Browser", "▦"),
                     ("Mod Editor", "✎"),
@@ -506,17 +582,18 @@ impl MojModelBridgeApp {
     fn show_header(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading(self.active_page.as_str());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Scan directory").clicked() {
-                    self.scan(context);
-                }
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.root_path)
-                        .desired_width(300.0)
-                        .hint_text("Extracted mod/project directory"),
-                );
-                ui.label(RichText::new("PROJECT").size(9.0).color(MUTED));
-            });
+            if self.active_page == "Content Browser" {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Rescan directory").clicked() {
+                        self.scan(context);
+                    }
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.root_path)
+                            .desired_width(300.0)
+                            .hint_text("Single extracted directory"),
+                    );
+                });
+            }
         });
         ui.horizontal(|ui| {
             ui.label(RichText::new(&self.scan_status).size(11.0).color(MUTED));
@@ -536,6 +613,81 @@ impl MojModelBridgeApp {
             ui.add_space(8.0);
             ui.label("The content browser is the first integrated editor surface. Porting and build workflows remain available from the navigation rail.");
         });
+    }
+
+    fn show_project_converter(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        ui.add_space(10.0);
+        ui.heading("Import a mod as a project");
+        ui.label(RichText::new("Select any combination of compiled classes, decompiled Java, and original source/resources. The app merges them into one parsed project and remembers the original folder locations.").color(MUTED));
+        ui.add_space(12.0);
+
+        show_source_folder_row(ui, "Compiled", &mut self.project_sources.compiled);
+        show_source_folder_row(ui, "Decompiled", &mut self.project_sources.decompiled);
+        show_source_folder_row(ui, "Source", &mut self.project_sources.source);
+
+        ui.add_space(10.0);
+        ui.horizontal(|ui| {
+            let enabled = !self.project_sources.paths().is_empty();
+            if ui.add_enabled(enabled, egui::Button::new("Create project and parse")).clicked() {
+                self.scan_project_sources(context);
+            }
+            if ui.add_enabled(self.active_project_manifest.is_some(), egui::Button::new("Update saved project")).clicked() {
+                self.update_current_project(context);
+            }
+        });
+        ui.add_space(12.0);
+        if !self.active_project_name.is_empty() {
+            ui.group(|ui| {
+                ui.label(RichText::new(format!("Current project: {}", self.active_project_name)).strong());
+                if let Some(manifest) = &self.active_project_manifest {
+                    ui.label(RichText::new(manifest.to_string_lossy()).size(9.0).color(MUTED));
+                }
+                ui.label("Update rescans the saved locations and replaces the current browser index; it does not import a second copy.");
+            });
+        } else {
+            ui.label(RichText::new("A project manifest is created locally after the first successful parse.").color(MUTED));
+        }
+    }
+
+    fn show_projects(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
+        ui.add_space(10.0);
+        ui.heading("Saved projects");
+        ui.label(RichText::new("Saved projects remember the original source locations and can be rescanned when parsing support improves.").color(MUTED));
+        ui.add_space(8.0);
+        let projects = project::list_projects();
+        if projects.is_empty() {
+            ui.label("No saved projects yet. Import one from Project Converter.");
+        } else {
+            egui::ScrollArea::vertical().id_salt("saved-projects-list")
+                .max_height(ui.available_height().max(80.0))
+                .show(ui, |ui| {
+                    for saved in &projects {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(&saved.name).strong());
+                                if ui.button("Load and rescan").clicked() {
+                                    self.project_sources = saved.sources.clone();
+                                    self.active_project_name = saved.name.clone();
+                                    self.active_project_manifest = Some(saved.manifest_path.clone());
+                                    self.update_current_project(context);
+                                }
+                            });
+                            for (role, path) in [
+                                ("Compiled", saved.sources.compiled.as_str()),
+                                ("Decompiled", saved.sources.decompiled.as_str()),
+                                ("Source", saved.sources.source.as_str()),
+                            ] {
+                                if !path.is_empty() {
+                                    ui.label(RichText::new(format!("{role}: {path}")).size(9.0).color(MUTED));
+                                }
+                            }
+                        });
+                    }
+                });
+        }
+        if ui.button("Open Project Converter").clicked() {
+            self.active_page = "Project Converter".to_owned();
+        }
     }
 
     fn show_browser(&mut self, context: &egui::Context, ui: &mut egui::Ui) {
@@ -572,6 +724,7 @@ impl MojModelBridgeApp {
         ui.label(RichText::new(format!("{} indexed", self.browser.entries.len())).size(10.0).color(MUTED));
         ui.add_space(7.0);
         egui::ScrollArea::vertical()
+            .id_salt("content-browser-categories")
             .max_height(ui.available_height().max(48.0))
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -580,6 +733,7 @@ impl MojModelBridgeApp {
                 let label = format!("{category}  ({count})");
                 if ui.selectable_label(self.category == *category, label).clicked() {
                     self.category = (*category).to_owned();
+                    self.item_search.clear();
                     self.selected_entry = None;
                     self.scene = None;
                     self.texture_paths.clear();
@@ -600,6 +754,7 @@ impl MojModelBridgeApp {
         ui.label(RichText::new(format!("{} entries", items.len())).size(10.0).color(MUTED));
         ui.add_space(5.0);
         egui::ScrollArea::vertical()
+            .id_salt("content-browser-items")
             .max_height(ui.available_height().max(48.0))
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -658,6 +813,18 @@ impl MojModelBridgeApp {
         ui.group(|ui| {
             ui.horizontal(|ui| {
                 ui.heading(if self.scene.is_some() { "Model / animation viewer" } else { "Asset preview" });
+                if sprite_preview_available(&entry) {
+                    let toggle_label = if self.sprite_3d_preview { "Show 2D" } else { "Extrude to 3D" };
+                    if ui.button(toggle_label).clicked() {
+                        self.sprite_3d_preview = !self.sprite_3d_preview;
+                        if self.sprite_3d_preview {
+                            self.rebuild_sprite_preview();
+                        } else {
+                            self.scene = None;
+                            self.preview_texture = None;
+                        }
+                    }
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(if self.expanded_viewer { "Collapse" } else { "Expand" }).clicked() {
                         self.expanded_viewer = !self.expanded_viewer;
@@ -677,7 +844,7 @@ impl MojModelBridgeApp {
 
         if !self.expanded_viewer {
             ui.add_space(8.0);
-            egui::ScrollArea::vertical().max_height((available.y - preview_height - 20.0).max(180.0)).show(ui, |ui| {
+            egui::ScrollArea::vertical().id_salt("asset-editor-scroll").max_height((available.y - preview_height - 20.0).max(180.0)).show(ui, |ui| {
                 ui.group(|ui| self.show_editor(ui));
             });
         }
@@ -872,6 +1039,7 @@ impl MojModelBridgeApp {
                 });
             if previous != self.selected_texture {
                 self.refresh_preview_image();
+                if self.sprite_3d_preview { self.rebuild_sprite_preview(); }
             }
         } else if let Some(path) = self.texture_paths.first() {
             ui.label(RichText::new(path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string_lossy().to_string())).size(10.0).color(MUTED));
@@ -1074,6 +1242,8 @@ impl eframe::App for MojModelBridgeApp {
                 let active_page = self.active_page.clone();
                 match active_page.as_str() {
                     "Content Browser" => self.show_browser(&context, ui),
+                    "Project Converter" => self.show_project_converter(&context, ui),
+                    "Projects" => self.show_projects(&context, ui),
                     "Dashboard" => self.show_dashboard(ui),
                     _ => {
                         ui.add_space(18.0);
@@ -1086,6 +1256,34 @@ impl eframe::App for MojModelBridgeApp {
                 }
             });
     }
+}
+
+fn show_source_folder_row(ui: &mut egui::Ui, label: &str, path: &mut String) {
+    ui.horizontal(|ui| {
+        ui.add_sized([100.0, 24.0], egui::Label::new(RichText::new(label).strong()));
+        ui.add(egui::TextEdit::singleline(path)
+            .desired_width((ui.available_width() - 104.0).max(120.0))
+            .hint_text("Choose a folder"));
+        if ui.button("Browse…").clicked() {
+            let mut dialog = rfd::FileDialog::new().set_title(format!("Select {label} folder"));
+            if Path::new(path).is_dir() {
+                dialog = dialog.set_directory(path.as_str());
+            }
+            if let Some(folder) = dialog.pick_folder() {
+                *path = folder.to_string_lossy().to_string();
+            }
+        }
+        if ui.button("Clear").clicked() {
+            path.clear();
+        }
+    });
+}
+
+fn sprite_preview_available(entry: &BrowserEntry) -> bool {
+    !matches!(entry.category.as_str(), "Blocks" | "Mobs" | "Models")
+        && entry.model_source.is_none()
+        && entry.resource_model_source.is_none()
+        && (entry.icon_path.is_some() || !entry.texture_paths.is_empty())
 }
 
 fn load_minecraftia_font(context: &egui::Context) -> bool {
