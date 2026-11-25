@@ -49,8 +49,9 @@ pub fn extract_legacy_lore(source_text: &str) -> Vec<String> {
             let Some(raw) = matched.get(1) else { continue };
             line.push_str(&decode_java_string(raw.as_str()));
         }
-        let line = line.trim().to_owned();
-        if !line.is_empty() && !result.contains(&line) {
+        // Keep whitespace at fragment boundaries; a trailing space can be
+        // intentional when adjacent styled Java strings form one sentence.
+        if !line.trim().is_empty() && !result.contains(&line) {
             result.push(line);
         }
     }
@@ -86,16 +87,52 @@ fn formatting_code(name: &str) -> Option<char> {
 }
 
 fn decode_java_string(raw: &str) -> String {
-    let quoted = format!("\"{raw}\"");
-    if let Ok(value) = serde_json::from_str::<String>(&quoted) {
-        return value;
+    let mut output = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+        let Some(escaped) = chars.next() else {
+            output.push('\\');
+            break;
+        };
+        match escaped {
+            'n' => output.push('\n'),
+            'r' => output.push('\r'),
+            't' => output.push('\t'),
+            'b' => output.push('\u{0008}'),
+            'f' => output.push('\u{000c}'),
+            '"' => output.push('"'),
+            '\'' => output.push('\''),
+            '\\' => output.push('\\'),
+            'u' => {
+                let mut digits = String::new();
+                for _ in 0..4 {
+                    if let Some(digit) = chars.next() { digits.push(digit); }
+                }
+                if let Ok(value) = u32::from_str_radix(&digits, 16) {
+                    if let Some(value) = char::from_u32(value) {
+                        output.push(value);
+                    } else {
+                        output.push_str("\\u");
+                        output.push_str(&digits);
+                    }
+                } else {
+                    output.push_str("\\u");
+                    output.push_str(&digits);
+                }
+            }
+            other => {
+                // Preserve unknown Java escapes as written rather than losing
+                // potentially meaningful mod-specific tooltip content.
+                output.push('\\');
+                output.push(other);
+            }
+        }
     }
-    // Keep unknown Java-specific escapes intact rather than dropping lore.
-    raw.replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\\"", "\"")
-        .replace("\\\\", "\\")
+    output
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
