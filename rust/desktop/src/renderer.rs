@@ -241,6 +241,14 @@ fn draw_cube(
     pixels: &mut [u8],
     depth_buffer: &mut [f32],
 ) {
+    if cube.crossed_plane {
+        draw_crossed_plane(
+            cube, world, camera, textures, default_texture_index, texture_size,
+            width, height, focal, light, pixels, depth_buffer,
+        );
+        return;
+    }
+
     let [x0, y0, z0] = cube.min;
     let [x1, y1, z1] = cube.max;
     let u = cube.uv_origin[0];
@@ -288,6 +296,56 @@ fn draw_cube(
             width, height, pixels, depth_buffer,
         );
     }
+}
+
+fn draw_crossed_plane(
+    cube: &ViewerCube,
+    world: Transform,
+    camera: &Camera,
+    textures: &[RgbaImage],
+    default_texture_index: usize,
+    texture_size: [u32; 2],
+    width: usize,
+    height: usize,
+    focal: f32,
+    light: [f32; 3],
+    pixels: &mut [u8],
+    depth_buffer: &mut [f32],
+) {
+    let texture_index = texture_index_for_face(cube, 4, default_texture_index);
+    let texture = textures.get(texture_index).or_else(|| textures.first());
+    let (texture_width, texture_height) = texture
+        .map(|image| (image.width().max(1) as f32, image.height().max(1) as f32))
+        .unwrap_or((texture_size[0].max(1) as f32, texture_size[1].max(1) as f32));
+    let [x0, y0, _] = cube.min;
+    let [x1, y1, _] = cube.max;
+    let points = [
+        [x0, y0, 0.0],
+        [x1, y0, 0.0],
+        [x1, y1, 0.0],
+        [x0, y1, 0.0],
+    ];
+    let rect = cube.face_uvs
+        .and_then(|faces| faces.get(4).copied())
+        .unwrap_or([0.0, 0.0, texture_width, texture_height]);
+    let vertices = quad_from_rect(points, rect, cube.mirror, texture_width, texture_height);
+    let projected: Option<[ProjectedVertex; 4]> = vertices.map(|vertex| {
+        project_vertex(vertex, world, camera, width, height, focal)
+    }).into_iter().collect::<Option<Vec<_>>>()
+        .and_then(|values| values.try_into().ok());
+    let Some(projected) = projected else { return; };
+    let normal = normalize(world.direction([0.0, 0.0, 1.0]));
+    let view_normal = rotate_camera(normal, camera.yaw, camera.pitch);
+    let shade = (0.25 + dot(view_normal, light).max(0.0) * 0.75).clamp(0.18, 1.0);
+    // The rasterizer is two-sided; alpha-tested pixels leave depth untouched.
+    raster_triangle(
+        [projected[0], projected[1], projected[2]], texture, shade,
+        width, height, pixels, depth_buffer,
+    );
+    raster_triangle(
+        [projected[0], projected[2], projected[3]], texture, shade,
+        width, height, pixels, depth_buffer,
+    );
 }
 
 fn cube_face_quad(
@@ -536,6 +594,7 @@ mod tests {
             uv_origin: [0.0; 2],
             face_uvs: None,
             face_texture_indices: Some([2, 2, 1, 0, 2, 2]),
+            crossed_plane: false,
             mirror: false,
             name: "test".to_owned(),
         };
@@ -566,6 +625,7 @@ mod tests {
                     uv_origin: [0.0, 0.0],
                     face_uvs: None,
                     face_texture_indices: None,
+                    crossed_plane: false,
                     mirror: false,
                     name: "body_cube".to_owned(),
                 }],
