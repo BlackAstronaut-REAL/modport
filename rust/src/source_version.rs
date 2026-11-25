@@ -30,6 +30,7 @@ pub struct SourceVersionDetection {
     /// Supported API family: 1.7.10, 1.8.9, 1.12.2 or 1.21.1.
     pub api_release: String,
     /// Forge/NeoForge version string when present.
+    pub loader_family: String,
     pub loader_version: String,
     /// high, medium, low, ambiguous, or unknown.
     pub confidence: String,
@@ -71,6 +72,14 @@ fn forge_coordinate_pattern() -> &'static Regex {
         Regex::new(
             r#"(?i)(?:net\.minecraftforge:forge|minecraftforge:forge|forge)\s*[:= ]\s*['"]?(1\.\d+(?:\.\d+)?)-(10\.13\.4|11\.15\.1|14\.23\.5)(?:\.\d+)?"#
         ).expect("static Forge dependency coordinate regex")
+    })
+}
+
+fn neoforge_version_pattern() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"(?i)(?:net\\.neoforged:neoforge|neoforge)\\s*[:= ]\\s*['\\\"]?(\\d+\\.\\d+(?:\\.\\d+)?)")
+            .expect("static NeoForge dependency coordinate regex")
     })
 }
 
@@ -184,6 +193,16 @@ fn metadata_evidence(metadata: &ModMetadata, evidence: &mut Vec<VersionEvidence>
             105,
         );
     }
+    if !metadata.neoforge_version.trim().is_empty() && !metadata.minecraft_version.trim().is_empty() {
+        add_evidence(
+            evidence,
+            &metadata.minecraft_version,
+            "neoforge.mods.toml NeoForge dependency",
+            "high",
+            format!("NeoForge version/range {} is declared for Minecraft {}", metadata.neoforge_version, metadata.minecraft_version),
+            118,
+        );
+    }
 }
 
 fn inspect_build_text(path: &Path, text: &str, evidence: &mut Vec<VersionEvidence>) {
@@ -226,6 +245,21 @@ fn inspect_build_text(path: &Path, text: &str, evidence: &mut Vec<VersionEvidenc
                     "medium",
                     format!("Minecraft dependency range begins at {}", version.as_str()),
                     92,
+                );
+            }
+        }
+    }
+
+    for capture in neoforge_version_pattern().captures_iter(text) {
+        if let Some(version) = capture.get(1) {
+            if let Some(minecraft) = dependency_range_pattern().captures(text).and_then(|value| value.get(1)) {
+                add_evidence(
+                    evidence,
+                    minecraft.as_str(),
+                    format!("{source_path} NeoForge dependency coordinate"),
+                    "high",
+                    format!("NeoForge loader {} targets Minecraft {}", version.as_str(), minecraft.as_str()),
+                    122,
                 );
             }
         }
@@ -359,8 +393,9 @@ pub fn detect_source_version(
     let mut result = SourceVersionDetection {
         minecraft_version: String::new(),
         api_release: String::new(),
+        loader_family: metadata.map(|value| value.loader_family.clone()).unwrap_or_default(),
         loader_version: metadata
-            .map(|value| value.forge_version.clone())
+            .map(|value| if !value.forge_version.is_empty() { value.forge_version.clone() } else { value.neoforge_version.clone() })
             .unwrap_or_default(),
         confidence: "unknown".to_owned(),
         status: "unknown".to_owned(),
@@ -454,6 +489,21 @@ mod tests {
         ).unwrap();
         let detected = detect_source_version(&[root.path().to_path_buf()], None);
         assert_eq!(detected.api_release, "1.12.2");
+    }
+
+    #[test]
+    fn detects_neoforge_family_and_loader_version_from_metadata() {
+        let metadata = ModMetadata {
+            minecraft_version: "1.21.1".to_owned(),
+            neoforge_version: "21.1.100".to_owned(),
+            loader_family: "NeoForge".to_owned(),
+            source: "neoforge.mods.toml".to_owned(),
+            ..Default::default()
+        };
+        let detected = detect_source_version(&[], Some(&metadata));
+        assert_eq!(detected.api_release, "1.21.1");
+        assert_eq!(detected.loader_family, "NeoForge");
+        assert_eq!(detected.loader_version, "21.1.100");
     }
 
     #[test]
