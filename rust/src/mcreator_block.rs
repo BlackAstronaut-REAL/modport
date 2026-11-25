@@ -365,6 +365,46 @@ fn number_after(source: &str, patterns: &[&str]) -> Option<f64> {
     None
 }
 
+fn block_sound_type(source_text: &str) -> Option<&'static str> {
+    if source_text.contains("woodSoundType") {
+        return Some("WOOD");
+    }
+    let pattern = Regex::new(
+        r"(?:net\\.minecraft\\.world\\.level\\.block\\.)?SoundType\\.([A-Za-z0-9_]+)",
+    ).ok()?;
+    let raw = pattern.captures(source_text)?.get(1)?.as_str().to_ascii_uppercase();
+    Some(match raw.as_str() {
+        "STONE" => "STONE",
+        "GRASS" | "WET_GRASS" => "GRASS",
+        "WOOD" => "WOOD",
+        "LEAVES" => "LEAVES",
+        "GLASS" => "GLASS",
+        "METAL" => "METAL",
+        "PISTON" => "PISTON",
+        "CLOTH" => "WOOL",
+        "SAND" => "SAND",
+        "SNOW" => "SNOW",
+        "LADDER" => "LADDER",
+        "ANVIL" => "ANVIL",
+        "SLIME_BLOCK" => "SLIME",
+        "HONEY_BLOCK" => "HONEY",
+        "NETHERRACK" => "NETHERRACK",
+        "NETHER_BRICKS" => "NETHER_BRICKS",
+        "BONE_BLOCK" => "BONE",
+        "NETHERITE_BLOCK" => "NETHERITE",
+        "BAMBOO" | "BAMBOO_SAPLING" => "BAMBOO",
+        "CROP" | "FLOWERING_AZALEA" | "FUNGUS" => "PLANT",
+        "ROOTED_DIRT" => "GROUND",
+        "SCULK" => "SCULK",
+        "CANDLE" => "CANDLE",
+        "AMETHYST" => "AMETHYST",
+        "COPPER" => "COPPER",
+        "POWDER_SNOW" => "POWDER_SNOW",
+        _ => "STONE",
+    })
+}
+
+
 /// Recover the statically identifiable ItemStack emitted by a block's drop
 /// routine. Dynamic loot tables remain untouched instead of guessing an item.
 fn extract_block_drop(
@@ -481,18 +521,7 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
         properties.insert("light_opacity".to_owned(), json!(value as i64));
     }
 
-    let sound = if text.contains("SoundType.WOOD") || text.contains("woodSoundType") {
-        Some("WOOD")
-    } else if text.contains("SoundType.METAL") {
-        Some("METAL")
-    } else if text.contains("SoundType.GLASS") {
-        Some("GLASS")
-    } else if text.contains("SoundType.STONE") {
-        Some("STONE")
-    } else {
-        None
-    };
-    if let Some(sound) = sound {
+    if let Some(sound) = block_sound_type(text) {
         properties.insert("step_sound".to_owned(), json!(sound));
     }
 
@@ -590,14 +619,8 @@ pub fn build_block_element(
         definition.insert("particleTexture".to_owned(),json!(texture));
     }
 
-    if source.source_text.contains("SoundType.WOOD") || source.source_text.contains("woodSoundType") {
-        definition.insert("soundOnStep".to_owned(),json!("WOOD"));
-    } else if source.source_text.contains("SoundType.METAL") {
-        definition.insert("soundOnStep".to_owned(),json!("METAL"));
-    } else if source.source_text.contains("SoundType.GLASS") {
-        definition.insert("soundOnStep".to_owned(),json!("GLASS"));
-    } else if source.source_text.contains("SoundType.STONE") {
-        definition.insert("soundOnStep".to_owned(),json!("STONE"));
+    if let Some(sound) = block_sound_type(&source.source_text) {
+        definition.insert("soundOnStep".to_owned(), json!(sound));
     }
 
     if source.source_text.contains("setLightOpacity") {
@@ -882,6 +905,24 @@ mod tests{
         assert_eq!(element["definition"]["renderType"],11);
         assert_eq!(element["definition"]["texture"],"demo_block");
         assert_eq!(element["definition"]["requiresCorrectTool"],true);
+    }
+
+    #[test]
+    fn maps_legacy_and_modern_block_sound_types_to_mcreator_values() {
+        for (source, expected) in [
+            ("SoundType.CLOTH", "WOOL"),
+            ("SoundType.SLIME_BLOCK", "SLIME"),
+            ("SoundType.BAMBOO_SAPLING", "BAMBOO"),
+            ("SoundType.FLOWERING_AZALEA", "PLANT"),
+            ("SoundType.ROOTED_DIRT", "GROUND"),
+            ("SoundType.WET_GRASS", "GRASS"),
+            ("SoundType.POWDER_SNOW", "POWDER_SNOW"),
+        ] {
+            assert_eq!(block_sound_type(source), Some(expected), "{source}");
+        }
+        assert_eq!(block_sound_type("woodSoundType"), Some("WOOD"));
+        assert_eq!(block_sound_type("SoundType.UNKNOWN"), Some("STONE"));
+        assert_eq!(block_sound_type("no sound configured"), None);
     }
 
     #[test]
