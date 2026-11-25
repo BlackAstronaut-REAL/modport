@@ -721,6 +721,7 @@ pub fn port_to_neoforge(
         "source_version": {
             "minecraft_version": report.source_version.minecraft_version,
             "api_release": report.source_version.api_release,
+            "loader_family": report.source_version.loader_family,
             "loader_version": report.source_version.loader_version,
             "confidence": report.source_version.confidence,
             "status": report.source_version.status,
