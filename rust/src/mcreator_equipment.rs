@@ -520,7 +520,7 @@ pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
         ("fishingrod", "Fishing Rod"), ("crossbow", "Bow"), ("blaster", "Bow"),
         ("launcher", "Bow"), ("cannon", "Bow"), ("rifle", "Bow"), ("pistol", "Bow"),
         ("shotgun", "Bow"), ("sniper", "Bow"), ("zapper", "Bow"), ("raygun", "Bow"),
-        ("raygun", "Bow"), ("laser", "Bow"), ("bazooka", "Bow"), ("rocketlauncher", "Bow"),
+        ("laser", "Bow"), ("bazooka", "Bow"), ("rocketlauncher", "Bow"),
         ("gun", "Bow"), ("pickaxe", "Pickaxe"), ("shears", "Shears"),
         ("shovel", "Shovel"), ("spade", "Shovel"),
         ("greatsword", "Sword"), ("longsword", "Sword"), ("shortsword", "Sword"),
