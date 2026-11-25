@@ -69,7 +69,7 @@ fn forge_coordinate_pattern() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| {
         Regex::new(
-            r"(?i)(?:net\.minecraftforge:forge|minecraftforge:forge|forge)\s*[:= ]\s*['\"]?(1\.\d+(?:\.\d+)?)-(10\.13\.4|11\.15\.1|14\.23\.5)(?:\.\d+)?"
+            r#"(?i)(?:net\.minecraftforge:forge|minecraftforge:forge|forge)\s*[:= ]\s*['"]?(1\.\d+(?:\.\d+)?)-(10\.13\.4|11\.15\.1|14\.23\.5)(?:\.\d+)?"#
         ).expect("static Forge dependency coordinate regex")
     })
 }
