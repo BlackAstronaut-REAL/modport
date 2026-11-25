@@ -17,6 +17,7 @@ pub mod metadata;
 pub mod neoforge_docs;
 pub mod neoforge_project;
 pub mod neoforge_port;
+pub mod item_method_dictionary;
 pub mod native_recipe_bridge;
 pub mod native_block_entity;
 pub mod native_lore;
