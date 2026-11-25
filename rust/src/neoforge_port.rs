@@ -1244,7 +1244,7 @@ mod tests {
         let output = temp.path().join("entity_out");
         fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
         fs::write(source.join("mcmod.info"), r#"{"modid":"entitymod","name":"Entity Mod"}"#).unwrap();
-        fs::write(source.join("src/main/java/demo/EntityRegistry.java"), r#"
+        fs::write(source.join("src/main/java/demo/EntityRubyBeast.java"), r#"
             public class EntityRubyBeast extends EntityMob {
                 public EntityRubyBeast() {
                     setSize(1.2F, 1.8F);
@@ -1254,6 +1254,8 @@ mod tests {
                     tasks.addTask(1, new EntityAIAttackMelee(this, 1.0D, true));
                 }
             }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/EntityRegistry.java"), r#"
             public class EntityRegistry {
                 RegistryObject<EntityType<EntityRubyBeast>> RUBY_BEAST =
                     ENTITY_TYPES.register("ruby_beast", () -> EntityType.Builder.of(
