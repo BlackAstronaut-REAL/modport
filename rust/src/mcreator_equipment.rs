@@ -1511,6 +1511,8 @@ pub fn export_equipment_to_workspace(
         source_roots.first().and_then(|root| root.file_name()).and_then(|value| value.to_str())
             .unwrap_or("converted_mod").to_owned()
     };
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, &import_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
 
     let discovered = discover_equipment_sources(source_roots)?;
     let mut tool_materials = compiled_tool_materials(source_roots)?;
@@ -1581,7 +1583,7 @@ pub fn export_equipment_to_workspace(
             &unique_equipment_element_name(&source.class_name, &registry),
             &mut used_names
         );
-        let (element, mut warnings) = if kind == "tool" {
+        let (mut element, mut warnings) = if kind == "tool" {
             let tool_type = source.tool_type.as_deref().unwrap_or("Sword");
             build_tool_element(
                 Some(&template),&source.class_name,&source.superclass,&source.source_text,
@@ -1593,6 +1595,16 @@ pub fn export_equipment_to_workspace(
                 &registry,&texture_name,imported_fv
             )
         };
+        let display = localization.translated_name(&registry, &item_display_name(&registry));
+        if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
+            if definition.contains_key("name") {
+                definition.insert("name".to_owned(), json!(display));
+            }
+            let information = localization.item_information(&source.source_text, &registry);
+            if !information.is_empty() && definition.contains_key("specialInformation") {
+                definition.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
+        }
         if source.source_path.to_ascii_lowercase().ends_with(".class") {
             warnings.push("Registration and getter constants were recovered from compiled bytecode only; constructor behaviors and source-declared texture paths may need manual reconstruction.".to_owned());
         }
@@ -1624,7 +1636,6 @@ pub fn export_equipment_to_workspace(
             "mojmodelbridge_source_path":source.source_path
         });
         workspace["mod_elements"].as_array_mut().expect("validated workspace mod_elements").push(descriptor);
-        let display = item_display_name(&registry);
         equipment_language_entry(&mut workspace,&target_modid,&registry,&element_name,&display);
 
         report.exported += 1;
