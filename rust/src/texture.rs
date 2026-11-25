@@ -490,6 +490,7 @@ mod tests {
         let root = temp.path();
         let texture = root.join("assets/demo/textures/entity/creature/creature.png");
         touch(&texture);
+        let texture = fs::canonicalize(texture).unwrap();
         let index = TextureIndex::new(&[root.to_path_buf()], &[]).unwrap();
         let exact = index.match_reference("demo:textures/entity/creature/creature.png");
         assert!(exact.iter().any(|(path, score, _)| path == &texture && *score == 100_000.0));
