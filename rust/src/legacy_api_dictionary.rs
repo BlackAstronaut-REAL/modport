@@ -2420,6 +2420,30 @@ const DEFINITIONS: &[Definition] = &[
     d!("CapabilityFluidHandler", "register", V_112, "fluid_handler_capability_register", "Forge fluid handler capability bootstrap", "capabilities", "registration_adapter_required", "Registers fluid and item-fluid handler capability storage; preserve bootstrap ordering before @CapabilityInject.", "net/minecraftforge/fluids/capability/CapabilityFluidHandler.html"),
     d!("CapabilityEnergy", "register", V_112, "energy_capability_register", "Forge energy capability bootstrap", "capabilities", "registration_adapter_required", "Registers the IEnergyStorage capability and default storage; preserve bootstrap order and injected field availability.", "net/minecraftforge/energy/CapabilityEnergy.html"),
 
+    // ISpecialArmor allows custom armor to participate in the full damage
+    // mitigation algorithm before vanilla armor/absorption is applied.
+    d!("ISpecialArmor", "damageArmor", V_ALL, "special_armor_damage_item", "ISpecialArmor item durability callback", "armor_combat", "The mod owns the durability reduction; preserve damage source, integer damage amount and armor slot.", "net/minecraftforge/common/ISpecialArmor.html"),
+    d!("ISpecialArmor", "getArmorDisplay", V_ALL, "special_armor_display_points", "ISpecialArmor displayed armor points", "armor_combat", "Return effective displayed shield points for this player/stack/slot; separate display from actual mitigation.", "net/minecraftforge/common/ISpecialArmor.html"),
+    d!("ISpecialArmor", "getProperties", V_ALL, "special_armor_damage_properties", "ISpecialArmor.ArmorProperties damage priority and absorption", "armor_combat", "Preserve armor priority, absorption ratio, max absorption and slot; property ordering affects damage distribution across all armor pieces.", "net/minecraftforge/common/ISpecialArmor.html"),
+    d!("ISpecialArmor", "handleUnblockableDamage", V_112, "special_armor_unblockable_damage", "ISpecialArmor unblockable damage predicate", "armor_combat", "A true result permits armor interaction with unblockable sources such as magic, fire, falling and anvils; do not collapse to ordinary armor bypass.", "net/minecraftforge/common/ISpecialArmor.html"),
+
+    // ArmorProperties is a value/algorithm object returned by ISpecialArmor.
+    d!("ISpecialArmor.ArmorProperties", "applyArmor", V_ALL, "special_armor_apply_all", "Global ISpecialArmor damage application algorithm", "armor_combat", "Preserve armor inventory order, priorities, absorption ratios and remaining-damage result.", "net/minecraftforge/common/ISpecialArmor.ArmorProperties.html"),
+    d!("ISpecialArmor.ArmorProperties", "compareTo", V_ALL, "special_armor_priority_compare", "ArmorProperties priority ordering", "armor_combat", "Preserve priority ordering and tie behavior used when distributing incoming damage across multiple armor items.", "net/minecraftforge/common/ISpecialArmor.ArmorProperties.html"),
+    d!("ISpecialArmor.ArmorProperties", "copy", V_112, "special_armor_properties_copy", "ArmorProperties value copy", "armor_combat", "Preserve all public value fields (Priority, AbsorbMax, AbsorbRatio, Armor, Toughness, Slot) in the copied object.", "net/minecraftforge/common/ISpecialArmor.ArmorProperties.html"),
+    d!("ISpecialArmor.ArmorProperties", "toString", V_ALL, "special_armor_properties_string", "ArmorProperties diagnostic representation", "armor_combat", "Preserve string form when source logic logs or serializes armor calculation diagnostics.", "net/minecraftforge/common/ISpecialArmor.ArmorProperties.html"),
+
+    // IShearable is implemented by custom blocks/entities and drives custom
+    // shears, silk/fortune drops and block/entity-specific side effects.
+    d!("IShearable", "isShearable", V_ALL, "shearable_predicate", "IShearable shear eligibility", "blocks_entities", "Preserve item stack, world access and block position; true authorizes onSheared and does not itself perform drops.", "net/minecraftforge/common/IShearable.html"),
+    d!("IShearable", "onSheared", V_ALL, "shearable_drop_generation", "IShearable custom drop generation", "blocks_entities", "Preserve item stack, world, position and fortune; method performs object side effects but returns the ordered drops for ItemShears to spawn.", "net/minecraftforge/common/IShearable.html"),
+
+    // Legacy projectile ownership interface. Later Forge versions replace
+    // this spawn-packet use case with IEntityAdditionalSpawnData and entity
+    // data synchronization, so it remains limited to older releases.
+    d!("IThrowableEntity", "getThrower", V_17_18, "throwable_entity_owner_read", "Projectile thrower/creator entity", "projectiles", "Preserve nullable owner entity identity; distinguish thrower from current attack target and projectile shooter data.", "cpw/mods/fml/common/registry/IThrowableEntity.html"),
+    d!("IThrowableEntity", "setThrower", V_17_18, "throwable_entity_owner_write", "Projectile thrower/creator entity", "projectiles", "Preserve owner assignment timing before spawn serialization and damage attribution.", "cpw/mods/fml/common/registry/IThrowableEntity.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3860,6 +3884,33 @@ mod tests {
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
+    }
+
+
+    #[test]
+    fn legacy_special_armor_shear_and_throwable_interfaces_are_indexed() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        for (owner, method) in [
+            ("ISpecialArmor", "damageArmor"),
+            ("ISpecialArmor", "getArmorDisplay"),
+            ("ISpecialArmor", "getProperties"),
+            ("ISpecialArmor.ArmorProperties", "applyArmor"),
+            ("ISpecialArmor.ArmorProperties", "compareTo"),
+            ("IShearable", "isShearable"),
+            ("IShearable", "onSheared"),
+        ] {
+            assert!(has(&v112, owner, method), "missing {owner}#{method}");
+        }
+        assert!(has(&v112, "ISpecialArmor", "handleUnblockableDamage"));
+        assert!(!has(&v17, "ISpecialArmor", "handleUnblockableDamage"));
+        assert!(has(&v17, "IThrowableEntity", "getThrower"));
+        assert!(has(&v18, "IThrowableEntity", "setThrower"));
+        assert!(!has(&v112, "IThrowableEntity", "getThrower"));
     }
 
     #[test]
