@@ -1212,6 +1212,7 @@ impl eframe::App for MojModelBridgeApp {
                 self.playing = false;
             }
         }
+        let mut sprite_frame_changed = false;
         if let Some(animation) = self.texture_animation.as_mut() {
             animation.elapsed_seconds += delta;
             let next = animation.frame_at(animation.elapsed_seconds);
@@ -1224,10 +1225,14 @@ impl eframe::App for MojModelBridgeApp {
                         if let Some(texture) = self.texture_images.get_mut(self.selected_texture) {
                             *texture = frame;
                         }
+                        sprite_frame_changed = true;
                     }
                 }
             }
             context.request_repaint_after(Duration::from_millis(50));
+        }
+        if sprite_frame_changed && self.sprite_3d_preview {
+            self.rebuild_sprite_preview();
         }
     }
 
