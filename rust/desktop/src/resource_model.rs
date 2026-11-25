@@ -410,9 +410,30 @@ fn shape_for_builtin_parent(parent: &str, stem: &str) -> Option<&'static str> {
         .iter().any(|value| stem.contains(value))
     {
         Some("floor")
+    } else if parent.ends_with("block/slab") {
+        if stem.contains("double") { Some("cube") }
+        else if stem.contains("top") || stem.contains("upper") { Some("slab_top") }
+        else { Some("slab_bottom") }
+    } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
+        .iter().any(|value| parent.ends_with(value)) {
+        if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
+    } else if ["block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence"]
+        .iter().any(|value| parent.ends_with(value)) {
+        Some("fence")
+    } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
+        .iter().any(|value| parent.ends_with(value)) {
+        Some("wall")
+    } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
+        .iter().any(|value| parent.ends_with(value)) {
+        Some("pane")
+    } else if ["block/door_bottom", "block/door_top", "block/template_door"]
+        .iter().any(|value| parent.ends_with(value)) {
+        Some("door")
+    } else if ["block/trapdoor_bottom", "block/trapdoor_top", "block/template_trapdoor"]
+        .iter().any(|value| parent.ends_with(value)) {
+        if stem.contains("top") { Some("trapdoor_top") } else { Some("trapdoor_bottom") }
     } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
-        .iter().any(|value| parent.ends_with(value))
-    {
+        .iter().any(|value| parent.ends_with(value)) {
         Some("cube")
     } else {
         None
@@ -544,6 +565,24 @@ fn builtin_cross_plane(
     node
 }
 
+fn builtin_multi_cube(
+    name: &str,
+    parts: &[([f32; 3], [f32; 3])],
+    texture_size: [u32; 2],
+) -> ViewerNode {
+    let Some((first_min, first_max)) = parts.first().copied() else {
+        return builtin_cube(name, [-8.0; 3], [8.0; 3], [0.0; 3], texture_size);
+    };
+    let mut node = builtin_cube(name, first_min, first_max, [0.0; 3], texture_size);
+    for (index, (min, max)) in parts.iter().copied().enumerate().skip(1) {
+        let mut extra = builtin_cube(&format!("{name}_{index}"), min, max, [0.0; 3], texture_size);
+        if let Some(cube) = extra.cubes.pop() {
+            node.cubes.push(cube);
+        }
+    }
+    node
+}
+
 fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
     match shape {
         "cube" => vec![builtin_cube(
@@ -553,13 +592,42 @@ fn builtin_block_nodes(shape: &str, texture_size: [u32; 2]) -> Vec<ViewerNode> {
             [0.0; 3],
             texture_size,
         )],
-        "floor" => vec![builtin_cube(
+        "floor" | "pressure_plate" | "rail" => vec![builtin_cube(
             "floor",
             [-8.0, -8.0, -8.0],
             [8.0, -7.65, 8.0],
             [0.0; 3],
             texture_size,
         )],
+        "slab_bottom" => vec![builtin_cube("slab", [-8.0, -8.0, -8.0], [8.0, 0.0, 8.0], [0.0; 3], texture_size)],
+        "slab_top" => vec![builtin_cube("slab", [-8.0, 0.0, -8.0], [8.0, 8.0, 8.0], [0.0; 3], texture_size)],
+        "stairs" => vec![builtin_multi_cube("stairs", &[
+            ([-8.0, -8.0, -8.0], [8.0, 0.0, 8.0]),
+            ([-8.0, 0.0, -8.0], [8.0, 8.0, 0.0]),
+        ], texture_size)],
+        "stairs_top" => vec![builtin_multi_cube("stairs_top", &[
+            ([-8.0, 0.0, -8.0], [8.0, 8.0, 8.0]),
+            ([-8.0, -8.0, -8.0], [8.0, 0.0, 0.0]),
+        ], texture_size)],
+        "fence" => vec![builtin_multi_cube("fence", &[
+            ([-1.5, -8.0, -1.5], [1.5, 8.0, 1.5]),
+            ([-7.0, -1.0, -1.5], [7.0, 0.5, 1.5]),
+            ([-7.0, 3.0, -1.5], [7.0, 4.5, 1.5]),
+            ([-1.5, -1.0, -7.0], [1.5, 0.5, 7.0]),
+            ([-1.5, 3.0, -7.0], [1.5, 4.5, 7.0]),
+        ], texture_size)],
+        "wall" => vec![builtin_multi_cube("wall", &[
+            ([-2.0, -8.0, -2.0], [2.0, 6.0, 2.0]),
+            ([-8.0, -4.0, -2.0], [8.0, 0.0, 2.0]),
+            ([-2.0, -4.0, -8.0], [2.0, 0.0, 8.0]),
+        ], texture_size)],
+        "pane" => vec![builtin_multi_cube("pane", &[
+            ([-1.0, -8.0, -8.0], [1.0, 8.0, 8.0]),
+            ([-8.0, -8.0, -1.0], [8.0, 8.0, 1.0]),
+        ], texture_size)],
+        "door" => vec![builtin_cube("door", [-8.0, -8.0, -1.0], [8.0, 8.0, 1.0], [0.0; 3], texture_size)],
+        "trapdoor_bottom" => vec![builtin_cube("trapdoor", [-8.0, -8.0, -8.0], [8.0, -5.0, 8.0], [0.0; 3], texture_size)],
+        "trapdoor_top" => vec![builtin_cube("trapdoor", [-8.0, 5.0, -8.0], [8.0, 8.0, 8.0], [0.0; 3], texture_size)],
         "torch" => vec![builtin_cube(
             "torch",
             [-1.5, -8.0, -1.5],
