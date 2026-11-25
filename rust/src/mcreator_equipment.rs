@@ -185,6 +185,38 @@ fn compiled_equipment_getter_stubs(class: &ClassFile) -> String {
             }
         }
     }
+
+    // Forge 1.7/1.8 item icons are commonly registered inside registerIcons
+    // using a plain resource key such as "modid:items/bertha" (no .png suffix).
+    for method in &class.methods {
+        let Some(code) = method.code.as_ref() else { continue; };
+        let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+        let has_icon_registration = matches!(method.name.as_str(), "registerIcons" | "func_94581_a")
+            || instructions.iter().any(|instruction| {
+                if !matches!(instruction.opcode, 0xb6..=0xb9) || instruction.operands.len() < 2 {
+                    return false;
+                }
+                let index = u16::from_be_bytes([instruction.operands[0], instruction.operands[1]]);
+                class.member_reference(index).is_some_and(|(_, name, _)| {
+                    matches!(name.as_str(), "registerIcon" | "func_94245_a")
+                })
+            });
+        if !has_icon_registration { continue; }
+        for instruction in &instructions {
+            let constant_index = match instruction.opcode {
+                0x12 => instruction.operands.first().copied().map(u16::from),
+                0x13 | 0x14 if instruction.operands.len() >= 2 =>
+                    Some(u16::from_be_bytes([instruction.operands[0], instruction.operands[1]])),
+                _ => None,
+            };
+            let Some(constant_index) = constant_index else { continue; };
+            let Some(ConstantValue::String(value)) = class.constant(constant_index) else { continue; };
+            if value.trim().is_empty() { continue; }
+            if let Ok(literal) = serde_json::to_string(&value.replace('\\', "/")) {
+                output.push_str(&format!("registerIcon({literal});\n"));
+            }
+        }
+    }
     output
 }
 
@@ -1997,6 +2029,38 @@ mod equipment_discovery_tests {
         assert_eq!(report.records[0].texture, "plain_icon");
         assert!(workspace.join("src/main/resources/assets/converted/textures/item/plain_icon.png").is_file());
         assert!(!report.warnings.iter().any(|warning| warning.contains("No source icon texture found")));
+    }
+
+    #[test]
+    fn recovers_compiled_only_icon_register_literals() {
+        let class = ClassFile {
+            minor_version:0,
+            major_version:50,
+            access_flags:0,
+            this_class:0,
+            super_class:0,
+            interfaces:Vec::new(),
+            constant_pool:vec![
+                None,
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("modid:items/bertha".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::String { string_index:1 }),
+            ],
+            fields:Vec::new(),
+            methods:vec![MemberInfo {
+                name:"registerIcons".to_owned(),
+                code:Some(crate::bytecode::CodeAttribute {
+                    code:vec![0x12, 0x02, 0xb1],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            attributes:Vec::new(),
+            bootstrap_methods:Vec::new(),
+        };
+        let stubs = compiled_equipment_getter_stubs(&class);
+        let references = declared_equipment_texture_refs(&stubs);
+        assert!(references.iter().any(|value| value == "modid:items/bertha"));
+        assert!(references.iter().any(|value| texture_stem_from_reference(value).as_deref() == Some("bertha")));
     }
 
     #[test]

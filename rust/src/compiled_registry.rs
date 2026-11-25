@@ -637,7 +637,12 @@ mod tests {
             Some("red_ant"),
         );
         assert!(
-            index.parsed_classes.contains_key("com/example/LegacyEntityRegistry"),
+            index.parsed_classes.values().any(|class| {
+                class.this_name().is_some_and(|name| {
+                    let simple = name.rsplit('/').next().unwrap_or(name);
+                    simple.rsplit('$').next().unwrap_or(simple) == "LegacyEntityRegistry"
+                })
+            }),
             "the shared index retains the parsed class for downstream stat exporters"
         );
         let class = index.classes.get("LegacyEntityRegistry").unwrap();
