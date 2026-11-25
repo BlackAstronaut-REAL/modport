@@ -23,6 +23,7 @@ use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sour
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
+use crate::native_block_entity::{discover_block_entities, BlockEntitySourceRecord};
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
@@ -54,6 +55,17 @@ pub struct NativeFoodPlan {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
+pub struct NativeBlockEntityPlan {
+    pub registry_name: String,
+    pub source_class: String,
+    pub source_path: String,
+    pub associated_blocks: Vec<String>,
+    pub generated_class: String,
+    pub generated_as: String,
+    pub warnings: Vec<String>,
+}
+
 pub struct NativeBlockPlan {
     pub registry_name: String,
     pub source_class: String,
@@ -122,6 +134,7 @@ pub struct NeoForgePortReport {
     pub source_file_counts: BTreeMap<String, usize>,
     pub items: Vec<NativeItemPlan>,
     pub blocks: Vec<NativeBlockPlan>,
+    pub block_entities: Vec<NativeBlockEntityPlan>,
     pub entities: Vec<NativeEntityPlan>,
     pub armor_sets: Vec<NativeArmorPlan>,
     pub projectiles: Vec<String>,
@@ -381,6 +394,25 @@ pub fn port_to_neoforge(
     }
     deduplicate_items(&mut item_records, &mut warnings);
     deduplicate_blocks(&mut block_records, &mut warnings);
+    let block_entity_bindings: Vec<(String, String)> = block_records.iter()
+        .map(|block| (block.id.clone(), block.class_name.clone())).collect();
+    let block_entity_sources = discover_block_entities(roots, &block_entity_bindings)?;
+    warnings.extend(block_entity_sources.iter().flat_map(|record| record.warnings.iter().cloned()));
+    let native_block_entities: Vec<NativeBlockEntityPlan> = block_entity_sources.iter()
+        .map(|record| NativeBlockEntityPlan {
+            registry_name: record.registry_name.clone(),
+            source_class: record.source_class.clone(),
+            source_path: record.source_path.clone(),
+            associated_blocks: record.associated_blocks.clone(),
+            generated_class: generated_block_entity_class(&record.source_class),
+            generated_as: if record.associated_blocks.is_empty() {
+                "inventoried only; no matching block registration".to_owned()
+            } else {
+                "native BlockEntity + EntityBlock + BlockEntityType registration placeholder".to_owned()
+            },
+            warnings: record.warnings.clone(),
+        }).collect();
+
 
     let mut armor_stats = compiled_armor_stats(roots)?;
     armor_stats.extend(source_armor_stats(roots));
@@ -428,6 +460,7 @@ pub fn port_to_neoforge(
         &block_records,
         &native_armors,
         &native_entities,
+        &native_block_entities,
         &native_projectile_records,
     )?;
     let generated_resource_files = write_native_resources(
@@ -596,6 +629,7 @@ pub fn port_to_neoforge(
         source_file_counts,
         items,
         blocks,
+        block_entities: native_block_entities,
         entities,
         armor_sets,
         projectiles,
@@ -633,6 +667,7 @@ pub fn port_to_neoforge(
             "items": report.items.iter().filter(|item| !["Sword", "Axe", "Pickaxe", "Shovel", "Hoe", "Bow", "Fishing Rod", "Shears"].contains(&item.kind.as_str())).count(),
             "tools_and_weapons": report.items.iter().filter(|item| ["Sword", "Axe", "Pickaxe", "Shovel", "Hoe", "Bow", "Fishing Rod", "Shears"].contains(&item.kind.as_str())).count(),
             "blocks": report.blocks.len(),
+            "block_entity_placeholders": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "armor_sets": report.armor_sets.len(),
             "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
@@ -642,6 +677,7 @@ pub fn port_to_neoforge(
         },
         "recognized_but_pending": {
             "custom_entity_ai_and_models": report.entities.len(),
+            "block_entity_storage_ticking_menus_and_logic": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
             "custom_projectile_impact_logic": report.native_projectiles.len(),
             "non_throwable_projectile_families": report.projectiles.len().saturating_sub(report.native_projectiles.len())
