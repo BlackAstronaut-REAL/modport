@@ -1402,13 +1402,16 @@ fn write_native_registries(
     armors: &[ArmorSetRecord],
     entities: &[EntityMetadata],
     block_entities: &[NativeBlockEntityPlan],
+    projectiles: &[ProjectileRecord],
 ) -> Result<Vec<String>> {
     let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
     let registry_root = java_base.join("registry");
     fs::create_dir_all(&registry_root)?;
 
     fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks, block_entities))?;
-    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, tools, blocks, armors))?;
+    fs::write(registry_root.join("ModItems.java"), generate_items_java(
+        package, mod_id, items, tools, blocks, armors, projectiles
+    ))?;
 
     let mut generated = vec![
         format!("src/main/java/{}/registry/ModBlocks.java", package.replace('.', "/")),
@@ -1442,58 +1445,94 @@ fn write_native_registries(
         generated.push(format!("src/main/java/{}/registry/ModArmorMaterials.java", package.replace('.', "/")));
     }
 
-    if !entities.is_empty() {
+    if !entities.is_empty() || !projectiles.is_empty() {
         let entity_root = java_base.join("entity");
         let client_root = java_base.join("client");
         fs::create_dir_all(&entity_root)?;
         fs::create_dir_all(&client_root)?;
 
-        fs::write(registry_root.join("ModEntities.java"), generate_entities_java(package, mod_id, entities))?;
-        fs::write(entity_root.join("ModEntityAttributes.java"), generate_entity_attributes_java(package, entities))?;
-        fs::write(client_root.join("ModEntityRenderers.java"), generate_entity_renderers_java(
-            package, mod_id, resources_root, entities
-        ))?;
+        fs::write(
+            registry_root.join("ModEntities.java"),
+            generate_entities_java(package, mod_id, entities, projectiles)
+        )?;
+        fs::write(
+            client_root.join("ModEntityRenderers.java"),
+            generate_entity_renderers_java(package, mod_id, resources_root, entities, projectiles)
+        )?;
 
         generated.push(format!("src/main/java/{}/registry/ModEntities.java", package.replace('.', "/")));
-        generated.push(format!("src/main/java/{}/entity/ModEntityAttributes.java", package.replace('.', "/")));
         generated.push(format!("src/main/java/{}/client/ModEntityRenderers.java", package.replace('.', "/")));
 
-        for entity in entities {
-            let class_name = generated_entity_class(entity);
-            fs::write(entity_root.join(format!("{class_name}.java")), generate_entity_java(package, entity))?;
+        if !entities.is_empty() {
+            fs::write(entity_root.join("ModEntityAttributes.java"), generate_entity_attributes_java(package, entities))?;
+            generated.push(format!("src/main/java/{}/entity/ModEntityAttributes.java", package.replace('.', "/")));
+
+            for entity in entities {
+                let class_name = generated_entity_class(entity);
+                fs::write(entity_root.join(format!("{class_name}.java")), generate_entity_java(package, entity))?;
+                generated.push(format!("src/main/java/{}/entity/{class_name}.java", package.replace('.', "/")));
+            }
+        }
+
+        for projectile in projectiles {
+            let class_name = generated_projectile_class(projectile);
+            fs::write(
+                entity_root.join(format!("{class_name}.java")),
+                generate_projectile_java(package, projectile)
+            )?;
             generated.push(format!("src/main/java/{}/entity/{class_name}.java", package.replace('.', "/")));
         }
     }
 
-    // The scaffold entry point is replaced only when an extra registry must be
-    // attached; its base implementation already handles blocks/items/entities.
-    if !armors.is_empty() || !entities.is_empty() {
+    if !armors.is_empty() || !entities.is_empty() || !projectiles.is_empty() || !active_block_entities.is_empty() {
         fs::write(java_base.join("NeoForgeMod.java"), generate_mod_entrypoint(
             package, mod_id, !armors.is_empty(), !entities.is_empty()
         ))?;
         generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
     }
 
-    let has_lore = items.iter().any(|item| !item.lore.is_empty())
+    let has_generated_item_classes = items.iter().any(|item| !item.lore.is_empty() || item.projectile_entity.is_some())
         || tools.iter().any(|tool| !tool.lore.is_empty())
         || armors.iter().flat_map(|armor| &armor.pieces).any(|piece| !piece.lore.is_empty());
-    if has_lore {
-        let lore_root = java_base.join("item");
-        fs::create_dir_all(&lore_root)?;
-        for item in items.iter().filter(|item| !item.lore.is_empty()) {
-            let class_name = lore_class_name(&item.id);
-            let source = generate_lore_item_java(
-                package,
-                &class_name,
-                "Item",
-                &["net.minecraft.world.item.Item"],
-                "Item.Properties properties",
-                "super(properties);",
-                &item.lore,
-            );
-            fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+    if has_generated_item_classes {
+        let item_root = java_base.join("item");
+        fs::create_dir_all(&item_root)?;
+
+        for item in items.iter().filter(|item| !item.lore.is_empty() || item.projectile_entity.is_some()) {
+            let source;
+            let class_name;
+            if let Some(projectile_id) = item.projectile_entity.as_deref() {
+                if let Some(projectile) = projectiles.iter().find(|projectile| projectile.id == projectile_id) {
+                    class_name = projectile_launcher_class(&item.id);
+                    source = generate_projectile_launcher_java(package, &class_name, item, projectile);
+                } else {
+                    class_name = lore_class_name(&item.id);
+                    source = generate_lore_item_java(
+                        package,
+                        &class_name,
+                        "Item",
+                        &["net.minecraft.world.item.Item"],
+                        "Item.Properties properties",
+                        "super(properties);",
+                        &item.lore,
+                    );
+                }
+            } else {
+                class_name = lore_class_name(&item.id);
+                source = generate_lore_item_java(
+                    package,
+                    &class_name,
+                    "Item",
+                    &["net.minecraft.world.item.Item"],
+                    "Item.Properties properties",
+                    "super(properties);",
+                    &item.lore,
+                );
+            }
+            fs::write(item_root.join(format!("{class_name}.java")), source)?;
             generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
         }
+
         for tool in tools.iter().filter(|tool| !tool.lore.is_empty()) {
             let parent = generated_tool_item_type(tool);
             let mut imports = vec![format!("net.minecraft.world.item.{parent}")];
@@ -1509,9 +1548,10 @@ fn write_native_registries(
             let source = generate_lore_item_java(
                 package, &class_name, parent, &import_refs, parameters, super_call, &tool.lore
             );
-            fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+            fs::write(item_root.join(format!("{class_name}.java")), source)?;
             generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
         }
+
         for armor in armors {
             for piece in armor.pieces.iter().filter(|piece| !piece.lore.is_empty()) {
                 let class_name = lore_class_name(&piece.id);
@@ -1529,7 +1569,7 @@ fn write_native_registries(
                     "super(material, type, properties);",
                     &piece.lore,
                 );
-                fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+                fs::write(item_root.join(format!("{class_name}.java")), source)?;
                 generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
             }
         }
@@ -1539,62 +1579,6 @@ fn write_native_registries(
     generated.dedup();
     Ok(generated)
 }
-
-fn lore_class_name(registry_id: &str) -> String {
-    format!("Lore{}", java_type_identifier(registry_id))
-}
-
-fn generate_lore_item_java(
-    package: &str,
-    class_name: &str,
-    parent_class: &str,
-    extra_imports: &[&str],
-    constructor_parameters: &str,
-    super_call: &str,
-    lore: &[String],
-) -> String {
-    let mut source = format!(r#"package {package}.item;
-
-import java.util.List;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
-"#);
-    for import in extra_imports {
-        source.push_str(&format!("import {import};\n"));
-    }
-    source.push_str(&format!(r#"
-public final class {class_name} extends {parent_class} {{
-    private static final List<Component> LEGACY_LORE = List.of(
-"#));
-    let components: Vec<String> = lore.iter()
-        .flat_map(|line| lore_component_expressions(line))
-        .collect();
-    for (index, component) in components.iter().enumerate() {
-        source.push_str(&format!("        {component}{}\n", if index + 1 == components.len() { "" } else { "," }));
-    }
-    source.push_str(&format!(r#"    );
-
-    public {class_name}({constructor_parameters}) {{
-        {super_call}
-    }}
-
-    @Override
-    public void appendHoverText(
-        ItemStack stack,
-        Item.TooltipContext context,
-        List<Component> tooltipComponents,
-        TooltipFlag tooltipFlag
-    ) {{
-        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
-        tooltipComponents.addAll(LEGACY_LORE);
-    }}
-}}
-"#));
-    source
-}
-
 fn generate_tool_tiers_java(package: &str, tools: &[ToolRecord]) -> String {
     let mut body = format!(r#"package {package}.registry;
 
@@ -1954,7 +1938,12 @@ fn entity_category(entity: &EntityMetadata) -> &'static str {
     }
 }
 
-fn generate_entities_java(package: &str, mod_id: &str, entities: &[EntityMetadata]) -> String {
+fn generate_entities_java(
+    package: &str,
+    _mod_id: &str,
+    entities: &[EntityMetadata],
+    projectiles: &[ProjectileRecord],
+) -> String {
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
@@ -1981,6 +1970,15 @@ public final class ModEntities {{
             id = entity.registry_name
         ));
     }
+    for projectile in projectiles {
+        let field = projectile_entity_field(projectile);
+        let class_name = generated_projectile_class(projectile);
+        body.push_str(&format!(
+            r#"    public static final DeferredHolder<EntityType<?>, EntityType<{class_name}>> {field} = ENTITY_TYPES.register("{id}", () -> EntityType.Builder.of({class_name}::new, MobCategory.MISC).sized(0.25F, 0.25F).clientTrackingRange(4).updateInterval(10).build("{id}"));
+"#,
+            id = projectile.id
+        ));
+    }
     body.push_str(r#"
     private ModEntities() {}
 
@@ -1989,9 +1987,118 @@ public final class ModEntities {{
     }
 }
 "#);
-    let _ = mod_id;
     body
 }
+
+fn generate_projectile_java(package: &str, projectile: &ProjectileRecord) -> String {
+    let class_name = generated_projectile_class(projectile);
+    let default_item = projectile.bound_item.as_ref()
+        .map(|item_id| format!("ModItems.{}.get()", java_field_name(item_id, "ITEM")))
+        .unwrap_or_else(|| "Items.SNOWBALL".to_owned());
+    let item_import = if projectile.bound_item.is_some() {
+        format!("import {package}.registry.ModItems;\n")
+    } else {
+        String::new()
+    };
+    format!(r#"package {package}.entity;
+
+{item_import}import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+
+public final class {class_name} extends ThrowableItemProjectile {{
+    public {class_name}(EntityType<? extends ThrowableItemProjectile> entityType, Level level) {{
+        super(entityType, level);
+    }}
+
+    public {class_name}(EntityType<? extends ThrowableItemProjectile> entityType, LivingEntity shooter, Level level) {{
+        super(entityType, shooter, level);
+    }}
+
+    @Override
+    protected Item getDefaultItem() {{
+        return {default_item};
+    }}
+}}
+"#)
+}
+
+fn generate_projectile_launcher_java(
+    package: &str,
+    class_name: &str,
+    item: &ItemRecord,
+    projectile: &ProjectileRecord,
+) -> String {
+    let projectile_class = generated_projectile_class(projectile);
+    let entity_field = projectile_entity_field(projectile);
+    let components: Vec<String> = item.lore.iter()
+        .flat_map(|line| lore_component_expressions(line))
+        .collect();
+    let mut source = format!(r#"package {package}.item;
+
+import java.util.List;
+import {package}.registry.ModEntities;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+public final class {class_name} extends Item {{
+"#);
+    if !components.is_empty() {
+        source.push_str("    private static final List<Component> LEGACY_LORE = List.of(\n");
+        for (index, component) in components.iter().enumerate() {
+            source.push_str(&format!(
+                "        {component}{}\n",
+                if index + 1 == components.len() { "" } else { "," }
+            ));
+        }
+        source.push_str("    );\n");
+    }
+    source.push_str(&format!(r#"
+    public {class_name}(Item.Properties properties) {{
+        super(properties);
+    }}
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {{
+        ItemStack stack = player.getItemInHand(hand);
+        if (!level.isClientSide) {{
+            {projectile_class} projectile = new {projectile_class}(
+                ModEntities.{entity_field}.get(), player, level
+            );
+            projectile.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, 1.5F, 1.0F);
+            level.addFreshEntity(projectile);
+            player.getCooldowns().addCooldown(this, 10);
+        }}
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }}
+"#));
+    if !components.is_empty() {
+        source.push_str(r#"
+    @Override
+    public void appendHoverText(
+        ItemStack stack,
+        Item.TooltipContext context,
+        List<Component> tooltipComponents,
+        Item.TooltipFlag tooltipFlag
+    ) {
+        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+        tooltipComponents.addAll(LEGACY_LORE);
+    }
+"#);
+    }
+    source.push_str("}\n");
+    source
+}
+
 
 fn generate_entity_java(package: &str, entity: &EntityMetadata) -> String {
     let class_name = generated_entity_class(entity);
@@ -2084,6 +2191,7 @@ fn generate_entity_renderers_java(
     mod_id: &str,
     resources_root: &Path,
     entities: &[EntityMetadata],
+    projectiles: &[ProjectileRecord],
 ) -> String {
     let mut body = format!(r#"package {package}.client;
 
@@ -2092,6 +2200,7 @@ import {package}.registry.ModEntities;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.MobRenderer;
+import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -2118,11 +2227,20 @@ public final class ModEntityRenderers {{
                 return {texture};
             }}
         }});
-"#));
+"#
+        ));
+    }
+    for projectile in projectiles {
+        let field = projectile_entity_field(projectile);
+        let class_name = generated_projectile_class(projectile);
+        body.push_str(&format!(
+            "        event.registerEntityRenderer(ModEntities.{field}.get(), ThrownItemRenderer<{class_name}>::new);\n"
+        ));
     }
     body.push_str("    }\n}\n");
     body
 }
+
 
 fn find_entity_texture(resources_root: &Path, mod_id: &str, entity: &EntityMetadata) -> Option<String> {
     let namespace_root = resources_root.join("assets").join(mod_id);
@@ -2304,6 +2422,7 @@ fn generate_items_java(
     tools: &[ToolRecord],
     blocks: &[BlockRecord],
     armors: &[ArmorSetRecord],
+    projectiles: &[ProjectileRecord],
 ) -> String {
     let mut body = format!(r#"package {package}.registry;
 
@@ -2357,6 +2476,17 @@ public final class ModItems {
     for item in items {
         let field = java_field_name(&item.id, "ITEM");
         let properties = item_properties_java(item);
+        if let Some(projectile_id) = item.projectile_entity.as_deref() {
+            if projectiles.iter().any(|projectile| projectile.id == projectile_id) {
+                let class_name = projectile_launcher_class(&item.id);
+                body.push_str(&format!(
+                    "    public static final DeferredItem<{package}.item.{class_name}> {field} = ITEMS.register(\"{id}\", () -> new {package}.item.{class_name}({properties}));\n",
+                    id = item.id,
+                    properties = properties
+                ));
+                continue;
+            }
+        }
         if item.lore.is_empty() {
             body.push_str(&format!(
                 "    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem(\"{id}\", {properties});\n",
