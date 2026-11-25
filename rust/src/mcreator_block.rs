@@ -405,6 +405,78 @@ fn block_sound_type(source_text: &str) -> Option<&'static str> {
 }
 
 
+
+fn compact_sound_token(value: &str) -> String {
+    value.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect()
+}
+
+/// Port of the old exporter sound inventory scoring. MCreator workspaces
+/// store imported sound events as sound_elements; retain each exact element
+/// name so the target schema can bind it without inventing a resource ID.
+fn infer_block_sound_event(source_text: &str, registry: &str, workspace: &Value) -> Option<String> {
+    let inventory = workspace.get("sound_elements").and_then(Value::as_array)?;
+    let source_compact = compact_sound_token(source_text);
+    let registry_compact = compact_sound_token(registry);
+    let role_terms = ["step", "walk", "foot", "stone", "grass", "wood", "metal", "block"];
+    let mut best: Option<(i32, String)> = None;
+
+    for item in inventory {
+        let Some(name) = item.get("name").and_then(Value::as_str)
+            .map(str::trim).filter(|name| !name.is_empty()) else { continue };
+        let candidate_compact = compact_sound_token(name);
+        let candidate_lower = name.to_ascii_lowercase();
+        let mut score = 0;
+
+        if !registry_compact.is_empty()
+            && (candidate_compact.contains(&registry_compact)
+                || registry_compact.contains(&candidate_compact))
+        {
+            score += 8;
+        }
+        if role_terms.iter().any(|term| source_compact.contains(term)) {
+            score += 5;
+        }
+        if role_terms.iter().any(|term| candidate_lower.contains(term)) {
+            score += 4;
+        }
+        let shared_characters = candidate_compact.chars().collect::<BTreeSet<_>>()
+            .into_iter().filter(|ch| source_compact.contains(*ch)).count();
+        score += shared_characters.min(5) as i32;
+
+        if best.as_ref().is_none_or(|(best_score, _)| score > *best_score) {
+            best = Some((score, name.to_owned()));
+        }
+    }
+    best.map(|(_, name)| name)
+}
+
+fn apply_block_sound_bindings(
+    definition: &mut Map<String, Value>,
+    source_text: &str,
+    registry: &str,
+    workspace: &Value,
+) {
+    let has_inventory = workspace.get("sound_elements").and_then(Value::as_array)
+        .is_some_and(|items| !items.is_empty());
+    if !has_inventory {
+        return;
+    }
+
+    let sound = block_sound_type(source_text)
+        .map(str::to_owned)
+        .or_else(|| infer_block_sound_event(source_text, registry, workspace))
+        .unwrap_or_else(|| "STONE".to_owned());
+    definition.insert("soundOnStep".to_owned(), json!(sound));
+    definition.insert("isCustomSoundType".to_owned(), json!(false));
+    for key in ["breakSound", "fallSound", "hitSound", "placeSound", "stepSound"] {
+        definition.insert(key.to_owned(), json!(""));
+    }
+}
+
+
 /// Recover the statically identifiable ItemStack emitted by a block's drop
 /// routine. Dynamic loot tables remain untouched instead of guessing an item.
 fn extract_block_drop(
@@ -624,10 +696,6 @@ pub fn build_block_element(
         definition.insert("particleTexture".to_owned(),json!(texture));
     }
 
-    if let Some(sound) = block_sound_type(&source.source_text) {
-        definition.insert("soundOnStep".to_owned(), json!(sound));
-    }
-
     if source.source_text.contains("setLightOpacity") {
         if let Some(value)=number_after(&source.source_text,&[r"\bsetLightOpacity\s*\(\s*(\d+)\s*\)"]) {
             definition.insert("lightOpacity".to_owned(),json!(value as i64));
@@ -742,7 +810,10 @@ pub fn export_blocks_to_workspace(
             suffix+=1;
         }
 
-        let (element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv,&field_registry_map);
+        let (mut element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv,&field_registry_map);
+        if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
+            apply_block_sound_bindings(definition, &source.source_text, &source.registry_name, &workspace);
+        }
         if source.source_text.trim().is_empty() {
             warnings.push("Block class and registry ID were recovered from compiled bytecode only; source-defined state properties, hardness, drops, and special behavior may need manual reconstruction.".to_owned());
         }
@@ -910,6 +981,40 @@ mod tests{
         assert_eq!(element["definition"]["renderType"],11);
         assert_eq!(element["definition"]["texture"],"demo_block");
         assert_eq!(element["definition"]["requiresCorrectTool"],true);
+    }
+
+    #[test]
+    fn infers_block_sound_event_and_normalizes_explicit_sound_types() {
+        let workspace = json!({
+            "sound_elements": [
+                {"name": "ambient_wind"},
+                {"name": "ruby_ore_step"},
+                {"name": "stone_break"}
+            ]
+        });
+        let mut definition = Map::new();
+        for key in ["breakSound", "fallSound", "hitSound", "placeSound", "stepSound"] {
+            definition.insert(key.to_owned(), json!("CUSTOM:old"));
+        }
+        apply_block_sound_bindings(
+            &mut definition,
+            "Ruby ore block walking",
+            "ruby_ore",
+            &workspace,
+        );
+        assert_eq!(definition["soundOnStep"], "ruby_ore_step");
+        assert_eq!(definition["isCustomSoundType"], false);
+        for key in ["breakSound", "fallSound", "hitSound", "placeSound", "stepSound"] {
+            assert_eq!(definition[key], "");
+        }
+
+        apply_block_sound_bindings(
+            &mut definition,
+            ".sound(SoundType.CLOTH)",
+            "ruby_ore",
+            &workspace,
+        );
+        assert_eq!(definition["soundOnStep"], "WOOL");
     }
 
     #[test]
