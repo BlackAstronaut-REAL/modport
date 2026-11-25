@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 use crate::archive::extract_archive;
 use crate::metadata::{infer_mod_metadata, ModMetadata};
 use crate::mod_graph::{scan_mod_graph, EntityMetadata};
-use crate::mcreator_armor::{discover_armor_sources, ArmorSetSource};
+use crate::mcreator_armor::{compiled_armor_stats, discover_armor_sources, source_armor_stats, ArmorSetSource};
 use crate::mcreator_block::{discover_block_sources, is_plant_source, source_block_properties, BlockSource};
 use crate::mcreator_equipment::{discover_equipment_sources, EquipmentSource};
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
@@ -65,8 +65,14 @@ pub struct NativeEntityPlan {
 #[derive(Debug, Clone, Serialize)]
 pub struct NativeArmorPlan {
     pub source_prefix: String,
+    pub material_id: String,
+    pub armor_texture: String,
     pub piece_classes: Vec<String>,
     pub registry_names: Vec<String>,
+    pub durability_multiplier: u32,
+    pub enchantability: u32,
+    pub defense: BTreeMap<String, u32>,
+    pub generated_as: String,
     pub warnings: Vec<String>,
 }
 
@@ -139,6 +145,28 @@ struct BlockRecord {
     source_path: String,
     properties: Map<String, Value>,
     plant_like: bool,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ArmorPieceRecord {
+    id: String,
+    class_name: String,
+    part: String,
+    durability: u32,
+}
+
+#[derive(Debug, Clone)]
+struct ArmorSetRecord {
+    source_prefix: String,
+    material_id: String,
+    texture_asset: String,
+    durability_multiplier: u32,
+    enchantability: u32,
+    defense: BTreeMap<String, u32>,
+    toughness: f32,
+    knockback_resistance: f32,
+    pieces: Vec<ArmorPieceRecord>,
     warnings: Vec<String>,
 }
 
@@ -234,7 +262,7 @@ pub fn port_to_neoforge(
         }
     }
 
-    let mut item_records = collect_items(&equipment, &armor_sources, &mut warnings);
+    let mut item_records = collect_items(&equipment, &mut warnings);
     let mut block_records = collect_blocks(&block_sources, &mut warnings);
     for item in &mut item_records {
         item.source_path = prepared.display_source_path(&item.source_path);
@@ -245,6 +273,15 @@ pub fn port_to_neoforge(
     deduplicate_items(&mut item_records, &mut warnings);
     deduplicate_blocks(&mut block_records, &mut warnings);
 
+    let mut armor_stats = compiled_armor_stats(roots)?;
+    armor_stats.extend(source_armor_stats(roots));
+    let native_armors = collect_native_armors(
+        &armor_sources,
+        &armor_stats,
+        &item_records,
+        &resources_root,
+        &target_mod_id,
+    );
     let native_entities = collect_native_entities(&graph.entities);
     let generated_java_files = write_native_registries(
         output_root,
@@ -253,9 +290,12 @@ pub fn port_to_neoforge(
         &target_mod_id,
         &item_records,
         &block_records,
+        &native_armors,
         &native_entities,
     )?;
-    let generated_resource_files = write_native_resources(&resources_root, &target_mod_id, &item_records, &block_records)?;
+    let generated_resource_files = write_native_resources(
+        &resources_root, &target_mod_id, &item_records, &block_records, &native_armors
+    )?;
 
     let items: Vec<NativeItemPlan> = item_records.iter().map(|item| NativeItemPlan {
         registry_name: item.id.clone(),
@@ -292,20 +332,24 @@ pub fn port_to_neoforge(
         ],
     }).collect();
 
-    let armor_sets: Vec<NativeArmorPlan> = armor_sources.iter().map(|armor: &ArmorSetSource| {
-        let mut piece_classes: Vec<String> = armor.fields.values().cloned().collect();
+    let armor_sets: Vec<NativeArmorPlan> = native_armors.iter().map(|armor| {
+        let mut piece_classes: Vec<String> = armor.pieces.iter().map(|piece| piece.class_name.clone()).collect();
         piece_classes.sort();
         piece_classes.dedup();
-        let mut registry_names: Vec<String> = armor.registered_piece_ids.values().map(|value| normalized_id(value)).collect();
+        let mut registry_names: Vec<String> = armor.pieces.iter().map(|piece| piece.id.clone()).collect();
         registry_names.sort();
         registry_names.dedup();
         NativeArmorPlan {
-            source_prefix: armor.prefix.clone(),
+            source_prefix: armor.source_prefix.clone(),
+            material_id: armor.material_id.clone(),
+            armor_texture: armor.texture_asset.clone(),
             piece_classes,
             registry_names,
-            warnings: vec![
-                "Armor pieces are recorded for follow-up conversion; wearable ArmorMaterial and ArmorItem behavior is not yet emitted.".to_owned()
-            ],
+            durability_multiplier: armor.durability_multiplier,
+            enchantability: armor.enchantability,
+            defense: armor.defense.clone(),
+            generated_as: "registered native ArmorMaterial and wearable ArmorItem pieces".to_owned(),
+            warnings: armor.warnings.clone(),
         }
     }).collect();
 
@@ -320,7 +364,7 @@ pub fn port_to_neoforge(
         warnings.push(format!("{} entity class(es) were registered as basic native PathfinderMob placeholders; exact source AI and custom render models remain incomplete.", entities.len()));
     }
     if !armor_sets.is_empty() {
-        warnings.push(format!("{} armor set(s) were recognized but remain non-wearable until ArmorMaterial/ArmorItem generation is implemented.", armor_sets.len()));
+        warnings.push(format!("{} armor set(s) were emitted as wearable native ArmorMaterial/ArmorItem registrations; source-specific repair recipes, special effects and armor attributes remain partial.", armor_sets.len()));
     }
     if !projectiles.is_empty() {
         warnings.push(format!("{} projectile class(es) were recognized but their entity behavior and item bindings are not yet emitted.", projectiles.len()));
@@ -381,12 +425,14 @@ pub fn port_to_neoforge(
         "converted": {
             "items": report.items.len(),
             "blocks": report.blocks.len(),
+            "armor_sets": report.armor_sets.len(),
+            "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
             "resource_files": resource_files_copied
         },
         "recognized_but_pending": {
             "custom_entity_ai_and_models": report.entities.len(),
-            "armor_sets": report.armor_sets.len(),
+            "custom_armor_repair_and_effects": report.armor_sets.len(),
             "projectiles": report.projectiles.len()
         },
         "documentation_domains": report.detected_domains,
