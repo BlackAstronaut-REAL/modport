@@ -209,7 +209,7 @@ fn extract_title(body: &str, path: &str) -> String {
         }
         if in_front_matter {
             if let Some(value) = trimmed.strip_prefix("title:") {
-                return value.trim().trim_matches(['"', '\'']).to_string();
+                return value.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
             }
             continue;
         }
@@ -218,7 +218,7 @@ fn extract_title(body: &str, path: &str) -> String {
         }
     }
     Path::new(path).file_stem().and_then(|v| v.to_str())
-        .unwrap_or("NeoForge documentation").replace(['-', '_'], " ")
+        .unwrap_or("NeoForge documentation").replace('-', " ").replace('_', " ")
 }
 
 fn query_terms(query: &str) -> Vec<String> {
@@ -271,7 +271,7 @@ fn make_snippet(body: &str, query: &[String]) -> String {
         .max_by_key(|line| {
             let counts = term_counts(line);
             query.iter().map(|term| counts.get(term).copied().unwrap_or(0)).sum::<usize>()
-                + usize::from(line.trim_start().starts_with('#')) * 2
+                + if line.trim_start().starts_with('#') { 2 } else { 0 }
         })
         .unwrap_or("No excerpt available.");
     let mut snippet = best.trim().trim_start_matches('#').trim().to_string();
