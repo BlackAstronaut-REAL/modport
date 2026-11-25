@@ -944,7 +944,7 @@ fn entity_source_texture_refs(
         r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)""#
     ).unwrap();
     let variant_selector = Regex::new(&format!(
-        r#"(?is)if\s*\(\s*"{}"\s*\.equals\s*\([^)]*\)\s*\)\s*\{{?\s*return\s+([A-Za-z0-9_$]+)"#,
+        r#"(?is)if\s*\(\s*"{}"\s*\.(?:equals|equalsIgnoreCase)\s*\((?:[^()]|\([^()]*\))*\)\s*\)\s*\{{?\s*return\s+([A-Za-z0-9_$]+)"#,
         regex::escape(entity_class)
     )).unwrap();
 
@@ -999,11 +999,15 @@ fn entity_source_texture_refs(
                 }
             }
         }
-        let entity_paths = Regex::new(
-            r#"(?i)textures/(?:entity|entities|mob|mobs)/[^"\s]+?\.png"#
-        ).unwrap();
-        for capture in entity_paths.captures_iter(source) {
-            direct.insert(capture[0].replace('\\', "/"));
+        // Only scan raw entity texture literals if no returned ResourceLocation
+        // could be resolved. Otherwise this would re-add eye/overlay textures.
+        if direct.is_empty() {
+            let entity_paths = Regex::new(
+                r#"(?i)textures/(?:entity|entities|mob|mobs)/[^"\s]+?\.png"#
+            ).unwrap();
+            for capture in entity_paths.captures_iter(source) {
+                direct.insert(capture[0].replace('\\', "/"));
+            }
         }
     }
     direct.into_iter().collect()
