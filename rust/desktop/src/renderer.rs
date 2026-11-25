@@ -155,7 +155,9 @@ pub fn render_scene_with_textures(
         for cube in &node.cubes {
             draw_cube(
                 cube, world, camera, textures, default_texture_index, scene.texture_size,
-                width, height, focal, aspect, light, &mut pixels, &mut depth,
+                width, height, focal, aspect, light,
+                scene.name.starts_with("sprite-preview:"),
+                &mut pixels, &mut depth,
             );
         }
     }
@@ -274,6 +276,7 @@ fn draw_cube(
     focal: f32,
     _aspect: f32,
     light: [f32; 3],
+    preserve_texture_color: bool,
     pixels: &mut [u8],
     depth_buffer: &mut [f32],
 ) {
@@ -321,7 +324,11 @@ fn draw_cube(
 
         let world_normal = normalize(world.direction(normal));
         let view_normal = rotate_camera(world_normal, camera.yaw, camera.pitch);
-        let illumination = (0.25 + dot(view_normal, light).max(0.0) * 0.75).clamp(0.18, 1.0);
+        let illumination = if preserve_texture_color {
+            1.0
+        } else {
+            (0.25 + dot(view_normal, light).max(0.0) * 0.75).clamp(0.18, 1.0)
+        };
         let projected: Option<[ProjectedVertex; 4]> = vertices.map(|vertex| {
             project_vertex(vertex, world, camera, width, height, focal)
         }).into_iter().collect::<Option<Vec<_>>>()
