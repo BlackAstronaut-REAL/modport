@@ -23,6 +23,7 @@ use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sour
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
+use crate::native_lore::{extract_legacy_lore, lore_component_expressions};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -34,6 +35,7 @@ pub struct NativeItemPlan {
     pub kind: String,
     pub stack_size: u32,
     pub source_path: String,
+    pub lore: Vec<String>,
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
@@ -81,6 +83,7 @@ pub struct NativeArmorPlan {
     pub durability_multiplier: u32,
     pub enchantability: u32,
     pub defense: BTreeMap<String, u32>,
+    pub piece_lore: BTreeMap<String, Vec<String>>,
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
@@ -146,6 +149,7 @@ struct ItemRecord {
     source_text: String,
     stack_size: u32,
     kind: String,
+    lore: Vec<String>,
     warnings: Vec<String>,
 }
 
@@ -165,6 +169,7 @@ struct ToolRecord {
     attribute_damage: f32,
     attribute_speed: f32,
     durability: u32,
+    lore: Vec<String>,
     warnings: Vec<String>,
 }
 
@@ -183,6 +188,7 @@ struct ArmorPieceRecord {
     class_name: String,
     part: String,
     durability: u32,
+    lore: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -318,6 +324,7 @@ pub fn port_to_neoforge(
     armor_stats.extend(source_armor_stats(roots));
     let native_armors = collect_native_armors(
         &armor_sources,
+        &equipment,
         &armor_stats,
         &item_records,
         &resources_root,
@@ -345,7 +352,8 @@ pub fn port_to_neoforge(
         kind: item.kind.clone(),
         stack_size: item.stack_size,
         source_path: item.source_path.clone(),
-        generated_as: "vanilla Item registration".to_owned(),
+        lore: item.lore.clone(),
+        generated_as: if item.lore.is_empty() { "vanilla Item registration".to_owned() } else { "native Item subclass with formatted legacy tooltip lore".to_owned() },
         warnings: item.warnings.clone(),
     }).collect();
     items.extend(tool_records.iter().map(|tool| NativeItemPlan {
@@ -354,7 +362,8 @@ pub fn port_to_neoforge(
         kind: tool.kind.clone(),
         stack_size: 1,
         source_path: tool.source_path.clone(),
-        generated_as: native_tool_generated_kind(&tool.kind).to_owned(),
+        lore: tool.lore.clone(),
+        generated_as: if tool.lore.is_empty() { native_tool_generated_kind(&tool.kind).to_owned() } else { format!("{} with formatted legacy tooltip lore", native_tool_generated_kind(&tool.kind)) },
         warnings: tool.warnings.clone(),
     }));
     items.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
@@ -412,6 +421,8 @@ pub fn port_to_neoforge(
             durability_multiplier: armor.durability_multiplier,
             enchantability: armor.enchantability,
             defense: armor.defense.clone(),
+            piece_lore: armor.pieces.iter().filter(|piece| !piece.lore.is_empty())
+                .map(|piece| (piece.id.clone(), piece.lore.clone())).collect(),
             generated_as: "registered native ArmorMaterial and wearable ArmorItem pieces".to_owned(),
             warnings: armor.warnings.clone(),
         }
@@ -671,6 +682,7 @@ fn collect_items(
             source_text: source.source_text.clone(),
             stack_size,
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
+            lore: extract_legacy_lore(&source.source_text),
             warnings: record_warnings,
         });
     }
@@ -685,12 +697,17 @@ fn collect_items(
 
 fn collect_native_armors(
     sources: &[ArmorSetSource],
+    equipment: &[EquipmentSource],
     stats_index: &BTreeMap<String, BTreeMap<String, f64>>,
     existing_items: &[ItemRecord],
     resources_root: &Path,
     mod_id: &str,
 ) -> Result<Vec<ArmorSetRecord>> {
     let existing_ids: BTreeSet<String> = existing_items.iter().map(|item| item.id.clone()).collect();
+    let equipment_lore: BTreeMap<String, Vec<String>> = equipment.iter()
+        .map(|source| (compact(&source.class_name), extract_legacy_lore(&source.source_text)))
+        .filter(|(_, lore)| !lore.is_empty())
+        .collect();
     let mut seen_materials = BTreeSet::new();
     let mut seen_piece_ids = existing_ids;
     let mut output = Vec::new();
@@ -804,6 +821,7 @@ fn collect_native_armors(
                 class_name: class.clone(),
                 part: part.clone(),
                 durability: ArmorItemTypeDurability::for_part(part, durability_multiplier),
+                lore: equipment_lore.get(&compact(class)).cloned().unwrap_or_default(),
             });
         }
 
@@ -1005,6 +1023,7 @@ fn collect_native_tools(
             attribute_damage,
             attribute_speed,
             durability,
+            lore: extract_legacy_lore(&source.source_text),
             warnings: tool_warnings,
         });
     }
