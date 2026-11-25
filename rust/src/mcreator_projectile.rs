@@ -430,6 +430,8 @@ pub fn export_projectiles_to_workspace(
     let target_modid=workspace.get("workspaceSettings").and_then(|v|v.get("modid")).and_then(Value::as_str)
         .filter(|v|!v.trim().is_empty()).unwrap_or("converted_mod").to_owned();
     let projectiles=discover_projectile_sources(source_roots)?;
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, &import_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
     let template=template_for(&workspace_root)?;
     let bindings=binding_items(&workspace,source_roots,&import_modid,&projectiles);
 
@@ -465,6 +467,14 @@ pub fn export_projectiles_to_workspace(
         definition.insert("projectileItem".to_owned(),json!(bound_item.as_ref().map(|name|format!("CUSTOM:{name}")).unwrap_or_default()));
         definition.insert("customModelTexture".to_owned(),json!(""));
         definition.insert("actionSound".to_owned(),json!(projectile_sound(&source.source_text,&template)));
+        let display = localization.translated_name(&registry, &projectile_display(&registry));
+        if definition.contains_key("name") {
+            definition.insert("name".to_owned(), json!(display));
+        }
+        let information = localization.item_information(&source.source_text, &registry);
+        if !information.is_empty() && definition.contains_key("specialInformation") {
+            definition.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+        }
         if source.source_text.contains("noGravity")||source.source_text.contains("setNoGravity(true)"){
             definition.insert("disableGravity".to_owned(),json!(true));
         }
@@ -514,7 +524,8 @@ pub fn export_projectiles_to_workspace(
     if !workspace["language_map"].get("en_us").is_some_and(Value::is_object){workspace["language_map"]["en_us"]=json!({});}
     let language=workspace["language_map"]["en_us"].as_object_mut().unwrap();
     for record in &report.records{
-        language.insert(format!("projectile.{target_modid}.{}",record.registry_name),json!(projectile_display(&record.registry_name)));
+        let display = localization.translated_name(&record.registry_name, &projectile_display(&record.registry_name));
+        language.insert(format!("projectile.{target_modid}.{}",record.registry_name),json!(display));
     }
 
     fs::write(&workspace_file,format!("{}\n",serde_json::to_string_pretty(&workspace)?))
