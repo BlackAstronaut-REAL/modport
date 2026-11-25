@@ -245,6 +245,23 @@ fn rotate_face_uv_coordinates(
     std::array::from_fn(|index| uv[(index + turns) % 4])
 }
 
+fn legacy_model_box_face_uvs(
+    u: f32,
+    v: f32,
+    width: f32,
+    height: f32,
+    depth: f32,
+) -> [[f32; 4]; 6] {
+    [
+        [u + depth + width, v + depth, u + 2.0 * depth + width, v + depth + height],
+        [u, v + depth, u + depth, v + depth + height],
+        [u + depth, v, u + depth + width, v + depth],
+        [u + depth + width, v, u + depth + 2.0 * width, v + depth],
+        [u + depth, v + depth, u + depth + width, v + depth + height],
+        [u + 2.0 * depth + width, v + depth, u + 2.0 * depth + 2.0 * width, v + depth + height],
+    ]
+}
+
 fn draw_cube(
     cube: &ViewerCube,
     world: Transform,
@@ -278,13 +295,14 @@ fn draw_cube(
 
     // Store face geometry first, then choose the correct image and UV scaling
     // per face. Legacy cubes have no explicit texture map and use texture 0.
+    let face_uvs = legacy_model_box_face_uvs(u, v, dx, dy, dz);
     let faces = [
-        (0, [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]], [u+dz+dx, v+dz, u+2.0*dz+dx, v+dz+dy], [1.0,0.0,0.0]),
-        (1, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [u, v+dz, u+dz, v+dz+dy], [-1.0,0.0,0.0]),
-        (2, [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]], [u+dz, v, u+dz+dx, v+dz], [0.0,-1.0,0.0]),
-        (3, [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]], [u+dz+dx, v, u+2.0*dz+dx, v+dz], [0.0,1.0,0.0]),
-        (4, [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], [u+dz, v+dz, u+dz+dx, v+dz+dy], [0.0,0.0,-1.0]),
-        (5, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [u+2.0*dz+dx, v+dz, u+2.0*dz+2.0*dx, v+dz+dy], [0.0,0.0,1.0]),
+        (0, [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]], face_uvs[0], [1.0,0.0,0.0]),
+        (1, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], face_uvs[1], [-1.0,0.0,0.0]),
+        (2, [[x1,y0,z1],[x0,y0,z1],[x0,y0,z0],[x1,y0,z0]], face_uvs[2], [0.0,-1.0,0.0]),
+        (3, [[x1,y1,z0],[x0,y1,z0],[x0,y1,z1],[x1,y1,z1]], face_uvs[3], [0.0,1.0,0.0]),
+        (4, [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], face_uvs[4], [0.0,0.0,-1.0]),
+        (5, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], face_uvs[5], [0.0,0.0,1.0]),
     ];
 
     for (face_index, points, default_rect, normal) in faces {
@@ -586,6 +604,17 @@ pub fn draw_spawn_egg(ui: &mut egui::Ui, size: f32, selected: bool) {
 mod tests {
     use super::*;
     use mojmodelbridge::viewer::{ViewerAnimation, ViewerNode};
+
+    #[test]
+    fn legacy_model_box_uv_net_uses_width_for_the_bottom_face_span() {
+        let faces = legacy_model_box_face_uvs(2.0, 3.0, 4.0, 6.0, 2.0);
+        assert_eq!(faces[0], [8.0, 5.0, 10.0, 11.0]);
+        assert_eq!(faces[1], [2.0, 5.0, 4.0, 11.0]);
+        assert_eq!(faces[2], [4.0, 3.0, 8.0, 5.0]);
+        assert_eq!(faces[3], [8.0, 3.0, 12.0, 5.0]);
+        assert_eq!(faces[4], [4.0, 5.0, 8.0, 11.0]);
+        assert_eq!(faces[5], [10.0, 5.0, 16.0, 11.0]);
+    }
 
     #[test]
     fn resource_face_visibility_defaults_to_legacy_all_faces() {
