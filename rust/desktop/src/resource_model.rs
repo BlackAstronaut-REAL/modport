@@ -731,6 +731,33 @@ mod tests {
     use image::RgbaImage;
 
     #[test]
+    fn explicit_cross_crop_elements_are_rendered_as_planes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model = root.join("assets/demo/models/block/custom_crop.json");
+        let texture = root.join("assets/demo/textures/block/crop.png");
+        fs::create_dir_all(model.parent().unwrap()).unwrap();
+        fs::create_dir_all(texture.parent().unwrap()).unwrap();
+        RgbaImage::new(16, 16).save(&texture).unwrap();
+        fs::write(&model, r#"{
+            "elements":[{
+                "from":[0,0,8],
+                "to":[16,16,8],
+                "faces":{
+                    "north":{"texture":"demo:block/crop"},
+                    "south":{"texture":"demo:block/crop"}
+                }
+            }]
+        }"#).unwrap();
+        let (scene, _) = load_block_model(&model, &[root.to_path_buf()]).unwrap();
+        assert!(scene.nodes[0].cubes[0].crossed_plane);
+        assert_eq!(
+            scene.nodes[0].cubes[0].face_visibility,
+            Some([false, false, false, false, true, true])
+        );
+    }
+
+    #[test]
     fn respects_omitted_faces_and_generates_minecraft_default_uvs() {
         let element = serde_json::json!({
             "from": [2, 3, 4],
