@@ -952,7 +952,7 @@ fn compiled_registry_names(compiled: &crate::compiled_registry::CompiledRegistry
         let class = class.as_ref();
         let has_marker = class.constant_pool.iter().flatten().any(|entry| {
             matches!(entry, crate::bytecode::ConstantPoolEntry::Utf8(value)
-                if markers.iter().any(|marker| value == marker))
+                if markers.iter().any(|marker| value.as_str() == *marker))
         });
         if !has_marker { continue; }
         for method in &class.methods {
