@@ -357,6 +357,18 @@ pub fn export_living_entities_to_workspace_with_modid(
         if registration.entity_class.is_empty() || registration.model_class.is_empty() {
             continue;
         }
+        if !overwrite {
+            let already_exported = workspace.get("mod_elements").and_then(Value::as_array)
+                .into_iter().flatten().any(|descriptor| {
+                    descriptor.get("mojmodelbridge_generated").and_then(Value::as_bool) == Some(true)
+                        && descriptor.get("mojmodelbridge_source_modid").and_then(Value::as_str) == Some(source_modid.as_str())
+                        && descriptor.get("mojmodelbridge_source_entity_class").and_then(Value::as_str)
+                            == Some(registration.entity_class.as_str())
+                });
+            if already_exported {
+                continue;
+            }
+        }
         let Some(source_model) = model_source_path(graph, &registration.model_class) else { continue };
         let parse_key = format!(
             "{}|{}",
