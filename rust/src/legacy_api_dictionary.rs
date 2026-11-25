@@ -3544,6 +3544,55 @@ const DEFINITIONS: &[Definition] = &[
     d!("IBlockState", "withMirror", V_112, "block_state_mirror", "BlockState mirror transform", "blocks", "Preserve Mirror enum and directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
 
 
+    // BlockPos packed coordinates, neighborhood iteration and immutable transforms.
+    d!("BlockPos", "crossProduct", V_112, "block_pos_cross_product", "Integer vector cross product", "geometry", "Preserve exact component order and integer overflow semantics for directional axes.", "net/minecraft/util/math/BlockPos.html"),
+    d!("BlockPos", "getAllInBox", V_ALL, "block_pos_box_iteration", "Inclusive BlockPos cuboid iterable", "geometry", "Preserve inclusive endpoints, iteration order and coordinate normalization for reversed bounds.", "net/minecraft/util/math/BlockPos.html"),
+    d!("BlockPos", "getAllInBoxMutable", V_112, "block_pos_mutable_box_iteration", "Mutable BlockPos cuboid iterator", "geometry", "Iterator reuses one mutable BlockPos instance; copy positions before storing them.", "net/minecraft/util/math/BlockPos.html"),
+    d!("BlockPos", "rotate", V_112, "block_pos_rotation", "BlockPos horizontal rotation", "geometry", "Preserve Rotation enum transform and Y coordinate.", "net/minecraft/util/math/BlockPos.html"),
+    d!("BlockPos", "subtract", V_ALL, "block_pos_subtract", "BlockPos coordinate subtraction", "geometry", "Preserve integer vector subtraction and immutable result semantics.", "net/minecraft/util/math/BlockPos.html"),
+    d!("BlockPos", "toImmutable", V_112, "block_pos_immutable_copy", "Mutable BlockPos immutable snapshot", "geometry", "Preserve snapshot semantics when mutable iterator instances are stored beyond the current iteration.", "net/minecraft/util/math/BlockPos.html"),
+
+    // Vec3d spatial math and interpolation operations.
+    d!("Vec3d", "add", V_112, "vec3d_add", "Immutable vector addition", "geometry", "Overloads accept XYZ or another Vec3d; preserve double precision and immutable result.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "crossProduct", V_ALL, "vec3d_cross_product", "3D vector cross product", "geometry", "Preserve right-handed coordinate convention and component order.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "dotProduct", V_ALL, "vec3d_dot_product", "3D vector dot product", "geometry", "Preserve component ordering and floating-point precision.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "getIntermediateWithXValue", V_ALL, "vec3d_intersection_x", "Vector interpolation at specified X plane", "geometry", "Preserve nullable result when segment is parallel/outside the interpolation interval.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "getIntermediateWithYValue", V_ALL, "vec3d_intersection_y", "Vector interpolation at specified Y plane", "geometry", "Preserve nullable result when segment is parallel/outside the interpolation interval.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "getIntermediateWithZValue", V_ALL, "vec3d_intersection_z", "Vector interpolation at specified Z plane", "geometry", "Preserve nullable result when segment is parallel/outside the interpolation interval.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "length", V_ALL, "vec3d_length", "3D vector magnitude", "geometry", "Preserve square root and double precision; avoid substituting squared length.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "lengthSquared", V_ALL, "vec3d_length_squared", "Squared 3D vector magnitude", "geometry", "Preserve no-square-root result used for distance thresholds.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "rotatePitch", V_ALL, "vec3d_rotate_pitch", "Vector pitch rotation", "geometry", "Preserve radians/rotation sign convention used by Minecraft look vectors.", "net/minecraft/util/math/Vec3d.html"),
+    d!("Vec3d", "rotateYaw", V_ALL, "vec3d_rotate_yaw", "Vector yaw rotation", "geometry", "Preserve coordinate handedness and radians/rotation sign convention.", "net/minecraft/util/math/Vec3d.html"),
+
+    // AxisAlignedBB transforms, intersection and geometric queries.
+    d!("AxisAlignedBB", "calculateIntercept", V_ALL, "aabb_segment_intercept", "Line segment/AABB ray intersection", "geometry", "Preserve nearest intercept, side, hit point and null miss result.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "expandTo", V_ALL, "aabb_expand_to_vector", "AABB expansion toward motion vector", "geometry", "Preserve directional min/max extension and collision sweep behavior.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "getAverageEdgeLength", V_112, "aabb_average_edge_length", "Average AABB edge length", "geometry", "Preserve average of XYZ dimensions rather than diagonal length.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "getCenter", V_112, "aabb_center", "AABB geometric center vector", "geometry", "Preserve half-dimension calculation and double precision.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "getXSize", V_112, "aabb_x_size", "AABB X extent", "geometry", "Preserve maxX-minX double value.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "getYSize", V_112, "aabb_y_size", "AABB Y extent", "geometry", "Preserve maxY-minY double value.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "getZSize", V_112, "aabb_z_size", "AABB Z extent", "geometry", "Preserve maxZ-minZ double value.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "hasNaN", V_112, "aabb_nan_predicate", "AABB NaN coordinate check", "geometry", "Preserve invalid geometry detection before clipping/collision math.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "intersectsWith", V_ALL, "aabb_intersects_legacy_alias", "Legacy AABB overlap predicate", "geometry", "Preserve legacy method alias and exact touching-face semantics.", "net/minecraft/util/math/AxisAlignedBB.html"),
+    d!("AxisAlignedBB", "isEmpty", V_112, "aabb_empty_predicate", "AABB empty/degenerate check", "geometry", "Preserve zero/negative dimension handling and NaN behavior.", "net/minecraft/util/math/AxisAlignedBB.html"),
+
+    // RayTraceResult exposes typed hit information and should not be flattened
+    // into only a BlockPos or entity reference.
+    d!("RayTraceResult", "getHitVec", V_112, "ray_hit_vector", "RayTraceResult precise collision location", "geometry", "Preserve fractional world coordinates and hit type.", "net/minecraft/util/math/RayTraceResult.html"),
+    d!("RayTraceResult", "getTypeOfHit", V_112, "ray_hit_type", "RayTraceResult hit classification", "geometry", "Preserve MISS/BLOCK/ENTITY distinction before reading type-specific fields.", "net/minecraft/util/math/RayTraceResult.html"),
+
+    // EnumFacing helpers for axis, rotations, opposite directions and vectors.
+    d!("EnumFacing", "getAxis", V_ALL, "facing_axis", "Direction axis classification", "geometry", "Preserve X/Y/Z axis identity independently from axis direction.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getAxisDirection", V_ALL, "facing_axis_direction", "Direction positive/negative axis orientation", "geometry", "Preserve POSITIVE/NEGATIVE semantics for directional transforms.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getDirectionVec", V_ALL, "facing_direction_vector", "Direction integer unit vector", "geometry", "Preserve exact signed integer vector for block offsets and rotations.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getFront", V_ALL, "facing_legacy_index_lookup", "Direction lookup from legacy side index", "geometry", "Preserve legacy numeric side mapping and invalid-index fallback.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getHorizontal", V_ALL, "facing_horizontal_index_lookup", "Horizontal direction lookup from index", "geometry", "Preserve modulo/index ordering for SOUTH/WEST/NORTH/EAST.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getOpposite", V_ALL, "facing_opposite", "Opposite facing direction", "geometry", "Preserve exact opposite axis/direction mapping.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getRotation", V_ALL, "facing_rotation", "Direction rotation around vertical axis", "geometry", "Preserve Rotation enum mapping for horizontal directions; vertical directions are unchanged.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getXOffset", V_ALL, "facing_x_offset", "Direction signed X offset", "geometry", "Preserve -1/0/1 axis component.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getYOffset", V_ALL, "facing_y_offset", "Direction signed Y offset", "geometry", "Preserve -1/0/1 axis component.", "net/minecraft/util/EnumFacing.html"),
+    d!("EnumFacing", "getZOffset", V_ALL, "facing_z_offset", "Direction signed Z offset", "geometry", "Preserve -1/0/1 axis component.", "net/minecraft/util/EnumFacing.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5383,6 +5432,24 @@ mod tests {
             ("IBlockState", "getActualState"), ("IBlockState", "cycleProperty"),
             ("IBlockState", "getCollisionBoundingBox"), ("IBlockState", "withProperty"),
             ("IBlockState", "isSideSolid"), ("IBlockState", "rotate"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn geometry_vector_raytrace_and_facing_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("BlockPos", "toLong"), ("BlockPos", "fromLong"),
+            ("BlockPos", "getAllInBoxMutable"), ("BlockPos", "crossProduct"),
+            ("Vec3d", "crossProduct"), ("Vec3d", "normalize"),
+            ("Vec3d", "getIntermediateWithYValue"), ("Vec3d", "rotateYaw"),
+            ("AxisAlignedBB", "calculateIntercept"), ("AxisAlignedBB", "union"),
+            ("AxisAlignedBB", "intersects"), ("AxisAlignedBB", "hasNaN"),
+            ("RayTraceResult", "getHitVec"), ("RayTraceResult", "getTypeOfHit"),
+            ("EnumFacing", "getDirectionVec"), ("EnumFacing", "getRotation"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
