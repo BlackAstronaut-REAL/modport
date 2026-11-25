@@ -8,14 +8,31 @@ the engine into the native executable.
 
 ## First source-driven NeoForge conversion pass
 
-The `port-neoforge` command accepts a mod directory, JAR, ZIP, or multiple source roots. It creates the NeoForge 1.21.1 project, analyzes Java and compiled registrations, emits native simple Item/Block registrations (including BlockItems), copies assets and data JSON with namespace remapping, generates missing item/block model JSON and English localization, and saves a conversion report.
+The `port-neoforge` command accepts a mod directory, JAR, ZIP, or multiple source roots. It creates a NeoForge 1.21.1 project, analyzes Java and compiled registrations, and emits native item, tiered-tool, wearable-armor, block, BlockItem, and basic living-entity registrations. It carries over recovered item stack/durability/rarity/fire-resistance/crafting-remainder properties, food nutrition and saturation, formatted/localized tooltip lore, armor stats and texture layers, block properties/mining tags/loot tables, and recipes recovered from JSON or common legacy Java helper calls. Source assets/data are copied with namespace remapping; missing item/block models, blockstates, and localization are generated. Each run writes a machine-readable `modport/port-analysis.json` with source paths, recovered values, docs references, warnings, and explicit pending work.
 
 ```powershell
 cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/legacy-mod.jar
 cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/decompiled-source --mod-id modern_mod --mod-name "Modern Mod" --package com.example.modern
 ```
 
-This is a partial converter, not a full behavior translator. Custom Java methods, entity AI, projectiles, wearable armor, block entities, event logic, networking, capabilities, and custom renderers/models are listed as pending in `modport/port-analysis.json`. Anything not safely reconstructed is not silently claimed as converted.
+This is a partial converter, not a full behavior translator. Entity classes currently use conservative `PathfinderMob` placeholders and generic goals; exact AI and custom models/renderers are not recovered. Projectile classes are inventoried but not emitted as fully functional custom projectiles. Custom item/block methods, special food effects, crop growth, block-entity logic, arbitrary procedures/events, networking, capabilities, custom loot conditions, and mod-specific interactions remain pending or are called out as warnings. The status file deliberately keeps `behavior_fully_reconstructed: false`; unsupported logic is not silently reported as converted.
+
+
+### Current native content coverage
+
+| Area | Current conversion behavior |
+| --- | --- |
+| Items | Basic items, stack size, durability, rarity, fire resistance, vanilla crafting remainder |
+| Food | Nutrition, saturation, always-edible and fast-eating flags; custom effects pending |
+| Tools/weapons | Sword, axe, pickaxe, shovel, hoe, bow/crossbow, fishing rod, shears; recovered material stats where found |
+| Armor | Wearable armor materials/pieces, defense, durability, enchantability, layer textures; special effects/repair items pending |
+| Blocks | Basic blocks, BlockItems, hardness, resistance, light, sound, mining requirements, loot and simple fallback models |
+| Plants | Cross-model/non-collision fallback; growth and special placement remain pending |
+| Entities | Registered entity placeholders with recovered attributes, conservative goals and fallback renderer |
+| Recipes/resources | JSON and common legacy Java recipes, namespace remapping, legacy result/ore recipe migration, asset/data import |
+| Lore/localization | Legacy § formatting codes, en_US language files, and Java localization strings |
+
+A generated Java project is not yet automatically compiled by Gradle against the NeoForge dependency inside the Rust unit-test suite. The current GitHub workflow verifies the Rust engine, desktop app, and CLI builds; test a generated mod with `gradle build` before distributing it.
 
 ## Native NeoForge project generation
 
