@@ -179,6 +179,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             item_source_properties(source, tool_materials.get(&compact(&registry)));
         let mut components = find_item_components(&all_files, &registry)
             .unwrap_or_else(|| serde_json::json!({}));
+        let component_lore = extract_component_lore(&mut components);
+        append_unique(&mut lore, &component_lore);
         if let Some(object) = components.as_object_mut() {
             object.insert("source_properties".to_owned(), source_properties);
         } else {
@@ -231,9 +233,12 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             let resource_model_source = find_item_model_json(&all_files, &registry);
             let model_source = armor_model.clone()
                 .or_else(|| find_linked_java_model(&all_files, &source_text, true));
-            let components_json = find_item_components(&all_files, &registry)
-                .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
-                .unwrap_or_else(|| "{}".to_owned());
+            let mut components = find_item_components(&all_files, &registry)
+                .unwrap_or_else(|| serde_json::json!({}));
+            let component_lore = extract_component_lore(&mut components);
+            append_unique(&mut lore, &component_lore);
+            let components_json = serde_json::to_string_pretty(&components)
+                .unwrap_or_else(|_| "{}".to_owned());
             let mut texture_paths = find_armor_layer_textures(&all_files, &set.prefix, &set.source_text);
             if let Some(model_path) = resource_model_source.as_ref() {
                 append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, model_path));
@@ -278,9 +283,12 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             });
         let mut lore = extract_tooltip_lines(&source.source_text);
         append_unique(&mut lore, &languages.descriptions_for(&registry));
-        let components_json = find_item_components(&all_files, &registry)
-            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
-            .unwrap_or_else(|| "{}".to_owned());
+        let mut components = find_item_components(&all_files, &registry)
+            .unwrap_or_else(|| serde_json::json!({}));
+        let component_lore = extract_component_lore(&mut components);
+        append_unique(&mut lore, &component_lore);
+        let components_json = serde_json::to_string_pretty(&components)
+            .unwrap_or_else(|_| "{}".to_owned());
         add(BrowserEntry {
             category: "Blocks".to_owned(),
             name: languages.name_for(&registry).unwrap_or_else(|| humanize(&registry)),
@@ -313,10 +321,13 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         };
         let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("texture");
         let registry = normalize_registry(stem);
-        let lore = languages.descriptions_for(&registry);
-        let components_json = find_item_components(&all_files, &registry)
-            .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_owned()))
-            .unwrap_or_else(|| "{}".to_owned());
+        let mut lore = languages.descriptions_for(&registry);
+        let mut components = find_item_components(&all_files, &registry)
+            .unwrap_or_else(|| serde_json::json!({}));
+        let component_lore = extract_component_lore(&mut components);
+        append_unique(&mut lore, &component_lore);
+        let components_json = serde_json::to_string_pretty(&components)
+            .unwrap_or_else(|_| "{}".to_owned());
         add(BrowserEntry {
             category: category.to_owned(),
             name: languages.name_for(&registry).unwrap_or_else(|| humanize(stem)),
@@ -1504,6 +1515,39 @@ fn find_item_components(files: &[PathBuf], registry: &str) -> Option<Value> {
     None
 }
 
+fn append_component_text(value: &Value, output: &mut String) {
+    match value {
+        Value::String(text) => output.push_str(text),
+        Value::Array(values) => {
+            for value in values { append_component_text(value, output); }
+        }
+        Value::Object(object) => {
+            if let Some(text) = object.get("text").and_then(Value::as_str) {
+                output.push_str(text);
+            } else if let Some(translate) = object.get("translate").and_then(Value::as_str) {
+                output.push_str(translate);
+            }
+            if let Some(extra) = object.get("extra") {
+                append_component_text(extra, output);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn extract_component_lore(components: &mut Value) -> Vec<String> {
+    let Some(object) = components.as_object_mut() else { return Vec::new(); };
+    let raw = object.remove("minecraft:lore").or_else(|| object.remove("lore"));
+    let Some(raw) = raw else { return Vec::new(); };
+    let lines = raw.as_array().cloned().unwrap_or_else(|| vec![raw]);
+    lines.iter().filter_map(|entry| {
+        let mut text = String::new();
+        append_component_text(entry, &mut text);
+        let text = text.trim().to_owned();
+        (!text.is_empty()).then_some(text)
+    }).collect()
+}
+
 fn append_unique(target: &mut Vec<String>, values: &[String]) {
     for value in values {
         if !target.contains(value) { target.push(value.clone()); }
@@ -1695,6 +1739,21 @@ mod tests {
         assert_eq!(material_properties["enchantability"], 15.0, "class getter should outrank material enchantability");
         assert_eq!(material_properties["attack_damage"], 13.5, "explicit class damage should outrank material damage");
         assert!(material_lore.iter().any(|line| line == "Mining efficiency: 9"));
+    }
+
+    #[test]
+    fn component_lore_is_moved_into_the_dedicated_lore_channel() {
+        let mut components = serde_json::json!({
+            "minecraft:custom_name": {"text":"Ancient Blade","color":"gold"},
+            "minecraft:lore": [
+                {"text":"An old oath"},
+                {"text":"Tempered in fire","extra":[{"text":" — unbroken"}]}
+            ]
+        });
+        let lore = extract_component_lore(&mut components);
+        assert_eq!(lore, vec!["An old oath", "Tempered in fire — unbroken"]);
+        assert!(components.get("minecraft:lore").is_none());
+        assert!(components.get("minecraft:custom_name").is_some());
     }
 
     #[test]
