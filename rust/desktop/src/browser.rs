@@ -241,8 +241,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 source_armor_properties
             } else {
                 compiled_armor.get(&compact(&set.prefix))
-                    .map(serde_json::to_value)
-                    .and_then(Result::ok)
+                    .and_then(|properties| serde_json::to_value(properties).ok())
                     .unwrap_or_else(|| serde_json::json!({}))
             };
             if let Some(object) = components.as_object_mut() {
