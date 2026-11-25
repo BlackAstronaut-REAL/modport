@@ -928,7 +928,7 @@ fn collect_native_tools(
         let harvest_level = stats.and_then(|value| value.harvest_level).unwrap_or(2);
         let tag = if harvest_level >= 3 { "DIAMOND" }
             else if harvest_level == 2 { "IRON" } else { "STONE" };
-        let uses = material_uses.unwrap_or(250).clamp(1, 100_000);
+        let uses = source_durability.or(material_uses).unwrap_or(250).clamp(1, 100_000);
         let efficiency = stats.and_then(|value| value.efficiency).unwrap_or(4.0).clamp(0.0, 100.0) as f32;
         let damage_bonus = stats.and_then(|value| value.damage).unwrap_or(1.0).clamp(-20.0, 100.0) as f32;
         let enchantability = stats.and_then(|value| value.enchantability).unwrap_or(10).clamp(0, 100) as u32;
@@ -1943,6 +1943,70 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 1);
         assert_eq!(status["converted"]["blocks"], 1);
+    }
+
+    #[test]
+    fn ports_legacy_tools_as_native_simple_tier_and_tiered_item_classes() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("tool_mod");
+        let output = temp.path().join("tool_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::create_dir_all(source.join("src/main/resources/assets/toolmod/textures/items")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"toolmod","name":"Tool Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/ModTools.java"), r#"
+            public class ModTools {
+                public static final ToolMaterial RUBY_TIER =
+                    EnumHelper.addToolMaterial("RUBY", 3, 550, 8.0F, 4.0F, 14);
+                public static final ItemPickaxe RUBY_PICKAXE = new ItemPickaxe(RUBY_TIER);
+                public static final ItemSword RUBY_SWORD = new ItemSword(RUBY_TIER);
+                public static void register() {
+                    GameRegistry.registerItem(RUBY_PICKAXE, "ruby_pickaxe");
+                    GameRegistry.registerItem(RUBY_SWORD, "ruby_sword");
+                }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/ItemPickaxe.java"), r#"
+            public class ItemPickaxe extends Item {
+                public ItemPickaxe(ToolMaterial material) {}
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/ItemSword.java"), r#"
+            public class ItemSword extends Item {
+                public ItemSword(ToolMaterial material) {}
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/resources/assets/toolmod/textures/items/ruby_pickaxe.png"), b"pickaxe").unwrap();
+        fs::write(source.join("src/main/resources/assets/toolmod/textures/items/ruby_sword.png"), b"sword").unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+
+        let pickaxe = report.items.iter().find(|item| item.registry_name == "ruby_pickaxe").unwrap();
+        assert_eq!(pickaxe.kind, "Pickaxe");
+        assert!(pickaxe.generated_as.contains("PickaxeItem"));
+        let sword = report.items.iter().find(|item| item.registry_name == "ruby_sword").unwrap();
+        assert_eq!(sword.kind, "Sword");
+        assert!(sword.generated_as.contains("SwordItem"));
+
+        let java_root = output.join("src/main/java/com/modport/toolmod/registry");
+        let tiers = fs::read_to_string(java_root.join("ModToolTiers.java")).unwrap();
+        assert!(tiers.contains("BlockTags.INCORRECT_FOR_DIAMOND_TOOL"));
+        assert!(tiers.contains("550"));
+        assert!(tiers.contains("8F"));
+        assert!(tiers.contains("4F"));
+        assert!(tiers.contains("14"));
+
+        let items = fs::read_to_string(java_root.join("ModItems.java")).unwrap();
+        assert!(items.contains("new PickaxeItem(ModToolTiers.TIER_RUBY_PICKAXE"));
+        assert!(items.contains("PickaxeItem.createAttributes(ModToolTiers.TIER_RUBY_PICKAXE, 1F, -2.8F)"));
+        assert!(items.contains("new SwordItem(ModToolTiers.TIER_RUBY_SWORD"));
+        assert!(items.contains("SwordItem.createAttributes(ModToolTiers.TIER_RUBY_SWORD, 3F, -2.4F)"));
+
+        assert!(output.join("src/main/resources/assets/toolmod/models/item/ruby_pickaxe.json").is_file());
+        assert!(output.join("src/main/resources/assets/toolmod/models/item/ruby_sword.json").is_file());
+        let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
+        assert_eq!(status["converted"]["tools_and_weapons"], 2);
     }
 
     #[test]
