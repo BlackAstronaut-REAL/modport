@@ -1997,10 +1997,10 @@ import net.neoforged.neoforge.registries.DeferredRegister;
         body.push_str("import net.minecraft.world.food.FoodProperties;\n");
     }
     if items.iter().any(|item| item.rarity.is_some()) {
-        body.push_str("import net.minecraft.world.item.Rarity;\\n");
+        body.push_str("import net.minecraft.world.item.Rarity;\n");
     }
     if items.iter().any(|item| item.craft_remainder.is_some()) {
-        body.push_str("import net.minecraft.world.item.Items;\\n");
+        body.push_str("import net.minecraft.world.item.Items;\n");
     }
     if !armors.is_empty() {
         body.push_str("import net.minecraft.world.item.ArmorItem;\n");
@@ -2598,6 +2598,8 @@ mod tests {
         assert!(items.contains(".rarity(Rarity.RARE)"));
         assert!(items.contains(".fireResistant()"));
         assert!(items.contains(".craftRemainder(Items.BUCKET)"));
+        assert!(items.contains("import net.minecraft.world.item.Rarity;\\n"));
+        assert!(items.contains("import net.minecraft.world.item.Items;\\n"));
     }
 
     #[test]
