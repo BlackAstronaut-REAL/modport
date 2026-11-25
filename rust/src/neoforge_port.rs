@@ -26,6 +26,7 @@ use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
 use crate::native_block_entity::discover_block_entities;
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
 use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
+use crate::legacy_api_dictionary::{map_legacy_api_methods, map_legacy_api_usages, LegacyApiMethodMapping};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -139,6 +140,7 @@ pub struct NeoForgePortReport {
     pub source_file_counts: BTreeMap<String, usize>,
     pub items: Vec<NativeItemPlan>,
     pub detected_item_methods: Vec<ItemMethodMapping>,
+    pub detected_legacy_api_methods: Vec<LegacyApiMethodMapping>,
     pub blocks: Vec<NativeBlockPlan>,
     pub block_entities: Vec<NativeBlockEntityPlan>,
     pub entities: Vec<NativeEntityPlan>,
@@ -626,6 +628,13 @@ pub fn port_to_neoforge(
         method_catalog.entry(mapping.source_method.clone()).or_insert_with(|| mapping.clone());
     }
     let detected_item_methods: Vec<ItemMethodMapping> = method_catalog.into_values().collect();
+    let detected_legacy_api_methods = detect_legacy_api_methods(roots);
+    if !detected_legacy_api_methods.is_empty() {
+        warnings.push(format!(
+            "Recognized {} distinct versioned legacy Forge API method(s) across Java source declarations and typed call sites. The normalized behavior, candidate source versions, target APIs and adapter notes are included in port-analysis.json; this does not mean custom method bodies have been translated.",
+            detected_legacy_api_methods.len()
+        ));
+    }
     if !detected_item_methods.is_empty() {
         warnings.push(format!(
             "Recognized {} distinct legacy item method(s) against the NeoForge 1.21.1 item API dictionary. Per-item mappings, conversion statuses, and adapter notes are included in port-analysis.json; recognition does not imply that a custom method body was translated.",
@@ -673,6 +682,7 @@ pub fn port_to_neoforge(
         source_file_counts,
         items,
         detected_item_methods,
+        detected_legacy_api_methods,
         blocks,
         block_entities: native_block_entities,
         entities,
@@ -722,6 +732,7 @@ pub fn port_to_neoforge(
         },
         "recognized_but_pending": {
             "legacy_item_methods": report.detected_item_methods.len(),
+            "legacy_api_methods": report.detected_legacy_api_methods.len(),
             "custom_entity_ai_and_models": report.entities.len(),
             "block_entity_storage_ticking_menus_and_logic": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
@@ -739,6 +750,28 @@ pub fn port_to_neoforge(
     fs::write(output_root.join("modport/port-status.json"), format!("{}\n", serde_json::to_string_pretty(&status)?))?;
 
     Ok(report)
+}
+
+fn detect_legacy_api_methods(roots: &[PathBuf]) -> Vec<LegacyApiMethodMapping> {
+    let mut methods = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
+    for root in roots {
+        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+            if !entry.file_type().is_file()
+                || !entry.path().extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java"))
+            {
+                continue;
+            }
+            let Ok(source) = fs::read_to_string(entry.path()) else { continue; };
+            let mappings = map_legacy_api_methods(&source, None)
+                .into_iter()
+                .chain(map_legacy_api_usages(&source, None));
+            for mapping in mappings {
+                methods.entry((mapping.source_owner.clone(), mapping.source_method.clone()))
+                    .or_insert(mapping);
+            }
+        }
+    }
+    methods.into_values().collect()
 }
 
 fn prepare_sources(inputs: &[PathBuf]) -> Result<PreparedSources> {
