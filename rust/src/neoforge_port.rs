@@ -2291,6 +2291,7 @@ mod tests {
         fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
         fs::create_dir_all(source.join("src/main/resources/assets/oldmod/textures/item")).unwrap();
         fs::create_dir_all(source.join("src/main/resources/assets/oldmod/textures/block")).unwrap();
+        fs::create_dir_all(source.join("src/main/resources/assets/oldmod/lang")).unwrap();
         fs::create_dir_all(source.join("src/main/resources/data/oldmod/recipes")).unwrap();
         fs::write(source.join("mcmod.info"), r#"{"modid":"oldmod","name":"Old Mod","version":"1.2"}"#).unwrap();
         fs::write(source.join("src/main/java/demo/ModItems.java"), r#"
@@ -2324,6 +2325,8 @@ mod tests {
         "#).unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/textures/item/ruby.png"), b"item png").unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/textures/block/ruby_ore.png"), b"block png").unwrap();
+        fs::write(source.join("src/main/resources/assets/oldmod/lang/en_US.lang"),
+            "item.ruby.desc=Translated tooltip from language file\\n").unwrap();
         fs::write(source.join("src/main/resources/data/oldmod/recipes/ruby.json"),
             br#"{"type":"minecraft:crafting_shaped","result":{"item":"oldmod:ruby"}}"#).unwrap();
 
@@ -2335,7 +2338,7 @@ mod tests {
         assert_eq!(report.target_mod_id, "oldmod");
         assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby"]);
         assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_ore"]);
-        assert_eq!(report.items[0].lore, vec!["§6Ruby ", "§lPower", "§oRare"]);
+        assert_eq!(report.items[0].lore, vec!["§6Ruby ", "§lPower", "§oRare", "Translated tooltip from language file"]);
         assert!(report.resource_files_copied >= 3);
         assert!(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/models/item/ruby.json").is_file());
