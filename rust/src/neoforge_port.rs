@@ -27,6 +27,7 @@ use crate::native_block_entity::discover_block_entities;
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
 use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
 use crate::legacy_api_dictionary::{map_legacy_api_methods, map_legacy_api_usages, LegacyApiMethodMapping};
+use crate::source_version::{detect_source_version, SourceVersionDetection};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -134,6 +135,7 @@ pub struct NeoForgePortReport {
     pub behavior_fully_reconstructed: bool,
     pub target_project: NeoForgeProjectReport,
     pub source_metadata: ModMetadata,
+    pub source_version: SourceVersionDetection,
     pub source_mod_id: String,
     pub target_mod_id: String,
     pub source_roots: Vec<String>,
@@ -303,6 +305,7 @@ pub fn port_to_neoforge(
     let roots = &prepared.roots;
     let scan = scan_project(roots)?;
     let source_metadata = scan.metadata.clone();
+    let source_version = detect_source_version(roots, Some(&source_metadata));
     let primary = roots.first().context("No prepared source root")?;
     let graph = scan_mod_graph(primary, &roots[1..])?;
 
@@ -628,7 +631,8 @@ pub fn port_to_neoforge(
         method_catalog.entry(mapping.source_method.clone()).or_insert_with(|| mapping.clone());
     }
     let detected_item_methods: Vec<ItemMethodMapping> = method_catalog.into_values().collect();
-    let detected_legacy_api_methods = detect_legacy_api_methods(roots);
+    let legacy_api_version = source_version.api_release_filter();
+    let detected_legacy_api_methods = detect_legacy_api_methods(roots, legacy_api_version);
     if !detected_legacy_api_methods.is_empty() {
         warnings.push(format!(
             "Recognized {} distinct versioned legacy Forge API method(s) across Java source declarations and typed call sites. The normalized behavior, candidate source versions, target APIs and adapter notes are included in port-analysis.json; this does not mean custom method bodies have been translated.",
@@ -676,6 +680,7 @@ pub fn port_to_neoforge(
         behavior_fully_reconstructed: false,
         target_project,
         source_metadata,
+        source_version: source_version.clone(),
         source_mod_id: source_mod_id.clone(),
         target_mod_id: target_mod_id.clone(),
         source_roots: input_roots.iter().map(|root| root.to_string_lossy().to_string()).collect(),
@@ -713,6 +718,15 @@ pub fn port_to_neoforge(
         },
         "source_mod_id": source_mod_id,
         "target_mod_id": target_mod_id,
+        "source_version": {
+            "minecraft_version": report.source_version.minecraft_version,
+            "api_release": report.source_version.api_release,
+            "loader_version": report.source_version.loader_version,
+            "confidence": report.source_version.confidence,
+            "status": report.source_version.status,
+            "evidence": report.source_version.evidence,
+            "notes": report.source_version.notes
+        },
         "display_name": target_mod_name,
         "package": target_package,
         "conversion_state": "partial_native_content_export",
@@ -752,7 +766,7 @@ pub fn port_to_neoforge(
     Ok(report)
 }
 
-fn detect_legacy_api_methods(roots: &[PathBuf]) -> Vec<LegacyApiMethodMapping> {
+fn detect_legacy_api_methods(roots: &[PathBuf], version: Option<&str>) -> Vec<LegacyApiMethodMapping> {
     let mut methods = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
     for root in roots {
         for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
@@ -762,9 +776,9 @@ fn detect_legacy_api_methods(roots: &[PathBuf]) -> Vec<LegacyApiMethodMapping> {
                 continue;
             }
             let Ok(source) = fs::read_to_string(entry.path()) else { continue; };
-            let mappings = map_legacy_api_methods(&source, None)
+            let mappings = map_legacy_api_methods(&source, version)
                 .into_iter()
-                .chain(map_legacy_api_usages(&source, None));
+                .chain(map_legacy_api_usages(&source, version));
             for mapping in mappings {
                 methods.entry((mapping.source_owner.clone(), mapping.source_method.clone()))
                     .or_insert(mapping);
