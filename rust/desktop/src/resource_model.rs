@@ -167,6 +167,38 @@ fn face_texture_indices(
     })
 }
 
+fn face_visibility(element: &Value) -> [bool; 6] {
+    let faces = element.get("faces").and_then(Value::as_object);
+    let names = ["east", "west", "up", "down", "north", "south"];
+    std::array::from_fn(|index| faces.is_some_and(|faces| faces.contains_key(names[index])))
+}
+
+fn face_uv_rotations(element: &Value) -> [u16; 6] {
+    let faces = element.get("faces").and_then(Value::as_object);
+    let names = ["east", "west", "up", "down", "north", "south"];
+    std::array::from_fn(|index| {
+        let rotation = faces.and_then(|faces| faces.get(names[index]))
+            .and_then(|face| face.get("rotation"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as u16;
+        if matches!(rotation, 0 | 90 | 180 | 270) { rotation } else { 0 }
+    })
+}
+
+fn default_face_uv(from: [f32; 3], to: [f32; 3], face_index: usize) -> [f32; 4] {
+    match face_index {
+        // Face order used by ViewerCube and renderer.rs:
+        // east, west, up, down, north, south.
+        0 => [16.0 - to[2], 16.0 - to[1], 16.0 - from[2], 16.0 - from[1]],
+        1 => [from[2], 16.0 - to[1], to[2], 16.0 - from[1]],
+        2 => [from[0], from[2], to[0], to[2]],
+        3 => [from[0], 16.0 - to[2], to[0], 16.0 - from[2]],
+        4 => [16.0 - to[0], 16.0 - to[1], 16.0 - from[0], 16.0 - from[1]],
+        5 => [from[0], 16.0 - to[1], to[0], 16.0 - from[1]],
+        _ => [0.0, 0.0, 16.0, 16.0],
+    }
+}
+
 fn face_uvs(
     element: &Value,
     textures: &Map<String, Value>,
@@ -175,20 +207,26 @@ fn face_uvs(
     texture_paths: &[PathBuf],
     default_texture_size: [u32; 2],
 ) -> [[f32; 4]; 6] {
-    let default = [
-        0.0, 0.0,
-        default_texture_size[0] as f32,
-        default_texture_size[1] as f32,
-    ];
+    let from = vector3(element.get("from"), [0.0, 0.0, 0.0]);
+    let to = vector3(element.get("to"), [16.0, 16.0, 16.0]);
     let faces = element.get("faces").and_then(Value::as_object);
     let names = ["east", "west", "up", "down", "north", "south"];
     std::array::from_fn(|index| {
-        let Some(face) = faces.and_then(|faces| faces.get(names[index])) else { return default; };
-        let Some(uv) = face.get("uv").and_then(Value::as_array).filter(|uv| uv.len() == 4) else {
-            return default;
+        let Some(face) = faces.and_then(|faces| faces.get(names[index])) else {
+            return [0.0, 0.0, default_texture_size[0] as f32, default_texture_size[1] as f32];
         };
-        let values = uv.iter().filter_map(Value::as_f64).map(|value| value as f32).collect::<Vec<_>>();
-        if values.len() != 4 { return default; }
+        let values = face.get("uv").and_then(Value::as_array)
+            .filter(|uv| uv.len() == 4)
+            .and_then(|uv| {
+                let parsed = uv.iter().map(Value::as_f64).collect::<Option<Vec<_>>>()?;
+                Some([
+                    parsed[0] as f32,
+                    parsed[1] as f32,
+                    parsed[2] as f32,
+                    parsed[3] as f32,
+                ])
+            })
+            .unwrap_or_else(|| default_face_uv(from, to, index));
         let size = resolved_face_texture_path(Some(face), textures, roots, namespace)
             .and_then(|path| texture_paths.iter().find(|candidate| **candidate == path))
             .and_then(|path| image::image_dimensions(path).ok())
@@ -309,6 +347,8 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
         let face_texture_indices = face_texture_indices(
             element, &textures, roots, &namespace, &texture_paths,
         );
+        let face_visibility = face_visibility(element);
+        let face_uv_rotations = face_uv_rotations(element);
 
         nodes.push(ViewerNode {
             name: element.get("name").and_then(Value::as_str)
@@ -322,6 +362,8 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
                 uv_origin: [0.0; 2],
                 face_uvs: Some(face_uvs),
                 face_texture_indices: Some(face_texture_indices),
+                face_visibility: Some(face_visibility),
+                face_uv_rotations: Some(face_uv_rotations),
                 crossed_plane: false,
                 mirror: false,
                 name: format!("element_{element_index}"),
@@ -473,6 +515,8 @@ fn builtin_cube(
             uv_origin: [0.0; 2],
             face_uvs: Some([[0.0, 0.0, width, height]; 6]),
             face_texture_indices: None,
+            face_visibility: None,
+            face_uv_rotations: None,
             crossed_plane: false,
             mirror: false,
             name: format!("{name}_cube"),
@@ -577,6 +621,50 @@ pub fn synthetic_block_preview(
 mod tests {
     use super::*;
     use image::RgbaImage;
+
+    #[test]
+    fn respects_omitted_faces_and_generates_minecraft_default_uvs() {
+        let element = serde_json::json!({
+            "from": [2, 3, 4],
+            "to": [12, 13, 14],
+            "faces": {
+                "east": {"texture":"#side"},
+                "up": {"texture":"#top"},
+                "down": {"texture":"#bottom"},
+                "north": {"texture":"#side"},
+                "south": {"texture":"#side"}
+            }
+        });
+        assert_eq!(face_visibility(&element), [true, false, true, true, true, true]);
+        let uvs = face_uvs(
+            &element,
+            &Map::new(),
+            &[],
+            "demo",
+            &[],
+            [16, 16],
+        );
+        assert_eq!(uvs[0], [2.0, 3.0, 12.0, 13.0]);
+        assert_eq!(uvs[2], [2.0, 4.0, 12.0, 14.0]);
+        assert_eq!(uvs[3], [2.0, 2.0, 12.0, 12.0]);
+        assert_eq!(uvs[4], [4.0, 3.0, 14.0, 13.0]);
+        assert_eq!(uvs[5], [2.0, 3.0, 12.0, 13.0]);
+    }
+
+    #[test]
+    fn reads_quarter_turn_uv_rotation_per_resource_face() {
+        let element = serde_json::json!({
+            "faces": {
+                "east": {"rotation": 90},
+                "west": {"rotation": 180},
+                "up": {"rotation": 270},
+                "down": {"rotation": 90},
+                "north": {"rotation": 0},
+                "south": {"rotation": 270}
+            }
+        });
+        assert_eq!(face_uv_rotations(&element), [90, 180, 270, 90, 0, 270]);
+    }
 
     #[test]
     fn maps_each_custom_block_face_to_its_own_texture_and_uv_scale() {
