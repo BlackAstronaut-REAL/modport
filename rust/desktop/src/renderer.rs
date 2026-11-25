@@ -226,6 +226,25 @@ fn texture_index_for_face(cube: &ViewerCube, face_index: usize, default_index: u
         .unwrap_or(default_index)
 }
 
+fn face_is_visible(cube: &ViewerCube, face_index: usize) -> bool {
+    cube.face_visibility
+        .and_then(|faces| faces.get(face_index).copied())
+        .unwrap_or(true)
+}
+
+fn rotate_face_uv_coordinates(
+    uv: [[f32; 2]; 4],
+    rotation_degrees: u16,
+    face_index: usize,
+) -> [[f32; 2]; 4] {
+    let mut turns = ((rotation_degrees / 90) % 4) as usize;
+    // Minecraft defines the down face rotation in the opposite direction.
+    if face_index == 3 {
+        turns = (4 - turns) % 4;
+    }
+    std::array::from_fn(|index| uv[(index + turns) % 4])
+}
+
 fn draw_cube(
     cube: &ViewerCube,
     world: Transform,
@@ -269,6 +288,9 @@ fn draw_cube(
     ];
 
     for (face_index, points, default_rect, normal) in faces {
+        if !face_is_visible(cube, face_index) {
+            continue;
+        }
         let texture_index = texture_index_for_face(cube, face_index, default_texture_index);
         let texture = textures.get(texture_index).or_else(|| textures.first());
         let (texture_width, texture_height) = texture
@@ -359,7 +381,18 @@ fn cube_face_quad(
     let rect = cube.face_uvs
         .and_then(|faces| faces.get(face_index).copied())
         .unwrap_or(default_rect);
-    quad_from_rect(points, rect, cube.mirror, texture_width, texture_height)
+    let mut vertices = quad_from_rect(points, rect, cube.mirror, texture_width, texture_height);
+    let rotation = cube.face_uv_rotations
+        .and_then(|rotations| rotations.get(face_index).copied())
+        .unwrap_or(0);
+    if rotation != 0 {
+        let uv = vertices.map(|vertex| vertex.uv);
+        let rotated = rotate_face_uv_coordinates(uv, rotation, face_index);
+        for index in 0..4 {
+            vertices[index].uv = rotated[index];
+        }
+    }
+    vertices
 }
 
 fn quad_from_rect(
@@ -555,6 +588,49 @@ mod tests {
     use mojmodelbridge::viewer::{ViewerAnimation, ViewerNode};
 
     #[test]
+    fn resource_face_visibility_defaults_to_legacy_all_faces() {
+        let legacy = ViewerCube {
+            min: [0.0; 3],
+            max: [1.0; 3],
+            uv_origin: [0.0; 2],
+            face_uvs: None,
+            face_texture_indices: None,
+            face_visibility: None,
+            face_uv_rotations: None,
+            crossed_plane: false,
+            mirror: false,
+            name: "legacy".to_owned(),
+        };
+        assert!((0..6).all(|face| face_is_visible(&legacy, face)));
+
+        let resource = ViewerCube {
+            face_visibility: Some([true, false, true, false, true, false]),
+            name: "resource".to_owned(),
+            ..legacy
+        };
+        assert!(face_is_visible(&resource, 0));
+        assert!(!face_is_visible(&resource, 1));
+        assert!(face_is_visible(&resource, 2));
+        assert!(!face_is_visible(&resource, 3));
+        assert!(face_is_visible(&resource, 4));
+        assert!(!face_is_visible(&resource, 5));
+    }
+
+    #[test]
+    fn face_uv_rotation_uses_minecraft_direction_rules() {
+        let original = [[1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+        assert_eq!(
+            rotate_face_uv_coordinates(original, 90, 0),
+            [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]]
+        );
+        // Down (face 3) rotates counterclockwise, so its quarter-turn is reversed.
+        assert_eq!(
+            rotate_face_uv_coordinates(original, 90, 3),
+            [[1.0, 1.0], [1.0, 0.0], [0.0, 0.0], [0.0, 1.0]]
+        );
+    }
+
+    #[test]
     fn quad_uvs_follow_vanilla_textured_quad_vertex_order() {
         let points = [[0.0, 0.0, 0.0]; 4];
         let vertices = quad_from_rect(points, [1.0, 2.0, 3.0, 4.0], false, 16.0, 16.0);
@@ -594,6 +670,8 @@ mod tests {
             uv_origin: [0.0; 2],
             face_uvs: None,
             face_texture_indices: Some([2, 2, 1, 0, 2, 2]),
+            face_visibility: None,
+            face_uv_rotations: None,
             crossed_plane: false,
             mirror: false,
             name: "test".to_owned(),
@@ -625,6 +703,8 @@ mod tests {
                     uv_origin: [0.0, 0.0],
                     face_uvs: None,
                     face_texture_indices: None,
+                    face_visibility: None,
+                    face_uv_rotations: None,
                     crossed_plane: false,
                     mirror: false,
                     name: "body_cube".to_owned(),
