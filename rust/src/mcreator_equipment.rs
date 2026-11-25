@@ -498,6 +498,9 @@ pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
         ("itemaxe", "Axe"), ("itemsword", "Sword"), ("itempickaxe", "Pickaxe"),
         ("itemspade", "Shovel"), ("itemshovel", "Shovel"), ("itemhoe", "Hoe"),
         ("itemshears", "Shears"), ("itemfishingrod", "Fishing Rod"), ("itembow", "Bow"),
+        ("itemmeleeweapon", "Sword"), ("itemweapon", "Sword"), ("weaponitem", "Sword"),
+        ("itemrangedweapon", "Bow"), ("rangedweaponitem", "Bow"), ("itemranged", "Bow"),
+        ("itemgun", "Bow"), ("itemblaster", "Bow"), ("itemlauncher", "Bow"), ("itemcannon", "Bow"),
         ("pickaxeitem", "Pickaxe"), ("sworditem", "Sword"), ("axeitem", "Axe"),
         ("shovelitem", "Shovel"), ("hoeitem", "Hoe"), ("bowitem", "Bow"),
         ("crossbowitem", "Bow"), ("fishingroditem", "Fishing Rod"), ("shearsitem", "Shears"),
@@ -514,10 +517,14 @@ pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
         return None;
     }
     for (suffix, kind) in [
-        ("fishingrod", "Fishing Rod"), ("crossbow", "Bow"), ("pickaxe", "Pickaxe"),
+        ("fishingrod", "Fishing Rod"), ("crossbow", "Bow"), ("blaster", "Bow"),
+        ("launcher", "Bow"), ("cannon", "Bow"), ("rifle", "Bow"), ("pistol", "Bow"),
+        ("shotgun", "Bow"), ("gun", "Bow"), ("pickaxe", "Pickaxe"),
         ("shears", "Shears"), ("shovel", "Shovel"), ("spade", "Shovel"),
-        ("sword", "Sword"), ("dagger", "Sword"), ("katana", "Sword"),
-        ("blade", "Sword"), ("spear", "Sword"), ("staff", "Sword"),
+        ("sword", "Sword"), ("dagger", "Sword"), ("knife", "Sword"), ("katana", "Sword"),
+        ("blade", "Sword"), ("spear", "Sword"), ("pike", "Sword"), ("trident", "Sword"),
+        ("staff", "Sword"), ("wand", "Sword"), ("mace", "Sword"), ("club", "Sword"),
+        ("flail", "Sword"), ("halberd", "Sword"), ("rapier", "Sword"),
         ("hammer", "Sword"), ("scythe", "Sword"), ("weapon", "Sword"),
         ("axe", "Axe"), ("hoe", "Hoe"), ("bow", "Bow"),
     ] {
@@ -918,9 +925,18 @@ fn custom_weapon_tool_type(class: &str, source_text: &str) -> Option<String> {
     ].iter().any(|token| text.contains(token));
     let combat_signal = [
         "hitentity", "onleftclickentity", "onentityswing", "attackentityfrom",
-        "getdamagevsentity", "func_150931_i",
+        "hurtenemy", "onattack", "onentityhit", "getdamagevsentity", "func_150931_i",
     ].iter().any(|token| text.contains(token));
     if damage_signal && combat_signal {
+        return Some("Sword".to_owned());
+    }
+    let named_weapon_base = [
+        "itemweapon", "meleeweapon", "weaponbase", "weaponitem", "combatitem",
+        "itemmelee", "meleeitem",
+    ].iter().any(|token| text.contains(token));
+    if named_weapon_base && (text.contains("attackdamage") || text.contains("weapondamage")
+        || text.contains("getdamagevsentity") || text.contains("hitentity"))
+    {
         return Some("Sword".to_owned());
     }
     None
@@ -1367,11 +1383,32 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
             continue;
         }
         let Some(source_path) = class_paths.get(&class) else { continue };
-        let source_text = class_texts.get(&class).cloned()
+        let mut source_text = class_texts.get(&class).cloned()
             .filter(|text| !text.trim().is_empty())
             .or_else(|| compiled_texts.get(&class).cloned())
             .unwrap_or_default();
         let Some(superclass) = class_parents.get(&class) else { continue };
+
+        // Weapon/item behavior and icon paths are frequently declared once in
+        // an abstract/custom base, while concrete Lost Infinity-style subclasses
+        // only select stats or constructor arguments. Include the ancestor chain
+        // for classification and texture discovery without changing registry IDs.
+        let mut parent_name = simple_java_name(superclass);
+        let mut visited_parents = HashSet::<String>::new();
+        for _ in 0..12 {
+            if parent_name.is_empty() || !visited_parents.insert(parent_name.clone()) {
+                break;
+            }
+            if let Some(parent_source) = class_texts.get(&parent_name)
+                .filter(|text| !text.trim().is_empty())
+                .or_else(|| compiled_texts.get(&parent_name))
+            {
+                source_text.push_str("\n");
+                source_text.push_str(parent_source);
+            }
+            let Some(next) = class_parents.get(&parent_name) else { break };
+            parent_name = simple_java_name(next);
+        }
         let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents, &source_text) else { continue };
 
         for registry in registries {
@@ -2030,6 +2067,37 @@ mod equipment_discovery_tests {
     }
 
     #[test]
+    fn recognizes_registered_weapon_from_inherited_custom_item_base() {
+        let temp = tempdir().unwrap();
+        let source = temp.path();
+        fs::write(source.join("ItemWeaponBase.java"), r#"
+            public abstract class ItemWeaponBase extends Item {
+                protected float weaponDamage = 24.0F;
+                public float getDamageVsEntity() { return weaponDamage; }
+                public void hitEntity() { }
+            }
+        "#).unwrap();
+        fs::write(source.join("ItemAncientBlade.java"), r#"
+            public class ItemAncientBlade extends ItemWeaponBase { }
+        "#).unwrap();
+        fs::write(source.join("Registry.java"), r#"
+            public class Registry {
+                public static ItemAncientBlade ancientBlade = new ItemAncientBlade();
+                public static void register() {
+                    GameRegistry.registerItem(ancientBlade, "ancient_blade");
+                }
+            }
+        "#).unwrap();
+
+        let found = discover_equipment_sources(&[source.to_path_buf()]).unwrap();
+        let weapon = found.iter().find(|item| item.registry_name == "ancient_blade").unwrap();
+        assert_eq!(weapon.element_type, "tool");
+        assert_eq!(weapon.tool_type.as_deref(), Some("Sword"));
+        assert!(weapon.source_text.contains("hitEntity"));
+        assert!(weapon.source_text.contains("weaponDamage"));
+    }
+
+    #[test]
     fn discovers_custom_item_base_weapons_and_keeps_them_as_tools() {
         let parents = BTreeMap::from([
             ("WeaponBase".to_owned(), "Object".to_owned()),
@@ -2062,7 +2130,7 @@ mod equipment_discovery_tests {
         fs::create_dir_all(source.join("assets/demo/textures/items")).unwrap();
         fs::create_dir_all(&workspace).unwrap();
         fs::write(source.join("assets/demo/textures/items/plain_icon.png"), b"standalone-icon").unwrap();
-        fs::write(source.join("assets/demo/models/item/plain_icon.json"), serde_json::to_vec(&json!({
+        fs::write(source.join("assets/demo/models/item/PlainItem.json"), serde_json::to_vec(&json!({
             "parent":"minecraft:item/generated",
             "textures":{"layer0":"demo:item/plain_icon"}
         })).unwrap()).unwrap();
