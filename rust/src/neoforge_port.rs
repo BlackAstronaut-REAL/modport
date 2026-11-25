@@ -417,7 +417,16 @@ pub fn port_to_neoforge(
         warnings.push(format!("{} projectile class(es) were recognized but their entity behavior and item bindings are not yet emitted.", projectiles.len()));
     }
     if block_records.iter().any(|block| block.plant_like) {
-        warnings.push("Plant-like blocks are currently emitted as simple blocks; crop growth, placement and cross-model behavior remain pending.".to_owned());
+        warnings.push("Plant-like blocks use cross models and non-colliding properties where generated; crop growth, placement rules, age/state variants, drops, and specialized spreading remain pending.".to_owned());
+    }
+    if block_records.iter().any(|block| block.properties.get("waterloggable").and_then(Value::as_bool).unwrap_or(false)) {
+        warnings.push("Waterloggable blocks were detected, but their WATERLOGGED state/property and SimpleWaterloggedBlock update behavior are not yet generated.".to_owned());
+    }
+    if block_records.iter().any(|block| block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false)) {
+        warnings.push("Falling/gravity blocks were detected, but custom FallingBlock subclasses and landing behavior are not yet generated.".to_owned());
+    }
+    if block_records.iter().any(|block| block.properties.contains_key("custom_drop")) {
+        warnings.push("Custom block drop expressions were detected, but loot-table or getDrops adapters are not yet generated.".to_owned());
     }
     warnings.push("Custom Java methods, event handlers, networking, capabilities, AI goals, block entities, and renderer/model behavior are not copied blindly; they require dedicated API-aware adapters.".to_owned());
 
@@ -1577,6 +1586,7 @@ fn generate_blocks_java(package: &str, _mod_id: &str, blocks: &[BlockRecord]) ->
 
 import {package}.NeoForgeMod;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -1590,14 +1600,31 @@ public final class ModBlocks {{
         let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
         let resistance = block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
         let light = block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32;
-        let light_property = if light > 0 {
-            format!(".lightLevel(state -> {light})")
-        } else {
-            String::new()
-        };
+        let requires_tool = block.properties.get("requires_correct_tool").and_then(Value::as_bool).unwrap_or(false);
+        let random_ticks = block.properties.get("random_ticks").and_then(Value::as_bool).unwrap_or(false);
+        let light_opacity = block.properties.get("light_opacity").and_then(Value::as_u64).unwrap_or(15);
+        let sound = block.properties.get("step_sound").and_then(Value::as_str)
+            .map(java_block_sound_type).unwrap_or("STONE");
+
+        let mut properties = format!("BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F)");
+        if light > 0 {
+            properties.push_str(&format!(".lightLevel(state -> {light})"));
+        }
+        if requires_tool {
+            properties.push_str(".requiresCorrectToolForDrops()");
+        }
+        if random_ticks {
+            properties.push_str(".randomTicks()");
+        }
+        if block.plant_like {
+            properties.push_str(".noCollission().noOcclusion()");
+        } else if light_opacity < 15 {
+            properties.push_str(".noOcclusion()");
+        }
+        properties.push_str(&format!(".sound(SoundType.{sound})"));
+
         body.push_str(&format!(
-            r#"    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock("{id}", BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F){light_property});
-"#,
+            "    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock(\"{id}\", {properties});\n",
             id = block.id
         ));
     }
@@ -1611,6 +1638,38 @@ public final class ModBlocks {{
 "#);
     body
 }
+
+fn java_block_sound_type(value: &str) -> &'static str {
+    match value.to_ascii_uppercase().as_str() {
+        "WOOD" => "WOOD",
+        "GLASS" => "GLASS",
+        "METAL" => "METAL",
+        "GRASS" => "GRASS",
+        "LEAVES" => "GRASS",
+        "SAND" => "SAND",
+        "SNOW" | "POWDER_SNOW" => "SNOW",
+        "WOOL" => "WOOL",
+        "LADDER" => "LADDER",
+        "ANVIL" => "ANVIL",
+        "SLIME" => "SLIME_BLOCK",
+        "HONEY" => "HONEY_BLOCK",
+        "NETHERRACK" => "NETHERRACK",
+        "NETHER_BRICKS" => "NETHER_BRICKS",
+        "BONE" => "BONE_BLOCK",
+        "NETHERITE" => "NETHERITE_BLOCK",
+        "BAMBOO" => "BAMBOO",
+        "PLANT" => "CROP",
+        "GROUND" | "ROOTED_DIRT" => "ROOTED_DIRT",
+        "SCULK" => "SCULK",
+        "CANDLE" => "CANDLE",
+        "AMETHYST" => "AMETHYST",
+        "COPPER" => "COPPER",
+        "PISTON" => "PISTON",
+        _ => "STONE",
+    }
+}
+
+
 fn generate_items_java(
     package: &str,
     _mod_id: &str,
@@ -1770,10 +1829,12 @@ fn write_native_resources(
         if !block_model.exists() {
             let texture = find_texture_reference(&textures_root, mod_id, &block.id, &block.class_name)
                 .unwrap_or_else(|| "minecraft:block/stone".to_owned());
-            write_json_file(&block_model, &json!({
-                "parent": "minecraft:block/cube_all",
-                "textures": {"all": texture}
-            }))?;
+            let model = if block.plant_like {
+                json!({"parent":"minecraft:block/cross","textures":{"cross":texture}})
+            } else {
+                json!({"parent":"minecraft:block/cube_all","textures":{"all":texture}})
+            };
+            write_json_file(&block_model, &model)?;
             written.push(relative_to(resources_root, &block_model));
         }
 

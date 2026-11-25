@@ -567,6 +567,11 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     properties.insert("hardness".to_owned(), json!(hardness));
     properties.insert("resistance".to_owned(), json!(resistance));
     properties.insert("light_level".to_owned(), json!(light));
+    let harvest_level = number_after(text, &[
+        r#"(?i)\bsetHarvestLevel\s*\(\s*["'][^"']+["']\s*,\s*(\d+)"#,
+        r#"(?i)\bharvestLevel\s*\(\s*(\d+)"#,
+    ]).unwrap_or(0.0).clamp(0.0, 10.0) as u32;
+    properties.insert("harvest_level".to_owned(), json!(harvest_level));
     properties.insert(
         "has_gravity".to_owned(),
         json!(
