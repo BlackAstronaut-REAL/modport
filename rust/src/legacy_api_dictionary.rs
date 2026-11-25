@@ -1879,6 +1879,7 @@ mod tests {
     #[test]
     fn special_ability_hooks_are_version_scoped_and_documented() {
         let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
             entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
@@ -1886,9 +1887,18 @@ mod tests {
         assert!(has(&v17, "Potion", "performEffect"));
         assert!(has(&v17, "EntityThrowable", "onImpact"));
         assert!(has(&v17, "EntityLivingBase", "getActivePotionEffects"));
+        assert!(has(&v17, "PotionEffect", "getPotionID"));
         assert!(!has(&v17, "EntityLivingBase", "getRevengeTarget"));
+        assert!(has(&v18, "PotionEffect", "getIsShowParticles"));
+        assert!(!has(&v18, "EntityLivingBase", "getRevengeTarget"));
         assert!(has(&v112, "EntityLivingBase", "getRevengeTarget"));
         assert!(has(&v112, "EntityLivingBase", "getLastAttackedEntity"));
+        assert!(has(&v112, "EntityLivingBase", "setActiveHand"));
+        assert!(has(&v112, "EntityLivingBase", "getLastDamageSource"));
+        assert!(has(&v112, "PotionEffect", "getCurativeItems"));
+        assert!(has(&v112, "PotionEffect", "setCurativeItems"));
+        assert!(has(&v112, "Potion", "getPotionFromResourceLocation"));
+        assert!(!has(&v112, "PotionEffect", "getPotionID"));
         assert!(has(&v112, "Enchantment", "onEntityDamaged"));
         assert!(has(&v112, "Enchantment", "isCurse"));
         assert!(has(&v112, "EntityArrow", "onHit"));
