@@ -23,7 +23,7 @@ use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sour
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
-use crate::native_lore::{extract_legacy_lore, lore_component_expressions};
+use crate::native_lore::{extract_language_descriptions, extract_legacy_lore, lore_component_expressions};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -305,11 +305,11 @@ pub fn port_to_neoforge(
 
     let mut tool_materials = compiled_tool_materials(roots)?;
     tool_materials.extend(source_tool_materials(roots, &source_mod_id));
-    let mut tool_records = collect_native_tools(&equipment, &tool_materials, &mut warnings);
+    let mut tool_records = collect_native_tools(&equipment, &tool_materials, roots, &source_mod_id, &mut warnings);
     for tool in &mut tool_records {
         tool.source_path = prepared.display_source_path(&tool.source_path);
     }
-    let mut item_records = collect_items(&equipment, &armor_sources, &mut warnings);
+    let mut item_records = collect_items(&equipment, &armor_sources, roots, &source_mod_id, &mut warnings);
     let mut block_records = collect_blocks(&block_sources, &mut warnings);
     for item in &mut item_records {
         item.source_path = prepared.display_source_path(&item.source_path);
@@ -325,6 +325,8 @@ pub fn port_to_neoforge(
     let native_armors = collect_native_armors(
         &armor_sources,
         &equipment,
+        roots,
+        &source_mod_id,
         &armor_stats,
         &item_records,
         &resources_root,
@@ -650,9 +652,26 @@ fn java_field_name(value: &str, prefix: &str) -> String {
     format!("{prefix}_{name}")
 }
 
+fn collect_source_lore(
+    source_text: &str,
+    source_roots: &[PathBuf],
+    registry: &str,
+    source_modid: &str,
+) -> Vec<String> {
+    let mut lore = extract_legacy_lore(source_text);
+    for line in extract_language_descriptions(source_roots, registry, source_modid) {
+        if !lore.contains(&line) {
+            lore.push(line);
+        }
+    }
+    lore
+}
+
 fn collect_items(
     equipment: &[EquipmentSource],
     armor_sources: &[ArmorSetSource],
+    source_roots: &[PathBuf],
+    source_modid: &str,
     warnings: &mut Vec<String>,
 ) -> Vec<ItemRecord> {
     let armor_classes: BTreeSet<String> = armor_sources.iter()
@@ -682,7 +701,7 @@ fn collect_items(
             source_text: source.source_text.clone(),
             stack_size,
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
-            lore: extract_legacy_lore(&source.source_text),
+            lore: collect_source_lore(&source.source_text, source_roots, &source.registry_name, source_modid),
             warnings: record_warnings,
         });
     }
@@ -698,6 +717,8 @@ fn collect_items(
 fn collect_native_armors(
     sources: &[ArmorSetSource],
     equipment: &[EquipmentSource],
+    source_roots: &[PathBuf],
+    source_modid: &str,
     stats_index: &BTreeMap<String, BTreeMap<String, f64>>,
     existing_items: &[ItemRecord],
     resources_root: &Path,
@@ -821,7 +842,9 @@ fn collect_native_armors(
                 class_name: class.clone(),
                 part: part.clone(),
                 durability: ArmorItemTypeDurability::for_part(part, durability_multiplier),
-                lore: equipment_lore.get(&compact(class)).cloned().unwrap_or_default(),
+                lore: equipment_lore.get(&compact(class)).cloned().unwrap_or_else(|| {
+                    collect_source_lore(&source.source_text, source_roots, registry, source_modid)
+                }),
             });
         }
 
@@ -926,6 +949,8 @@ fn native_tool_generated_kind(kind: &str) -> &'static str {
 fn collect_native_tools(
     equipment: &[EquipmentSource],
     material_stats: &BTreeMap<String, ToolMaterialStats>,
+    source_roots: &[PathBuf],
+    source_modid: &str,
     warnings: &mut Vec<String>,
 ) -> Vec<ToolRecord> {
     let numeric_field = |source: &str, names: &[&str]| -> Option<f64> {
@@ -1023,7 +1048,7 @@ fn collect_native_tools(
             attribute_damage,
             attribute_speed,
             durability,
-            lore: extract_legacy_lore(&source.source_text),
+            lore: collect_source_lore(&source.source_text, source_roots, &source.registry_name, source_modid),
             warnings: tool_warnings,
         });
     }
