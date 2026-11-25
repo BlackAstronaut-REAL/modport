@@ -88,7 +88,8 @@ fn mapped_block_ids(block_expression: &str, blocks: &[(String, String)]) -> Vec<
     let mut matched = BTreeSet::new();
     for field in &identifiers {
         for (registry_name, block_class) in blocks {
-            if snake(field) == *registry_name
+            let field_snake = snake(field);
+            if field_snake.as_str() == registry_name.as_str()
                 || compact(field) == compact(registry_name)
                 || compact(field) == compact(block_class)
                 || snake(field).ends_with(&format!("_{}", registry_name))

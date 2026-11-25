@@ -23,7 +23,7 @@ use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sour
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
-use crate::native_block_entity::{discover_block_entities, BlockEntitySourceRecord};
+use crate::native_block_entity::discover_block_entities;
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
@@ -1719,7 +1719,6 @@ public final class ModBlockEntities {{
 }
 
 fn generate_block_entity_java(package: &str, entity: &NativeBlockEntityPlan) -> String {
-    let field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
     format!(r#"package {package}.blockentity;
 
 import {package}.registry.ModBlockEntities;
