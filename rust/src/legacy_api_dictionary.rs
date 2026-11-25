@@ -1493,6 +1493,65 @@ const DEFINITIONS: &[Definition] = &[
     d!("PotionBrewEvent", "setItem", V_112, "brewing_slot_stack_write", "BrewingStand container slot ItemStack", "brewing", "adapter_required", "Preserve replacement stack by slot index and brewing process timing; do not omit bottle/fuel slots.", "net/minecraftforge/event/brewing/PotionBrewEvent.html"),
     d!("PlayerBrewedPotionEvent", "getStack", V_112, "player_brewed_stack", "Potion result ItemStack / brewing pickup", "brewing", "automatic_rename_candidate", "Preserve the brewed ItemStack collected by a player and its potion NBT/effects.", "net/minecraftforge/event/brewing/PlayerBrewedPotionEvent.html"),
 
+    // GUI event lifecycle: draw and button callbacks carry timing/context that
+    // must stay distinct when recreating custom screens and overlays.
+    d!("GuiScreenEvent", "getGui", V_112, "gui_event_screen", "GuiScreen client event context", "client_gui", "automatic_rename_candidate", "Preserve the exact GuiScreen instance and its lifecycle point.", "net/minecraftforge/client/event/GuiScreenEvent.html"),
+    d!("GuiScreenEvent.ActionPerformedEvent", "getButton", V_112, "gui_action_button", "GuiButton / screen action event", "client_gui", "automatic_rename_candidate", "Preserve the clicked button object and ID/action state.", "net/minecraftforge/client/event/GuiScreenEvent.ActionPerformedEvent.html"),
+    d!("GuiScreenEvent.ActionPerformedEvent", "getButtonList", V_112, "gui_action_button_list", "GuiScreen button list", "client_gui", "adapter_required", "The getter returns a copy; preserve copy-versus-live-list behavior when modifying the screen's button list.", "net/minecraftforge/client/event/GuiScreenEvent.ActionPerformedEvent.html"),
+    d!("GuiScreenEvent.ActionPerformedEvent", "setButton", V_112, "gui_action_button_write", "GuiButton / screen action event", "client_gui", "adapter_required", "Preserve replacement button identity and action dispatch semantics.", "net/minecraftforge/client/event/GuiScreenEvent.ActionPerformedEvent.html"),
+    d!("GuiScreenEvent.ActionPerformedEvent", "setButtonList", V_112, "gui_action_button_list_write", "GuiScreen button list", "client_gui", "adapter_required", "Preserve mutable button list replacement and ordering.", "net/minecraftforge/client/event/GuiScreenEvent.ActionPerformedEvent.html"),
+    d!("GuiScreenEvent.BackgroundDrawnEvent", "getMouseX", V_112, "gui_background_mouse_x", "GuiScreen background rendering input", "client_gui", "automatic_rename_candidate", "Preserve screen-space mouse X at background draw time.", "net/minecraftforge/client/event/GuiScreenEvent.BackgroundDrawnEvent.html"),
+    d!("GuiScreenEvent.BackgroundDrawnEvent", "getMouseY", V_112, "gui_background_mouse_y", "GuiScreen background rendering input", "client_gui", "automatic_rename_candidate", "Preserve screen-space mouse Y at background draw time.", "net/minecraftforge/client/event/GuiScreenEvent.BackgroundDrawnEvent.html"),
+    d!("GuiScreenEvent.DrawScreenEvent", "getMouseX", V_112, "gui_draw_mouse_x", "GuiScreen#drawScreen input", "client_gui", "automatic_rename_candidate", "Preserve mouse X at the Pre/Post GUI draw callback.", "net/minecraftforge/client/event/GuiScreenEvent.DrawScreenEvent.html"),
+    d!("GuiScreenEvent.DrawScreenEvent", "getMouseY", V_112, "gui_draw_mouse_y", "GuiScreen#drawScreen input", "client_gui", "automatic_rename_candidate", "Preserve mouse Y at the Pre/Post GUI draw callback.", "net/minecraftforge/client/event/GuiScreenEvent.DrawScreenEvent.html"),
+    d!("GuiScreenEvent.DrawScreenEvent", "getRenderPartialTicks", V_112, "gui_draw_partial_ticks", "GuiScreen rendering interpolation", "client_gui", "automatic_rename_candidate", "Preserve partial-tick interpolation used by animated GUI widgets.", "net/minecraftforge/client/event/GuiScreenEvent.DrawScreenEvent.html"),
+    d!("GuiScreenEvent.InitGuiEvent", "getButtonList", V_112, "gui_init_button_list", "GuiScreen button list", "client_gui", "automatic_rename_candidate", "Preserve the live button list supplied during screen initialization.", "net/minecraftforge/client/event/GuiScreenEvent.InitGuiEvent.html"),
+    d!("GuiScreenEvent.InitGuiEvent", "setButtonList", V_112, "gui_init_button_list_write", "GuiScreen button list", "client_gui", "adapter_required", "Preserve button-list replacement during Pre/Post init callbacks and original ordering.", "net/minecraftforge/client/event/GuiScreenEvent.InitGuiEvent.html"),
+
+    // Chat and screenshot callbacks have mutable output contracts.
+    d!("ClientChatEvent", "getMessage", V_112, "client_outgoing_chat_message", "Client chat/command text before network send", "chat", "automatic_rename_candidate", "Preserve the mutable outgoing text and command prefix before it is sent to the server.", "net/minecraftforge/client/event/ClientChatEvent.html"),
+    d!("ClientChatEvent", "getOriginalMessage", V_112, "client_outgoing_chat_original", "Client chat/command original text", "chat", "automatic_rename_candidate", "Preserve immutable original text separately from the listener-modified outgoing message.", "net/minecraftforge/client/event/ClientChatEvent.html"),
+    d!("ClientChatEvent", "setMessage", V_112, "client_outgoing_chat_message_write", "Client chat/command text before network send", "chat", "adapter_required", "Preserve message replacement before transmission and event cancellation that suppresses sending.", "net/minecraftforge/client/event/ClientChatEvent.html"),
+    d!("ClientChatReceivedEvent", "getMessage", V_112, "client_incoming_chat_component", "ITextComponent received chat message", "chat", "automatic_rename_candidate", "Preserve formatted component tree rather than flattening to plain text.", "net/minecraftforge/client/event/ClientChatReceivedEvent.html"),
+    d!("ClientChatReceivedEvent", "getType", V_112, "client_incoming_chat_type", "ChatType / incoming message routing", "chat", "automatic_rename_candidate", "Preserve SYSTEM, CHAT, and game-info routing semantics.", "net/minecraftforge/client/event/ClientChatReceivedEvent.html"),
+    d!("ClientChatReceivedEvent", "setMessage", V_112, "client_incoming_chat_component_write", "ITextComponent received chat message", "chat", "adapter_required", "Preserve replacement component formatting, siblings and style metadata.", "net/minecraftforge/client/event/ClientChatReceivedEvent.html"),
+    d!("ScreenshotEvent", "getCancelMessage", V_112, "screenshot_cancel_message", "Screenshot cancellation feedback component", "client_render", "automatic_rename_candidate", "Preserve the localized cancellation feedback component separately from success/result message.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+    d!("ScreenshotEvent", "getImage", V_112, "screenshot_image", "BufferedImage screenshot payload", "client_render", "automatic_rename_candidate", "Preserve the captured image object and pixel data prior to disk output.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+    d!("ScreenshotEvent", "getResultMessage", V_112, "screenshot_result_message", "ITextComponent screenshot status", "client_render", "automatic_rename_candidate", "Preserve success/failure notification component returned to the user.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+    d!("ScreenshotEvent", "getScreenshotFile", V_112, "screenshot_output_file", "Screenshot destination File", "client_render", "automatic_rename_candidate", "Preserve target output file path and extension.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+    d!("ScreenshotEvent", "setResultMessage", V_112, "screenshot_result_message_write", "ITextComponent screenshot status", "client_render", "adapter_required", "Preserve custom result component and its formatting/localization.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+    d!("ScreenshotEvent", "setScreenshotFile", V_112, "screenshot_output_file_write", "Screenshot destination File", "client_render", "adapter_required", "Preserve output destination replacement and file-writing timing.", "net/minecraftforge/client/event/ScreenshotEvent.html"),
+
+    // Special first-person hand rendering and client collision correction.
+    d!("RenderSpecificHandEvent", "getEquipProgress", V_112, "first_person_equip_progress", "ItemInHandRenderer equip interpolation", "client_render", "automatic_rename_candidate", "Preserve equip animation progress separately from swing progress.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("RenderSpecificHandEvent", "getHand", V_112, "first_person_render_hand", "EnumHand / hand rendering", "client_render", "automatic_rename_candidate", "Preserve main/offhand identity in first-person rendering.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("RenderSpecificHandEvent", "getInterpolatedPitch", V_112, "first_person_interpolated_pitch", "Player pitch interpolation", "client_render", "automatic_rename_candidate", "Preserve interpolated pitch for hand transforms.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("RenderSpecificHandEvent", "getItemStack", V_112, "first_person_render_stack", "ItemStack / hand renderer", "client_render", "automatic_rename_candidate", "Preserve current hand ItemStack, including NBT and item overrides.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("RenderSpecificHandEvent", "getPartialTicks", V_112, "first_person_hand_partial_ticks", "First-person render interpolation", "client_render", "automatic_rename_candidate", "Preserve partial tick interpolation for swing/equip animation.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("RenderSpecificHandEvent", "getSwingProgress", V_112, "first_person_hand_swing_progress", "Hand swing animation", "client_render", "automatic_rename_candidate", "Preserve swing animation progress independently from equip interpolation.", "net/minecraftforge/client/event/RenderSpecificHandEvent.html"),
+    d!("PlayerSPPushOutOfBlocksEvent", "getEntityBoundingBox", V_112, "player_collision_bounds_read", "AxisAlignedBB local player collision box", "client_movement", "automatic_rename_candidate", "Preserve the bounding box used for client push-out-of-blocks correction.", "net/minecraftforge/client/event/PlayerSPPushOutOfBlocksEvent.html"),
+    d!("PlayerSPPushOutOfBlocksEvent", "setEntityBoundingBox", V_112, "player_collision_bounds_write", "AxisAlignedBB local player collision box", "client_movement", "adapter_required", "Preserve collision-box mutation before the client push-out calculation; do not conflate with server teleport/movement.", "net/minecraftforge/client/event/PlayerSPPushOutOfBlocksEvent.html"),
+
+    // RenderLivingEvent is the common renderer/entity/position contract;
+    // Pre/Post/Specials subclasses inherit the same state.
+    d!("RenderLivingEvent", "getEntity", V_112, "living_render_event_entity", "EntityLivingBase render subject", "client_render", "automatic_rename_candidate", "Preserve the living entity being rendered and its render-time state.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+    d!("RenderLivingEvent", "getPartialRenderTick", V_112, "living_render_event_partial_ticks", "Living entity renderer interpolation", "client_render", "automatic_rename_candidate", "Preserve the partial render tick used by living model and layer animation.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+    d!("RenderLivingEvent", "getRenderer", V_112, "living_render_event_renderer", "RenderLivingBase renderer", "client_render", "automatic_rename_candidate", "Preserve the concrete renderer, model and layer context.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+    d!("RenderLivingEvent", "getX", V_112, "living_render_event_x", "Living entity render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render X rather than integer block position.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+    d!("RenderLivingEvent", "getY", V_112, "living_render_event_y", "Living entity render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render Y rather than integer block position.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+    d!("RenderLivingEvent", "getZ", V_112, "living_render_event_z", "Living entity render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render Z rather than integer block position.", "net/minecraftforge/client/event/RenderLivingEvent.html"),
+
+    // Tooltip color event exposes original and mutable colors separately.
+    d!("RenderTooltipEvent.Color", "getBackground", V_112, "tooltip_background_color", "Tooltip background ARGB", "client_render", "automatic_rename_candidate", "Read current background color after preceding listeners.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "getBorderEnd", V_112, "tooltip_border_end_color", "Tooltip border ARGB", "client_render", "automatic_rename_candidate", "Read current bottom/right border color.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "getBorderStart", V_112, "tooltip_border_start_color", "Tooltip border ARGB", "client_render", "automatic_rename_candidate", "Read current top/left border color.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "getOriginalBackground", V_112, "tooltip_original_background_color", "Tooltip background ARGB original", "client_render", "automatic_rename_candidate", "Preserve vanilla/original background separately from the current mutable color.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "getOriginalBorderEnd", V_112, "tooltip_original_border_end_color", "Tooltip border ARGB original", "client_render", "automatic_rename_candidate", "Preserve original border end color separately from listener-modified output.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "getOriginalBorderStart", V_112, "tooltip_original_border_start_color", "Tooltip border ARGB original", "client_render", "automatic_rename_candidate", "Preserve original border start color separately from listener-modified output.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "setBackground", V_112, "tooltip_background_color_write", "Tooltip background ARGB", "client_render", "adapter_required", "Preserve packed ARGB color and listener ordering.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "setBorderEnd", V_112, "tooltip_border_end_color_write", "Tooltip border ARGB", "client_render", "adapter_required", "Preserve packed ARGB end color and its gradient edge.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+    d!("RenderTooltipEvent.Color", "setBorderStart", V_112, "tooltip_border_start_color_write", "Tooltip border ARGB", "client_render", "adapter_required", "Preserve packed ARGB start color and its gradient edge.", "net/minecraftforge/client/event/RenderTooltipEvent.Color.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -1946,6 +2005,18 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         }
         "GuiContainerEvent.DrawForeground" => {
             candidates.insert("GuiContainerEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "RenderLivingEvent" | "RenderLivingEvent.Pre" | "RenderLivingEvent.Post"
+        | "RenderLivingEvent.Specials" | "RenderLivingEvent.Specials.Pre"
+        | "RenderLivingEvent.Specials.Post" => {
+            candidates.insert("RenderLivingEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "PlayerSPPushOutOfBlocksEvent" => {
+            candidates.insert("PlayerEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
         "LivingEvent.LivingJumpEvent" | "LivingEvent.LivingUpdateEvent"
@@ -2592,6 +2663,29 @@ mod tests {
         }
         assert!(!has("PlayerEvent.PlayerChangedDimensionEvent", "getFromDim"));
         assert!(!has("PlayerEvent.ItemSmeltedEvent", "getSmelting"));
+    }
+
+
+    #[test]
+    fn gui_chat_screenshot_and_entity_render_hooks_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("GuiScreenEvent", "getGui"),
+            ("GuiScreenEvent.ActionPerformedEvent", "setButtonList"),
+            ("GuiScreenEvent.DrawScreenEvent", "getRenderPartialTicks"),
+            ("GuiScreenEvent.InitGuiEvent", "setButtonList"),
+            ("ClientChatEvent", "getOriginalMessage"),
+            ("ClientChatReceivedEvent", "setMessage"),
+            ("ScreenshotEvent", "setScreenshotFile"),
+            ("RenderSpecificHandEvent", "getSwingProgress"),
+            ("PlayerSPPushOutOfBlocksEvent", "setEntityBoundingBox"),
+            ("RenderLivingEvent", "getPartialRenderTick"),
+            ("RenderTooltipEvent.Color", "getOriginalBackground"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
     }
 
     #[test]
