@@ -499,10 +499,12 @@ fn main() -> Result<()> {
             let total: usize = report.stages.iter().map(|stage| stage.exported).sum();
             let skipped: usize = report.stages.iter().map(|stage| stage.skipped).sum();
             println!(
-                "Native export pipeline finished: {} element(s) exported, {} skipped across {} stages.",
+                "Native export pipeline finished: {} element(s) exported, {} skipped across {} stages in {:.2}s ({} ms).",
                 total,
                 skipped,
-                report.stages.len()
+                report.stages.len(),
+                report.total_duration_ms as f64 / 1000.0,
+                report.total_duration_ms
             );
             println!(
                 "Workspace validation: {}.",
@@ -510,7 +512,14 @@ fn main() -> Result<()> {
             );
             println!("Updated workspace: {}", report.workspace_file.display());
             for stage in report.stages {
-                println!("{}: {} exported, {} skipped", stage.name, stage.exported, stage.skipped);
+                println!(
+                    "{}: {} exported, {} skipped ({:.2}s / {} ms)",
+                    stage.name,
+                    stage.exported,
+                    stage.skipped,
+                    stage.duration_ms as f64 / 1000.0,
+                    stage.duration_ms
+                );
             }
             for warning in report.warnings {
                 eprintln!("[WARN] {warning}");
