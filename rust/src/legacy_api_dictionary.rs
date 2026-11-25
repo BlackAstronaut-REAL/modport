@@ -3321,6 +3321,54 @@ const DEFINITIONS: &[Definition] = &[
     d!("BiomeGenBase", "registerBiome", V_112, "biome_registry_register", "Biome registry registration", "registration", "Preserve ResourceLocation identity and duplicate registration failure behavior.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "setRegistryName", V_112, "biome_registry_name_write", "Biome registry key registration", "registration", "Preserve namespace/path and registry entry naming constraints.", "net/minecraft/world/biome/Biome.html"),
 
+    // Container menu methods for slot synchronization, crafting and transfer.
+    d!("Container", "addListener", V_ALL, "container_listener_add", "IContainerListener menu synchronization registration", "inventory_gui", "Preserve listener identity and immediate full-state sync when the listener joins.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "canDragIntoSlot", V_112, "container_drag_slot_predicate", "Container quick-craft drag eligibility", "inventory_gui", "Preserve drag mode and slot restrictions for player/container inventory.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "canMergeSlot", V_112, "container_merge_slot_predicate", "Container collect/merge item eligibility", "inventory_gui", "Preserve item stack and slot merge rules during double-click item collection.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "canTakeItemForPickAll", V_112, "container_pick_all_predicate", "Container double-click collect slot predicate", "inventory_gui", "Preserve target stack and slot restriction semantics for pick-all action.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "canWorkWith", V_112, "container_use_permission", "Container player interaction permission", "inventory_gui", "Preserve player range, world, block and container usability checks.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "enchantItem", V_ALL, "container_enchant_action", "Container client button/enchantment action", "inventory_gui", "Preserve button ID and server-authoritative action result; enchanting uses separate seed/XP synchronization.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getCanCraft", V_112, "container_player_can_craft", "Per-player container craft permission lookup", "inventory_gui", "Preserve player identity and disabled crafting state for individual viewers.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getCarried", V_112, "container_carried_stack_read", "Container cursor/carried ItemStack", "inventory_gui", "Preserve cursor stack separately from slots and player main inventory.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getInventory", V_112, "container_inventory_list", "Container backing inventory collection", "inventory_gui", "Preserve ordered backing IInventory references and distinct slot views.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getNextTransactionID", V_112, "container_next_transaction_id", "Container short transaction counter", "inventory_networking", "Preserve signed-short wraparound and per-player transaction ID synchronization.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getSlotList", V_112, "container_slot_list", "Container ordered slot collection", "inventory_gui", "Preserve live slot list identity/order; mutating the list can invalidate network slot IDs.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getTransactionID", V_112, "container_transaction_id_read", "Container transaction ID", "inventory_networking", "Preserve current per-player action transaction short.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "getViewers", V_112, "container_viewer_list", "Container current player viewers", "inventory_gui", "Preserve viewer order and exact player objects for open/close callbacks.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "isPlayerNotUsingContainer", V_112, "container_player_using_predicate", "Container viewer membership predicate", "inventory_gui", "Preserve server player identity and container open state.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "isSameInventory", V_112, "container_inventory_identity", "Container inventory identity comparison", "inventory_gui", "Preserve reference identity when detecting shared inventory slots across menus.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "onCraftMatrixChanged", V_ALL, "container_craft_matrix_changed", "Crafting inventory change callback", "recipes", "Preserve matrix identity and recomputation timing for result slot updates.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "onCraftSlotChanged", V_112, "container_craft_result_slot_changed", "Crafting result slot state mutation", "recipes", "Preserve result stack and crafting matrix callback ordering.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "onContainerEvent", V_112, "container_event_dispatch", "Container client event/button dispatch", "inventory_gui", "Preserve event ID and payload integer for custom container synchronization.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "onCraftGuiOpened", V_112, "container_craft_gui_opened", "Crafting menu open lifecycle", "recipes", "Preserve player inventory/opening sequence and crafting result initialization.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "setAll", V_112, "container_replace_all_slots", "Container all-slot stack synchronization", "inventory_networking", "Preserve list size/order and all slot stacks when applying server menu snapshot.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "setCanCraft", V_112, "container_player_can_craft_write", "Per-player container crafting permission mutation", "inventory_gui", "Preserve player identity and canCraft flag; server/client authorization must remain consistent.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "setCarried", V_112, "container_carried_stack_write", "Container cursor/carried ItemStack mutation", "inventory_gui", "Preserve cursor stack copy and client/server synchronization behavior.", "net/minecraft/inventory/Container.html"),
+    d!("Container", "setItemStack", V_112, "container_transaction_stack_write", "Container cursor stack/transaction state update", "inventory_networking", "Preserve stack and transaction ID used by click confirmation.", "net/minecraft/inventory/Container.html"),
+
+    // InventoryPlayer hotbar, selected-slot and animation APIs.
+    d!("InventoryPlayer", "changeCurrentItem", V_ALL, "player_inventory_change_selected_slot", "Selected hotbar slot change", "player_inventory", "Preserve wheel delta direction, wraparound and selected index synchronization.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "clear", V_112, "player_inventory_clear", "Player inventory clearing", "player_inventory", "Preserve main, armor and offhand list clearing plus cursor stack state.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "copyInventory", V_112, "player_inventory_copy", "Player inventory clone/respawn copy", "player_inventory", "Preserve main/armor/offhand contents, selected slot and item animation state when copying between player instances.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "decrementAnimations", V_ALL, "player_inventory_decrement_animations", "Player inventory ItemStack animation tick", "player_inventory", "Preserve per-slot animation counter update and stack copy/identity behavior.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "dropAllItems", V_ALL, "player_inventory_drop_all", "Drop all player inventory contents", "player_inventory", "Preserve order and distinction between main inventory, armor, offhand and cursor carried stack.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "getHotbarSize", V_112, "player_inventory_hotbar_size", "Player hotbar slot count", "player_inventory", "Preserve fixed hotbar size separate from full inventory size.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "hasItemStack", V_112, "player_inventory_contains_stack", "Player inventory stack existence predicate", "player_inventory", "Preserve item identity and stack count search across main/armor/offhand arrays.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "isHotbar", V_112, "player_inventory_is_hotbar_slot", "Hotbar index range predicate", "player_inventory", "Preserve index bounds and distinct main inventory vs hotbar semantics.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "isItemValidForSlot", V_112, "player_inventory_slot_validity", "Player inventory slot insertion predicate", "player_inventory", "Preserve armor/offhand restrictions and item stack validity rules.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "markDirty", V_ALL, "player_inventory_mark_dirty", "Player inventory dirty-state notification", "player_inventory", "Preserve inventory dirty marking and player/container synchronization.", "net/minecraft/entity/player/InventoryPlayer.html"),
+    d!("InventoryPlayer", "setPickedItemStack", V_112, "player_inventory_pick_block_stack", "Creative pick-block selected stack mutation", "player_inventory", "Preserve hotbar selection, stack copy and replacement/drop fallback behavior.", "net/minecraft/entity/player/InventoryPlayer.html"),
+
+    // Slot is the adapter between Container menu actions and backing inventories.
+    d!("Slot", "getHasStack", V_112, "slot_has_stack", "Slot nonempty predicate", "inventory_gui", "Preserve backing inventory emptiness check rather than stack count assumptions.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "getItemStackLimit", V_112, "slot_item_stack_limit", "Slot and candidate ItemStack effective stack limit", "inventory_gui", "Preserve item-sensitive limit and inventory-specific slot limit combination.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "getSlotIndex", V_ALL, "slot_inventory_index", "Underlying inventory slot index", "inventory_gui", "Preserve inventory index separately from menu slot ID.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "getSlotStackLimit", V_112, "slot_stack_limit", "Slot maximum stack size", "inventory_gui", "Preserve slot limit independently from candidate item max stack size.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "onSlotChange", V_ALL, "slot_stack_count_change_callback", "Slot stack count change callback", "inventory_gui", "Preserve old stack and changed amount for crafting/achievement/bookkeeping callbacks.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "onSwapCraft", V_112, "slot_swap_craft_callback", "Crafting slot stack swap accounting", "recipes", "Preserve crafted item count and recipe output slot side effects.", "net/minecraft/inventory/Slot.html"),
+    d!("Slot", "putStack", V_ALL, "slot_stack_write", "Slot backing inventory stack replacement", "inventory_gui", "Preserve inventory set-slot write and onSlotChanged callback timing.", "net/minecraft/inventory/Slot.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5052,6 +5100,36 @@ mod tests {
             ("BiomeGenBase", "isSnowyBiome"),
             ("BiomeGenBase", "plantFlower"),
             ("BiomeGenBase", "plantGrass"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn player_container_inventory_and_slot_functions_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("Container", "addSlotToContainer"),
+            ("Container", "canDragIntoSlot"),
+            ("Container", "detectAndSendChanges"),
+            ("Container", "getNextTransactionID"),
+            ("Container", "getSlotFromInventory"),
+            ("Container", "mergeItemStack"),
+            ("Container", "onContainerClosed"),
+            ("Container", "setCarried"),
+            ("Container", "slotClick"),
+            ("InventoryPlayer", "changeCurrentItem"),
+            ("InventoryPlayer", "copyInventory"),
+            ("InventoryPlayer", "dropAllItems"),
+            ("InventoryPlayer", "getSlotFor"),
+            ("InventoryPlayer", "setPickedItemStack"),
+            ("Slot", "canTakeStack"),
+            ("Slot", "getSlotIndex"),
+            ("Slot", "onSwapCraft"),
+            ("Slot", "putStack"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
