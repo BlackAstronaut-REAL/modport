@@ -2098,7 +2098,13 @@ mod tests {
                 public static void register() { GameRegistry.registerBlock(RUBY_ORE, "ruby_ore"); }
             }
             public class RubyOre extends Block {
-                public RubyOre() { setHardness(3.0F); setResistance(5.0F); }
+                public RubyOre() {
+                    setHardness(3.0F);
+                    setResistance(5.0F);
+                    setHarvestLevel("pickaxe", 2);
+                    setStepSound(SoundType.METAL);
+                    randomTicks();
+                }
             }
         "#).unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/textures/item/ruby.png"), b"item png").unwrap();
@@ -2118,6 +2124,22 @@ mod tests {
         assert!(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/models/item/ruby.json").is_file());
         assert!(output.join("src/main/resources/assets/oldmod/blockstates/ruby_ore.json").is_file());
+        let blocks_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModBlocks.java")).unwrap();
+        assert!(blocks_java.contains(".requiresCorrectToolForDrops()"));
+        assert!(blocks_java.contains(".randomTicks()"));
+        assert!(blocks_java.contains(".sound(SoundType.METAL)"));
+        let mineable: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json")
+        ).unwrap()).unwrap();
+        assert!(mineable["values"].as_array().unwrap().contains(&json!("oldmod:ruby_ore")));
+        let iron_required: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/minecraft/tags/block/needs_iron_tool.json")
+        ).unwrap()).unwrap();
+        assert!(iron_required["values"].as_array().unwrap().contains(&json!("oldmod:ruby_ore")));
+        let loot: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/oldmod/loot_tables/blocks/ruby_ore.json")
+        ).unwrap()).unwrap();
+        assert_eq!(loot["pools"][0]["entries"][0]["name"], "oldmod:ruby_ore");
         let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
         assert!(items_java.contains("registerSimpleItem(\"ruby\""));
         assert!(items_java.contains("new BlockItem"));
