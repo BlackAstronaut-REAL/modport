@@ -1401,12 +1401,13 @@ fn write_native_registries(
     blocks: &[BlockRecord],
     armors: &[ArmorSetRecord],
     entities: &[EntityMetadata],
+    block_entities: &[NativeBlockEntityPlan],
 ) -> Result<Vec<String>> {
     let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
     let registry_root = java_base.join("registry");
     fs::create_dir_all(&registry_root)?;
 
-    fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks))?;
+    fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks, block_entities))?;
     fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, tools, blocks, armors))?;
 
     let mut generated = vec![
@@ -1417,6 +1418,23 @@ fn write_native_registries(
     if tools.iter().any(|tool| matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe")) {
         fs::write(registry_root.join("ModToolTiers.java"), generate_tool_tiers_java(package, tools))?;
         generated.push(format!("src/main/java/{}/registry/ModToolTiers.java", package.replace('.', "/")));
+    }
+
+    let active_block_entities: Vec<&NativeBlockEntityPlan> = block_entities.iter()
+        .filter(|record| !record.associated_blocks.is_empty())
+        .collect();
+    if !active_block_entities.is_empty() {
+        fs::write(registry_root.join("ModBlockEntities.java"), generate_block_entities_java(package, &active_block_entities))?;
+        generated.push(format!("src/main/java/{}/registry/ModBlockEntities.java", package.replace('.', "/")));
+        let block_entity_root = java_base.join("blockentity");
+        fs::create_dir_all(&block_entity_root)?;
+        for record in &active_block_entities {
+            fs::write(
+                block_entity_root.join(format!("{}.java", record.generated_class)),
+                generate_block_entity_java(package, record)
+            )?;
+            generated.push(format!("src/main/java/{}/blockentity/{}.java", package.replace('.', "/"), record.generated_class));
+        }
     }
 
     if !armors.is_empty() {
@@ -1671,6 +1689,66 @@ fn generate_tool_registration(tool: &ToolRecord, package: &str) -> String {
             id = tool.id
         ),
     }
+}
+
+
+fn generate_block_entities_java(package: &str, block_entities: &[&NativeBlockEntityPlan]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import {package}.blockentity.*;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModBlockEntities {{
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
+        DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, NeoForgeMod.MOD_ID);
+"#);
+    for entity in block_entities {
+        let field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
+        let first_block = &entity.associated_blocks[0];
+        let block_field = java_field_name(first_block, "BLOCK");
+        body.push_str(&format!(
+            r#"    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<{class_name}>> {field} =
+        BLOCK_ENTITY_TYPES.register("{id}", () -> BlockEntityType.Builder.of(
+            (pos, state) -> new {class_name}(ModBlockEntities.{field}.get(), pos, state),
+            ModBlocks.{block_field}.get()
+        ).build(null));
+"#,
+            class_name = entity.generated_class,
+            id = entity.registry_name
+        ));
+    }
+    body.push_str(r#"
+    private ModBlockEntities() {}
+
+    public static void register(IEventBus modEventBus) {
+        BLOCK_ENTITY_TYPES.register(modEventBus);
+    }
+}
+"#);
+    body
+}
+
+fn generate_block_entity_java(package: &str, entity: &NativeBlockEntityPlan) -> String {
+    let field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
+    format!(r#"package {package}.blockentity;
+
+import {package}.registry.ModBlockEntities;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
+
+public final class {class_name} extends BlockEntity {{
+    public {class_name}(BlockEntityType<?> type, BlockPos pos, BlockState state) {{
+        super(type, pos, state);
+    }}
+}}
+"#, class_name = entity.generated_class)
 }
 
 fn generate_armor_materials_java(package: &str, armors: &[ArmorSetRecord]) -> String {
@@ -2098,13 +2176,24 @@ public final class NeoForgeMod {{
     body.push_str("    }\n}\n");
     body
 }
-fn generate_blocks_java(package: &str, _mod_id: &str, blocks: &[BlockRecord]) -> String {
+fn generate_blocks_java(
+    package: &str,
+    _mod_id: &str,
+    blocks: &[BlockRecord],
+    block_entities: &[NativeBlockEntityPlan],
+) -> String {
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -2124,15 +2213,9 @@ public final class ModBlocks {{
             .map(java_block_sound_type).unwrap_or("STONE");
 
         let mut properties = format!("BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F)");
-        if light > 0 {
-            properties.push_str(&format!(".lightLevel(state -> {light})"));
-        }
-        if requires_tool {
-            properties.push_str(".requiresCorrectToolForDrops()");
-        }
-        if random_ticks {
-            properties.push_str(".randomTicks()");
-        }
+        if light > 0 { properties.push_str(&format!(".lightLevel(state -> {light})")); }
+        if requires_tool { properties.push_str(".requiresCorrectToolForDrops()"); }
+        if random_ticks { properties.push_str(".randomTicks()"); }
         if block.plant_like {
             properties.push_str(".noCollission().noOcclusion()");
         } else if light_opacity < 15 {
@@ -2140,10 +2223,33 @@ public final class ModBlocks {{
         }
         properties.push_str(&format!(".sound(SoundType.{sound})"));
 
-        body.push_str(&format!(
-            "    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock(\"{id}\", {properties});\n",
-            id = block.id
-        ));
+        let entity = block_entities.iter()
+            .find(|candidate| candidate.associated_blocks.iter().any(|id| id == &block.id));
+        if let Some(entity) = entity {
+            let block_class = generated_entity_block_class(&block.id);
+            let be_field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
+            body.push_str(&format!(
+                "    public static final DeferredBlock<Block> {field} = BLOCKS.register(\"{id}\", () -> new {block_class}({properties}));\n",
+                id = block.id
+            ));
+            body.push_str(&format!(
+                r#"    public static final class {block_class} extends Block implements EntityBlock {{
+        public {block_class}(BlockBehaviour.Properties properties) {{ super(properties); }}
+
+        @Override
+        public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {{
+            return new {entity_class}(ModBlockEntities.{be_field}.get(), pos, state);
+        }}
+    }}
+"#,
+                entity_class = entity.generated_class
+            ));
+        } else {
+            body.push_str(&format!(
+                "    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock(\"{id}\", {properties});\n",
+                id = block.id
+            ));
+        }
     }
     body.push_str(r#"
     private ModBlocks() {}
@@ -2154,6 +2260,10 @@ public final class ModBlocks {{
 }
 "#);
     body
+}
+
+fn generated_entity_block_class(block_id: &str) -> String {
+    format!("EntityBlock{}", java_type_identifier(block_id))
 }
 
 fn java_block_sound_type(value: &str) -> &'static str {
