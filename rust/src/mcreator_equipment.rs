@@ -186,6 +186,53 @@ fn compiled_equipment_getter_stubs(class: &ClassFile) -> String {
         }
     }
 
+    // The item icon is often set in the concrete item constructor while
+    // registerIcons itself is inherited from net.minecraft.item.Item. Recover
+    // the string argument to setTextureName/func_111206_d directly from bytecode.
+    for method in &class.methods {
+        let Some(code) = method.code.as_ref() else { continue; };
+        let Ok(instructions) = decode_instructions(&code.code) else { continue; };
+        for (call_index, instruction) in instructions.iter().enumerate() {
+            if !matches!(instruction.opcode, 0xb6..=0xb9) || instruction.operands.len() < 2 {
+                continue;
+            }
+            let index = u16::from_be_bytes([instruction.operands[0], instruction.operands[1]]);
+            let Some((_, name, _)) = class.member_reference(index) else { continue; };
+            if !matches!(name.as_str(), "setTextureName" | "func_111206_d") {
+                continue;
+            }
+
+            // In normal javac output the icon key is the nearest preceding
+            // ldc String, with only receiver/argument loads between it and the
+            // call. Stop at another invoke so an unrelated earlier string is
+            // never mistaken for the texture argument.
+            let mut texture_ref = None;
+            for previous in instructions[..call_index].iter().rev().take(8) {
+                if matches!(previous.opcode, 0xb6..=0xba) {
+                    break;
+                }
+                let constant_index = match previous.opcode {
+                    0x12 => previous.operands.first().copied().map(u16::from),
+                    0x13 | 0x14 if previous.operands.len() >= 2 => Some(
+                        u16::from_be_bytes([previous.operands[0], previous.operands[1]])
+                    ),
+                    _ => None,
+                };
+                if let Some(constant_index) = constant_index {
+                    if let Some(ConstantValue::String(value)) = class.constant(constant_index) {
+                        texture_ref = Some(value.replace('\\', "/"));
+                        break;
+                    }
+                }
+            }
+            if let Some(texture_ref) = texture_ref {
+                if let Ok(literal) = serde_json::to_string(&texture_ref) {
+                    output.push_str(&format!("setTextureName({literal});\\n"));
+                }
+            }
+        }
+    }
+
     // Forge 1.7/1.8 item icons are commonly registered inside registerIcons
     // using a plain resource key such as "modid:items/bertha" (no .png suffix).
     for method in &class.methods {
@@ -2211,6 +2258,46 @@ mod equipment_discovery_tests {
         assert_eq!(report.records[0].texture, "plain_icon");
         assert!(workspace.join("src/main/resources/assets/converted/textures/item/plain_icon.png").is_file());
         assert!(!report.warnings.iter().any(|warning| warning.contains("No source icon texture found")));
+    }
+
+    #[test]
+    fn recovers_compiled_only_set_texture_name_constructor_argument() {
+        let class = ClassFile {
+            minor_version:0,
+            major_version:50,
+            access_flags:0,
+            this_class:0,
+            super_class:0,
+            interfaces:Vec::new(),
+            constant_pool:vec![
+                None,
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("modid:items/black_hole".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::String { string_index:1 }),
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("net/minecraft/item/Item".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::Class { name_index:3 }),
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("setTextureName".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::Utf8("(Ljava/lang/String;)Lnet/minecraft/item/Item;".to_owned())),
+                Some(crate::bytecode::ConstantPoolEntry::NameAndType { name_index:5, descriptor_index:6 }),
+                Some(crate::bytecode::ConstantPoolEntry::Methodref { class_index:4, name_and_type_index:7 }),
+            ],
+            fields:Vec::new(),
+            methods:vec![MemberInfo {
+                name:"<init>".to_owned(),
+                code:Some(crate::bytecode::CodeAttribute {
+                    code:vec![0x2a, 0x12, 0x02, 0xb6, 0x00, 0x08, 0x57, 0xb1],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            attributes:Vec::new(),
+            bootstrap_methods:Vec::new(),
+        };
+        let stubs = compiled_equipment_getter_stubs(&class);
+        let references = declared_equipment_texture_refs(&stubs);
+        assert!(references.iter().any(|value| value == "modid:items/black_hole"));
+        assert!(references.iter().any(|value| {
+            texture_stem_from_reference(value).as_deref() == Some("black_hole")
+        }));
     }
 
     #[test]
