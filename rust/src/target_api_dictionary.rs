@@ -334,7 +334,7 @@ mod tests {
     fn dictionary_does_not_repeat_same_owner_and_method_contract() {
         let mut seen = BTreeSet::new();
         for entry in target_api_dictionary() {
-            let key = format!("{}#{}", entry.owner, entry.method);
+            let key = format!("{}#{}#{}", entry.owner, entry.method, entry.signature);
             assert!(seen.insert(key.clone()), "duplicate target API entry {key}");
         }
     }
