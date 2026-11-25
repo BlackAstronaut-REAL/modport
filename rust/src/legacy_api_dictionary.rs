@@ -3689,6 +3689,32 @@ const DEFINITIONS: &[Definition] = &[
     d!("IChunkProvider", "saveChunks", V_ALL, "chunk_provider_save_chunks", "Chunk provider save lifecycle", "world_persistence", "Preserve save-all flag and progress callback ordering.", "net/minecraft/world/chunk/IChunkProvider.html"),
     d!("IChunkProvider", "unloadQueuedChunks", V_ALL, "chunk_provider_unload_queued", "Chunk unload queue processing", "world_chunks", "Preserve queue mutation and return value that indicates pending unload work.", "net/minecraft/world/chunk/IChunkProvider.html"),
 
+    // EntityRegistry registration and spawn egg metadata.
+    d!("EntityRegistry", "findGlobalUniqueEntityId", V_ALL, "entity_registry_unique_numeric_id", "Legacy unique entity numeric ID allocation", "registration", "Preserve global numeric ID allocation order only for old save/network compatibility; use ResourceLocation identity for modern registry.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+
+    // Spawn packet extension interface for custom synchronized entity state.
+
+    // GameRegistry registration, item stacks, recipes, fuel, and tile entities.
+    d!("GameRegistry", "addRecipe", V_ALL, "game_registry_add_recipe", "Crafting recipe registration", "registration_recipes", "Overloads accept IRecipe or shaped/shapeless object arrays; preserve registry name, recipe order and custom recipe serializers.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "registerTileEntityWithAlternatives", V_112, "game_registry_tile_entity_alternatives", "TileEntity registry aliases for old IDs", "registration", "Preserve primary registry ID plus all legacy aliases used by existing world saves.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+
+    // DimensionManager numeric dimension registration and runtime lifecycle.
+    d!("DimensionManager", "shouldLoadSpawn", V_112, "dimension_manager_spawn_chunk_policy", "Dimension spawn chunk loading policy", "dimensions", "Preserve per-dimension spawn chunk loading option.", "net/minecraftforge/common/DimensionManager.html"),
+
+    // DimensionType registry metadata and factory.
+    d!("DimensionType", "create", V_112, "dimension_type_create", "Register custom DimensionType", "dimensions", "Preserve name, suffix, numeric type ID, WorldProvider class and keepLoaded flag.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "getById", V_112, "dimension_type_by_id", "DimensionType lookup by legacy numeric type ID", "dimensions", "Preserve missing-ID exception/null behavior and separate dimension ID vs provider type ID.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "getId", V_112, "dimension_type_id", "DimensionType legacy numeric provider ID", "dimensions", "Preserve global provider type ID, not active world's dimension ID.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "getName", V_112, "dimension_type_name", "DimensionType display name", "dimensions", "Preserve exact display name and localization behavior.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "getSuffix", V_112, "dimension_type_suffix", "DimensionType save/player data suffix", "dimensions", "Preserve per-dimension save path suffix used for player data and world storage.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "hasSkyLight", V_112, "dimension_type_has_sky_light", "DimensionType skylight capability", "dimensions", "Preserve skylight flag independently from WorldProvider sky renderer capability.", "net/minecraft/world/DimensionType.html"),
+    d!("DimensionType", "shouldLoadSpawn", V_112, "dimension_type_spawn_chunk_load", "DimensionType spawn chunk keep-loaded policy", "dimensions", "Preserve keepLoaded setting for spawn chunks independently from forced chunk tickets.", "net/minecraft/world/DimensionType.html"),
+
+    // TileEntity static registry and NBT construction helpers.
+    d!("TileEntity", "create", V_ALL, "tile_entity_create_from_nbt", "TileEntity instance factory from NBT ID", "block_entities", "Preserve registry alias lookup, id resolution and null for unknown tile entity IDs.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getKey", V_112, "tile_entity_registry_key", "TileEntity registry ResourceLocation", "block_entities", "Preserve class-to-registry key mapping and alias behavior.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "register", V_ALL, "tile_entity_register_class", "TileEntity class/name registration", "registration", "Preserve numeric legacy ID, class and namespaced registry key/aliases.", "net/minecraft/tileentity/TileEntity.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5586,6 +5612,24 @@ mod tests {
             ("IChunkGenerator", "getNearestStructurePos"),
             ("IChunkProvider", "provideChunk"), ("IChunkProvider", "saveChunks"),
             ("IChunkProvider", "unloadQueuedChunks"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn entity_dimension_and_registry_functions_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("EntityRegistry", "registerModEntity"), ("EntityRegistry", "registerEgg"),
+            ("IEntityAdditionalSpawnData", "readSpawnData"),
+            ("IEntityAdditionalSpawnData", "writeSpawnData"),
+            ("GameRegistry", "registerWorldGenerator"), ("GameRegistry", "registerTileEntity"),
+            ("GameRegistry", "registerBlock"), ("DimensionManager", "initDimension"),
+            ("DimensionManager", "registerDimension"), ("DimensionManager", "unloadWorld"),
+            ("DimensionManager", "getWorlds"), ("DimensionType", "create"),
+            ("DimensionType", "getById"), ("TileEntity", "create"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
