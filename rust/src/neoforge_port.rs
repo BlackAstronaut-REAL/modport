@@ -1148,9 +1148,124 @@ fn write_native_registries(
         generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
     }
 
+    let has_lore = items.iter().any(|item| !item.lore.is_empty())
+        || tools.iter().any(|tool| !tool.lore.is_empty())
+        || armors.iter().flat_map(|armor| &armor.pieces).any(|piece| !piece.lore.is_empty());
+    if has_lore {
+        let lore_root = java_base.join("item");
+        fs::create_dir_all(&lore_root)?;
+        for item in items.iter().filter(|item| !item.lore.is_empty()) {
+            let class_name = lore_class_name(&item.id);
+            let source = generate_lore_item_java(
+                package,
+                &class_name,
+                "Item",
+                &["net.minecraft.world.item.Item"],
+                "Item.Properties properties",
+                "super(properties);",
+                &item.lore,
+            );
+            fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+            generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
+        }
+        for tool in tools.iter().filter(|tool| !tool.lore.is_empty()) {
+            let parent = generated_tool_item_type(tool);
+            let mut imports = vec![format!("net.minecraft.world.item.{parent}")];
+            let (parameters, super_call) = if matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe") {
+                imports.push("net.minecraft.world.item.Tier".to_owned());
+                ("Tier tier, Item.Properties properties", "super(tier, properties);")
+            } else {
+                ("Item.Properties properties", "super(properties);")
+            };
+            imports.push("net.minecraft.world.item.Item".to_owned());
+            let class_name = lore_class_name(&tool.id);
+            let import_refs: Vec<&str> = imports.iter().map(String::as_str).collect();
+            let source = generate_lore_item_java(
+                package, &class_name, parent, &import_refs, parameters, super_call, &tool.lore
+            );
+            fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+            generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
+        }
+        for armor in armors {
+            for piece in armor.pieces.iter().filter(|piece| !piece.lore.is_empty()) {
+                let class_name = lore_class_name(&piece.id);
+                let source = generate_lore_item_java(
+                    package,
+                    &class_name,
+                    "ArmorItem",
+                    &[
+                        "net.minecraft.core.Holder",
+                        "net.minecraft.world.item.ArmorItem",
+                        "net.minecraft.world.item.ArmorMaterial",
+                        "net.minecraft.world.item.Item",
+                    ],
+                    "Holder<ArmorMaterial> material, ArmorItem.Type type, Item.Properties properties",
+                    "super(material, type, properties);",
+                    &piece.lore,
+                );
+                fs::write(lore_root.join(format!("{class_name}.java")), source)?;
+                generated.push(format!("src/main/java/{}/item/{class_name}.java", package.replace('.', "/")));
+            }
+        }
+    }
+
     generated.sort();
     generated.dedup();
     Ok(generated)
+}
+
+fn lore_class_name(registry_id: &str) -> String {
+    format!("Lore{}", java_type_identifier(registry_id))
+}
+
+fn generate_lore_item_java(
+    package: &str,
+    class_name: &str,
+    parent_class: &str,
+    extra_imports: &[&str],
+    constructor_parameters: &str,
+    super_call: &str,
+    lore: &[String],
+) -> String {
+    let mut source = format!(r#"package {package}.item;
+
+import java.util.List;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+"#);
+    for import in extra_imports {
+        source.push_str(&format!("import {import};\n"));
+    }
+    source.push_str(&format!(r#"
+public final class {class_name} extends {parent_class} {{
+    private static final List<Component> LEGACY_LORE = List.of(
+"#));
+    let components: Vec<String> = lore.iter()
+        .flat_map(|line| lore_component_expressions(line))
+        .collect();
+    for (index, component) in components.iter().enumerate() {
+        source.push_str(&format!("        {component}{}\n", if index + 1 == components.len() { "" } else { "," }));
+    }
+    source.push_str(&format!(r#"    );
+
+    public {class_name}({constructor_parameters}) {{
+        {super_call}
+    }}
+
+    @Override
+    public void appendHoverText(
+        ItemStack stack,
+        Item.TooltipContext context,
+        List<Component> tooltipComponents,
+        TooltipFlag tooltipFlag
+    ) {{
+        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+        tooltipComponents.addAll(LEGACY_LORE);
+    }}
+}}
+"#));
+    source
 }
 
 fn generate_tool_tiers_java(package: &str, tools: &[ToolRecord]) -> String {
@@ -1210,9 +1325,13 @@ fn generated_tool_item_type(tool: &ToolRecord) -> &'static str {
     }
 }
 
-fn generate_tool_registration(tool: &ToolRecord) -> String {
+fn generate_tool_registration(tool: &ToolRecord, package: &str) -> String {
     let field = java_field_name(&tool.id, "ITEM");
-    let item_type = generated_tool_item_type(tool);
+    let item_type = if tool.lore.is_empty() {
+        generated_tool_item_type(tool).to_owned()
+    } else {
+        format!("{package}.item.{}", lore_class_name(&tool.id))
+    };
     match tool.kind.as_str() {
         "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe" => {
             let attribute_constructor = match tool.kind.as_str() {
@@ -1759,15 +1878,23 @@ public final class ModItems {
 "#);
     for item in items {
         let field = java_field_name(&item.id, "ITEM");
-        body.push_str(&format!(
-            r#"    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem("{id}", new Item.Properties().stacksTo({stack_size}));
+        if item.lore.is_empty() {
+            body.push_str(&format!(
+                r#"    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem("{id}", new Item.Properties().stacksTo({stack_size}));
 "#,
-            id = item.id,
-            stack_size = item.stack_size
-        ));
+                id = item.id,
+                stack_size = item.stack_size
+            ));
+        } else {
+            let class_name = lore_class_name(&item.id);
+            body.push_str(&format!(
+                "    public static final DeferredItem<{package}.item.{class_name}> {field} = ITEMS.register(\"{id}\", () -> new {package}.item.{class_name}(new Item.Properties().stacksTo({stack_size})));\n",
+                id = item.id, stack_size = item.stack_size
+            ));
+        }
     }
     for tool in tools {
-        body.push_str(&generate_tool_registration(tool));
+        body.push_str(&generate_tool_registration(tool, package));
     }
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK_ITEM");
@@ -1783,16 +1910,24 @@ public final class ModItems {
         for piece in &armor.pieces {
             let field = java_field_name(&piece.id, "ARMOR");
             let item_type = armor_item_type(&piece.part);
-            body.push_str(&format!(
-                r#"    public static final DeferredItem<ArmorItem> {field} = ITEMS.register("{id}", () -> new ArmorItem(
+            if piece.lore.is_empty() {
+                body.push_str(&format!(
+                    r#"    public static final DeferredItem<ArmorItem> {field} = ITEMS.register("{id}", () -> new ArmorItem(
         ModArmorMaterials.{material_field},
         ArmorItem.Type.{item_type},
         new Item.Properties().stacksTo(1).durability({durability})
     ));
 "#,
-                id = piece.id,
-                durability = piece.durability
-            ));
+                    id = piece.id,
+                    durability = piece.durability
+                ));
+            } else {
+                let class_name = lore_class_name(&piece.id);
+                body.push_str(&format!(
+                    "    public static final DeferredItem<{package}.item.{class_name}> {field} = ITEMS.register(\"{id}\", () -> new {package}.item.{class_name}(ModArmorMaterials.{material_field}, ArmorItem.Type.{item_type}, new Item.Properties().stacksTo(1).durability({durability})));\n",
+                    id = piece.id, durability = piece.durability
+                ));
+            }
         }
     }
     body.push_str(r#"
