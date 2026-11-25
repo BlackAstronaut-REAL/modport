@@ -15,6 +15,7 @@ const V_ALL: &[&str] = &["1.7.10", "1.8.9", "1.12.2"];
 const V_18: &[&str] = &["1.8.9", "1.12.2"];
 const V_112: &[&str] = &["1.12.2"];
 const V_17: &[&str] = &["1.7.10"];
+const V_189: &[&str] = &["1.8.9"];
 const V_17_18: &[&str] = &["1.7.10", "1.8.9"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -2542,56 +2543,71 @@ const DEFINITIONS: &[Definition] = &[
     d!("Item", "canContinueUsing", V_112, "item_use_stack_continuation", "Active item use stack transition", "items", "automatic_rename_candidate", "Preserve old/new stack comparison while an item remains active; returning false cancels the current use loop.", "net/minecraft/item/Item.html"),
     d!("Item", "canDestroyBlockInCreative", V_112, "item_creative_block_destruction", "Creative-mode block destruction permission", "items_blocks", "automatic_rename_candidate", "Preserve world, position, held stack and player; this is checked by the client controller before creative block destruction.", "net/minecraft/item/Item.html"),
     d!("Item", "canDisableShield", V_112, "item_shield_disable_predicate", "Shield disable eligibility", "items_combat", "automatic_rename_candidate", "Preserve attacker's held stack, shield stack, defending entity and attacker separately.", "net/minecraft/item/Item.html"),
-    d!("Item", "canHarvestBlock", V_112, "item_harvest_block_predicate", "ItemStack-sensitive block harvest predicate", "items_blocks", "automatic_rename_candidate", "Overloads accept block state alone or block state plus stack; preserve metadata and exact stack-dependent harvest behavior.", "net/minecraft/item/Item.html"),
+    d!("Item", "canHarvestBlock", V_18, "item_harvest_block_predicate", "ItemStack-sensitive block harvest predicate", "items_blocks", "automatic_rename_candidate", "Overloads accept block state alone or block state plus stack; preserve metadata and exact stack-dependent harvest behavior.", "net/minecraft/item/Item.html"),
     d!("Item", "getAnimationParameters", V_112, "item_animation_parameter_map", "ItemStack/World/entity animation parameters", "items_render", "automatic_rename_candidate", "Preserve the complete immutable animation parameter map used by custom item model/animation predicates.", "net/minecraft/item/Item.html"),
-    d!("Item", "getArmorModel", V_112, "item_custom_armor_model", "Custom armor ModelBiped renderer", "items_render", "automatic_rename_candidate", "Preserve entity, armor stack, equipment slot and default model fallback; custom models must retain per-stack state.", "net/minecraft/item/Item.html"),
-    d!("Item", "getArmorTexture", V_112, "item_custom_armor_texture", "Custom armor texture path", "items_render", "automatic_rename_candidate", "Preserve entity, exact armor stack, equipment slot and overlay type; layer naming and texture fallback affect armor rendering.", "net/minecraft/item/Item.html"),
-    d!("Item", "getByNameOrId", V_112, "item_registry_name_lookup", "Item registry name/legacy ID lookup", "registration", "automatic_rename_candidate", "Preserve namespaced ResourceLocation parsing and legacy numeric-ID fallback behavior.", "net/minecraft/item/Item.html"),
+    d!("Item", "getArmorModel", V_18, "item_custom_armor_model", "Custom armor ModelBiped renderer", "items_render", "automatic_rename_candidate", "Preserve entity, armor stack, equipment slot and default model fallback; custom models must retain per-stack state.", "net/minecraft/item/Item.html"),
+    d!("Item", "getArmorTexture", V_18, "item_custom_armor_texture", "Custom armor texture path", "items_render", "automatic_rename_candidate", "Preserve entity, exact armor stack, equipment slot and overlay type; layer naming and texture fallback affect armor rendering.", "net/minecraft/item/Item.html"),
+    d!("Item", "getByNameOrId", V_18, "item_registry_name_lookup", "Item registry name/legacy ID lookup", "registration", "automatic_rename_candidate", "Preserve namespaced ResourceLocation parsing and legacy numeric-ID fallback behavior.", "net/minecraft/item/Item.html"),
     d!("Item", "getCreatorModId", V_112, "item_stack_creator_modid", "ItemStack creation provenance", "items", "automatic_rename_candidate", "Preserve creator namespace, which may differ from the registering item's namespace.", "net/minecraft/item/Item.html"),
-    d!("Item", "getDamage", V_112, "item_stack_damage_read", "ItemStack item damage value", "items", "automatic_rename_candidate", "Preserve custom item damage interpretation; this can differ from raw ItemStack metadata.", "net/minecraft/item/Item.html"),
+    d!("Item", "getDamage", V_18, "item_stack_damage_read", "ItemStack item damage value", "items", "automatic_rename_candidate", "Preserve custom item damage interpretation; this can differ from raw ItemStack metadata.", "net/minecraft/item/Item.html"),
     d!("Item", "getDefaultInstance", V_112, "item_default_stack_instance", "Default ItemStack factory", "items", "automatic_rename_candidate", "Preserve new stack count/NBT/default capability state; do not return a shared mutable stack.", "net/minecraft/item/Item.html"),
     d!("Item", "getDestroySpeed", V_112, "item_block_destroy_speed", "ItemStack mining speed against IBlockState", "items_blocks", "automatic_rename_candidate", "Preserve stack, block state and custom speed multiplier; distinct from harvest-level eligibility.", "net/minecraft/item/Item.html"),
     d!("Item", "getEquipmentSlot", V_112, "item_equipment_slot", "ItemStack equipment slot selection", "items_armor", "automatic_rename_candidate", "Preserve stack-sensitive slot choice; do not infer slot from item class alone.", "net/minecraft/item/Item.html"),
     d!("Item", "getForgeRarity", V_112, "item_forge_rarity", "Forge IRarity stack tooltip", "items_render", "automatic_rename_candidate", "Preserve custom IRarity object separately from deprecated vanilla EnumRarity.", "net/minecraft/item/Item.html"),
     d!("Item", "getHorseArmorTexture", V_112, "item_horse_armor_texture", "Horse armor renderer texture override", "items_render", "automatic_rename_candidate", "Preserve horse instance and exact armor stack for texture selection.", "net/minecraft/item/Item.html"),
     d!("Item", "getHorseArmorType", V_112, "item_horse_armor_type", "HorseArmorType item equipment classification", "items_armor", "automatic_rename_candidate", "Preserve stack-specific horse armor type; returned type selects armor value and texture.", "net/minecraft/item/Item.html"),
-    d!("Item", "getIdFromItem", V_112, "item_legacy_numeric_id", "Legacy numeric Item ID", "registration", "manual_adapter_required", "Numeric IDs are save/network compatibility state, not stable namespaced identifiers.", "net/minecraft/item/Item.html"),
-    d!("Item", "getItemById", V_112, "item_legacy_numeric_lookup", "Legacy numeric Item ID lookup", "registration", "manual_adapter_required", "Preserve missing-ID/null behavior and numeric registry compatibility; modern code uses ResourceLocation keys.", "net/minecraft/item/Item.html"),
-    d!("Item", "getItemFromBlock", V_112, "block_item_lookup", "ItemBlock lookup for Block", "registration", "automatic_rename_candidate", "Preserve null for blocks without a registered item form.", "net/minecraft/item/Item.html"),
-    d!("Item", "getItemStackLimit", V_112, "item_stack_sensitive_max_count", "ItemStack maximum stack count", "items", "automatic_rename_candidate", "Preserve item-stack-sensitive count limits and custom per-stack capacity behavior.", "net/minecraft/item/Item.html"),
-    d!("Item", "getMaxDamage", V_112, "item_stack_sensitive_max_damage", "ItemStack maximum damage", "items", "automatic_rename_candidate", "Overloads include deprecated item-level max and stack-sensitive max; preserve per-stack durability overrides.", "net/minecraft/item/Item.html"),
+    d!("Item", "getIdFromItem", V_ALL, "item_legacy_numeric_id", "Legacy numeric Item ID", "registration", "manual_adapter_required", "Numeric IDs are save/network compatibility state, not stable namespaced identifiers.", "net/minecraft/item/Item.html"),
+    d!("Item", "getItemById", V_ALL, "item_legacy_numeric_lookup", "Legacy numeric Item ID lookup", "registration", "manual_adapter_required", "Preserve missing-ID/null behavior and numeric registry compatibility; modern code uses ResourceLocation keys.", "net/minecraft/item/Item.html"),
+    d!("Item", "getItemFromBlock", V_ALL, "block_item_lookup", "ItemBlock lookup for Block", "registration", "automatic_rename_candidate", "Preserve null for blocks without a registered item form.", "net/minecraft/item/Item.html"),
+    d!("Item", "getItemStackLimit", V_ALL, "item_stack_sensitive_max_count", "ItemStack maximum stack count", "items", "automatic_rename_candidate", "Preserve item-stack-sensitive count limits and custom per-stack capacity behavior.", "net/minecraft/item/Item.html"),
+    d!("Item", "getMaxDamage", V_ALL, "item_stack_sensitive_max_damage", "ItemStack maximum damage", "items", "automatic_rename_candidate", "Overloads include deprecated item-level max and stack-sensitive max; preserve per-stack durability overrides.", "net/minecraft/item/Item.html"),
     d!("Item", "getNBTShareTag", V_112, "item_network_share_tag_read", "ItemStack NBT payload sent to clients", "networking", "automatic_rename_candidate", "Preserve filtered/sanitized NBT payload and custom server-to-client stack synchronization behavior.", "net/minecraft/item/Item.html"),
     d!("Item", "getPropertyGetter", V_112, "item_model_property_getter_lookup", "IItemPropertyGetter lookup by ResourceLocation", "items_render", "automatic_rename_candidate", "Preserve namespaced property key and nullable getter result used by item model overrides.", "net/minecraft/item/Item.html"),
     d!("Item", "getRGBDurabilityForDisplay", V_112, "item_durability_bar_rgb", "ItemStack durability bar RGB color", "items_render", "automatic_rename_candidate", "Preserve packed RGB output and per-stack custom durability coloring.", "net/minecraft/item/Item.html"),
-    d!("Item", "getSmeltingExperience", V_112, "item_smelting_experience", "Furnace experience per smelted ItemStack", "recipes", "automatic_rename_candidate", "Preserve stack-specific XP output and furnace extraction timing.", "net/minecraft/item/Item.html"),
+    d!("Item", "getSmeltingExperience", V_18, "item_smelting_experience", "Furnace experience per smelted ItemStack", "recipes", "automatic_rename_candidate", "Preserve stack-specific XP output and furnace extraction timing.", "net/minecraft/item/Item.html"),
     d!("Item", "getTileEntityItemStackRenderer", V_112, "item_stack_tile_renderer", "TileEntityItemStackRenderer lookup", "items_render", "automatic_rename_candidate", "Preserve custom item renderer instance for GUI, hand, dropped item and frame contexts.", "net/minecraft/item/Item.html"),
-    d!("Item", "getToolClasses", V_112, "item_tool_class_set", "ItemStack tool class set", "items_tools", "automatic_rename_candidate", "Preserve all tool classes supported by the current stack rather than only a single harvest class.", "net/minecraft/item/Item.html"),
+    d!("Item", "getToolClasses", V_18, "item_tool_class_set", "ItemStack tool class set", "items_tools", "automatic_rename_candidate", "Preserve all tool classes supported by the current stack rather than only a single harvest class.", "net/minecraft/item/Item.html"),
     d!("Item", "getXpRepairRatio", V_112, "item_mending_repair_ratio", "Mending XP-to-durability repair ratio", "items_armor", "automatic_rename_candidate", "Preserve per-stack ratio used by Mending repair calculations; do not substitute a constant durability-per-XP value.", "net/minecraft/item/Item.html"),
-    d!("Item", "hasCustomEntity", V_112, "item_custom_dropped_entity_predicate", "Custom Entity replacement for EntityItem drops", "items_entities", "automatic_rename_candidate", "When true the spawn pipeline calls createEntity; preserve nullable replacement entity and original drop removal semantics.", "net/minecraft/item/Item.html"),
+    d!("Item", "hasCustomEntity", V_18, "item_custom_dropped_entity_predicate", "Custom Entity replacement for EntityItem drops", "items_entities", "automatic_rename_candidate", "When true the spawn pipeline calls createEntity; preserve nullable replacement entity and original drop removal semantics.", "net/minecraft/item/Item.html"),
     d!("Item", "hasCustomProperties", V_112, "item_model_properties_predicate", "Item model override property existence", "items_render", "automatic_rename_candidate", "Preserve whether property overrides are registered so model baking/rendering can skip unnecessary property lookups.", "net/minecraft/item/Item.html"),
-    d!("Item", "initCapabilities", V_112, "itemstack_capability_initialization", "ItemStack capability provider creation", "capabilities", "adapter_required", "Called when ItemStack receives this item; preserve input stack/NBT and provider lifetime for each stack instance.", "net/minecraft/item/Item.html"),
-    d!("Item", "isBeaconPayment", V_112, "item_beacon_payment_predicate", "Beacon payment item eligibility", "items", "automatic_rename_candidate", "Preserve custom stack-specific beacon payment rules.", "net/minecraft/item/Item.html"),
-    d!("Item", "isBookEnchantable", V_112, "item_book_enchant_compatibility", "Anvil enchanted book compatibility", "items_enchantments", "automatic_rename_candidate", "Preserve stack-specific book/item pair validation independently from enchanting table support.", "net/minecraft/item/Item.html"),
-    d!("Item", "isDamaged", V_112, "item_stack_damaged_predicate", "ItemStack damaged-state predicate", "items", "automatic_rename_candidate", "Preserve stack-specific damage state and item-specific durability interpretation.", "net/minecraft/item/Item.html"),
+    d!("Item", "initCapabilities", V_18, "itemstack_capability_initialization", "ItemStack capability provider creation", "capabilities", "adapter_required", "Called when ItemStack receives this item; preserve input stack/NBT and provider lifetime for each stack instance.", "net/minecraft/item/Item.html"),
+    d!("Item", "isBeaconPayment", V_18, "item_beacon_payment_predicate", "Beacon payment item eligibility", "items", "automatic_rename_candidate", "Preserve custom stack-specific beacon payment rules.", "net/minecraft/item/Item.html"),
+    d!("Item", "isBookEnchantable", V_18, "item_book_enchant_compatibility", "Anvil enchanted book compatibility", "items_enchantments", "automatic_rename_candidate", "Preserve stack-specific book/item pair validation independently from enchanting table support.", "net/minecraft/item/Item.html"),
+    d!("Item", "isDamaged", V_18, "item_stack_damaged_predicate", "ItemStack damaged-state predicate", "items", "automatic_rename_candidate", "Preserve stack-specific damage state and item-specific durability interpretation.", "net/minecraft/item/Item.html"),
     d!("Item", "isEnchantable", V_112, "item_stack_enchantable_predicate", "ItemStack enchantability predicate", "items_enchantments", "automatic_rename_candidate", "Preserve current stack state and existing enchantment rules.", "net/minecraft/item/Item.html"),
     d!("Item", "isInCreativeTab", V_112, "item_creative_tab_membership", "Creative inventory tab membership check", "items_gui", "automatic_rename_candidate", "Protected override hook; preserve tab filtering independently from getCreativeTabs and getSubItems.", "net/minecraft/item/Item.html"),
     d!("Item", "isRepairable", V_112, "item_repairable_predicate", "Crafting/anvil item repair eligibility", "items", "automatic_rename_candidate", "Preserve vanilla crafting repair predicate separately from custom getIsRepairable stack-pair logic.", "net/minecraft/item/Item.html"),
     d!("Item", "isShield", V_112, "item_shield_predicate", "ItemStack shield classification", "items_combat", "automatic_rename_candidate", "Preserve stack-sensitive shield identification for blocking and disable mechanics.", "net/minecraft/item/Item.html"),
-    d!("Item", "isValidArmor", V_112, "item_stack_armor_slot_validity", "Entity equipment slot armor validation", "items_armor", "automatic_rename_candidate", "Preserve stack, target slot and wearer entity; can vary by player/mob and armor stack.", "net/minecraft/item/Item.html"),
-    d!("Item", "onArmorTick", V_112, "item_armor_tick", "Per-tick equipped armor callback", "items_armor", "adapter_required", "Preserve world/player/armor stack and execute only while armor is equipped in the armor slot.", "net/minecraft/item/Item.html"),
-    d!("Item", "onBlockStartBreak", V_112, "item_block_start_break", "Pre-block-break item ability hook", "items_tools", "adapter_required", "Preserve held stack, target position and player; this occurs before the block is removed and can cancel the break.", "net/minecraft/item/Item.html"),
+    d!("Item", "isValidArmor", V_18, "item_stack_armor_slot_validity", "Entity equipment slot armor validation", "items_armor", "automatic_rename_candidate", "Preserve stack, target slot and wearer entity; can vary by player/mob and armor stack.", "net/minecraft/item/Item.html"),
+    d!("Item", "onArmorTick", V_18, "item_armor_tick", "Per-tick equipped armor callback", "items_armor", "adapter_required", "Preserve world/player/armor stack and execute only while armor is equipped in the armor slot.", "net/minecraft/item/Item.html"),
+    d!("Item", "onBlockStartBreak", V_18, "item_block_start_break", "Pre-block-break item ability hook", "items_tools", "adapter_required", "Preserve held stack, target position and player; this occurs before the block is removed and can cancel the break.", "net/minecraft/item/Item.html"),
     d!("Item", "onHorseArmorTick", V_112, "item_horse_armor_tick", "Per-tick equipped horse armor callback", "items_armor", "adapter_required", "Preserve world, horse and armor stack; this is called from the horse update path.", "net/minecraft/item/Item.html"),
     d!("Item", "rayTrace", V_112, "item_ray_trace", "Item use ray trace result", "items_interaction", "adapter_required", "Preserve player eye position, reach, liquid-hit flag and returned RayTraceResult type.", "net/minecraft/item/Item.html"),
     d!("Item", "readNBTShareTag", V_112, "item_network_share_tag_read_apply", "Apply received ItemStack share NBT", "networking", "adapter_required", "Preserve client synchronization timing and merge/replace behavior for the shared tag.", "net/minecraft/item/Item.html"),
-    d!("Item", "renderHelmetOverlay", V_112, "item_helmet_hud_overlay", "Equipped helmet HUD overlay render callback", "items_render", "adapter_required", "Preserve equipped ItemStack, player, ScaledResolution and partial ticks; client-only render path.", "net/minecraft/item/Item.html"),
-    d!("Item", "setDamage", V_112, "item_stack_damage_write", "ItemStack custom damage assignment", "items", "adapter_required", "Preserve stack-sensitive damage mutation and item-specific max damage.", "net/minecraft/item/Item.html"),
-    d!("Item", "setHarvestLevel", V_112, "item_tool_harvest_level_write", "Item tool class harvest-level registration", "items_tools", "adapter_required", "Overloads set a global tool class/level or a state-specific mapping; preserve per-block-state overrides.", "net/minecraft/item/Item.html"),
-    d!("Item", "setNoRepair", V_112, "item_disable_repair", "Item repair prohibition", "items", "adapter_required", "Preserve the canRepair state used by crafting and anvil repair logic.", "net/minecraft/item/Item.html"),
-    d!("Item", "setTileEntityItemStackRenderer", V_112, "item_stack_renderer_write", "Custom TileEntityItemStackRenderer assignment", "items_render", "adapter_required", "Preserve renderer object identity and registration before any item model rendering occurs.", "net/minecraft/item/Item.html"),
+    d!("Item", "renderHelmetOverlay", V_18, "item_helmet_hud_overlay", "Equipped helmet HUD overlay render callback", "items_render", "adapter_required", "Preserve equipped ItemStack, player, ScaledResolution and partial ticks; client-only render path.", "net/minecraft/item/Item.html"),
+    d!("Item", "setDamage", V_18, "item_stack_damage_write", "ItemStack custom damage assignment", "items", "adapter_required", "Preserve stack-sensitive damage mutation and item-specific max damage.", "net/minecraft/item/Item.html"),
+    d!("Item", "setHarvestLevel", V_18, "item_tool_harvest_level_write", "Item tool class harvest-level registration", "items_tools", "adapter_required", "Overloads set a global tool class/level or a state-specific mapping; preserve per-block-state overrides.", "net/minecraft/item/Item.html"),
+    d!("Item", "setNoRepair", V_18, "item_disable_repair", "Item repair prohibition", "items", "adapter_required", "Preserve the canRepair state used by crafting and anvil repair logic.", "net/minecraft/item/Item.html"),
+    d!("Item", "setTileEntityItemStackRenderer", V_18, "item_stack_renderer_write", "Custom TileEntityItemStackRenderer assignment", "items_render", "adapter_required", "Preserve renderer object identity and registration before any item model rendering occurs.", "net/minecraft/item/Item.html"),
     d!("Item", "shouldCauseBlockBreakReset", V_112, "item_block_break_progress_reset", "Continuous mining progress reset predicate", "items_tools", "automatic_rename_candidate", "Preserve old/new stacks and custom condition; returning false keeps block-breaking progress when an item mode changes.", "net/minecraft/item/Item.html"),
     d!("Item", "shouldRotateAroundWhenRendering", V_112, "item_render_rotation_predicate", "Item 3D rendering rotation flag", "items_render", "automatic_rename_candidate", "Preserve custom held-item transform behavior independently from isFull3D.", "net/minecraft/item/Item.html"),
-    d!("Item", "showDurabilityBar", V_112, "item_durability_bar_visibility", "ItemStack durability bar visibility", "items_render", "adapter_required", "Preserve per-stack visibility override separately from the durability percentage/color.", "net/minecraft/item/Item.html"),
-    d!("Item", "updateItemStackNBT", V_112, "item_stack_nbt_update", "ItemStack NBT migration/update hook", "items", "adapter_required", "Preserve in-place tag mutation, return value and invocation timing during stack deserialization.", "net/minecraft/item/Item.html"),
+    d!("Item", "showDurabilityBar", V_18, "item_durability_bar_visibility", "ItemStack durability bar visibility", "items_render", "adapter_required", "Preserve per-stack visibility override separately from the durability percentage/color.", "net/minecraft/item/Item.html"),
+    d!("Item", "updateItemStackNBT", V_18, "item_stack_nbt_update", "ItemStack NBT migration/update hook", "items", "adapter_required", "Preserve in-place tag mutation, return value and invocation timing during stack deserialization.", "net/minecraft/item/Item.html"),
+
+
+    // Item API entries verified against the 1.7.10, 1.8.9 and 1.12.2 Forge JavaDocs.
+    d!("Item", "getIconString", V_17, "item_legacy_icon_resource_name", "Item model JSON / namespaced texture resource", "items_render", "resource_adapter_required", "Recover the legacy icon string and translate it into a namespaced item texture/model reference; it is not a modern runtime icon handle.", "net/minecraft/item/Item.html"),
+    d!("Item", "func_150893_a", V_17, "item_block_destroy_speed", "Item#getDestroySpeed / tool rules", "items_tools", "signature_adapter_required", "1.7.10 JavaDocs expose this SRG method name; resolve its descriptor and known MCP alias (getStrVsBlock) before translating stack-sensitive block mining speed.", "net/minecraft/item/Item.html"),
+    d!("Item", "func_150897_b", V_17, "item_harvest_block_predicate", "Item#isCorrectToolForDrops / harvest rules", "items_tools", "signature_adapter_required", "1.7.10 JavaDocs expose this SRG method name; resolve its descriptor and MCP alias (canHarvestBlock) before translating the block harvest predicate.", "net/minecraft/item/Item.html"),
+    d!("Item", "isPotionIngredient", V_17_18, "item_brewing_ingredient_predicate", "Brewing recipe ingredient predicate", "brewing", "adapter_required", "Preserve stack-sensitive eligibility and the potion-effect string returned by getPotionEffect; migrate custom ingredients into brewing recipe registration.", "net/minecraft/item/Item.html"),
+    d!("Item", "registerItems", V_18, "vanilla_item_registry_bootstrap", "BuiltInRegistries / item deferred registration", "registration", "manual_review", "This is a vanilla static registry bootstrap hook rather than a normal mod extension point; retain it only when bytecode proves a mod intentionally calls or replaces it.", "net/minecraft/item/Item.html"),
+    d!("Item", "registerItemBlock", V_18, "vanilla_block_item_registration", "BlockItem deferred registration", "registration", "adapter_required", "Preserve the block-to-item association and registry key; modern ports register a BlockItem through the item deferred register instead of invoking the static helper.", "net/minecraft/item/Item.html"),
+    d!("Item", "getChestGenBase", V_189, "item_chest_loot_generation_override", "Loot table pool/entry injection", "loot", "adapter_required", "Preserve chest category, world RNG and original weighted result; migrate to the matching loot table or a targeted loot modifier.", "net/minecraft/item/Item.html"),
+    d!("Item", "getDigSpeed", V_189, "item_block_state_mining_speed", "Item#getDestroySpeed", "items_tools", "adapter_required", "Translate the IBlockState-aware speed calculation and preserve stack metadata and state-dependent multipliers.", "net/minecraft/item/Item.html"),
+    d!("Item", "getModel", V_189, "item_use_sensitive_model_override", "ItemOverrides / item model property predicates", "items_render", "resource_adapter_required", "Preserve stack, holding player and remaining-use ticks when choosing a ModelResourceLocation; modern overrides use registered properties and model resources.", "net/minecraft/item/Item.html"),
+    d!("Item", "getStrVsBlock", V_189, "item_block_mining_strength", "Item#getDestroySpeed / tool rules", "items_tools", "adapter_required", "Translate the stack-and-block mining-strength calculation while preserving block-specific and metadata-sensitive tool behavior.", "net/minecraft/item/Item.html"),
+    d!("Item", "getRegistryName", V_18, "item_registry_name_read", "BuiltInRegistries / ResourceKey / ResourceLocation", "registration", "automatic_rename_candidate", "Preserve the stable namespaced key and unset-name behavior; do not replace it with a display or unlocalized name.", "net/minecraft/item/Item.html"),
+    d!("Item", "setRegistryName", V_18, "item_registry_name_write", "DeferredRegister object name / ResourceLocation", "registration", "adapter_required", "Translate the one-string, mod-id/name and ResourceLocation overloads into a stable deferred-register key; avoid mutating a frozen registry.", "net/minecraft/item/Item.html"),
 
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_112, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
@@ -2665,8 +2681,8 @@ const DEFINITIONS: &[Definition] = &[
     d!("Block", "tickRate", V_112, "block_scheduled_tick_rate", "Scheduled block tick interval", "blocks_world", "adapter_required", "Preserve world-specific delay; custom fluid/redstone/growth blocks depend on tick timing.", "net/minecraft/block/Block.html"),
 
     // Remaining 1.12 Item extension points verified in the 1.12.2 method summary.
-    d!("Item", "isMap", V_112, "item_map_predicate", "Map item classification", "items", "automatic_rename_candidate", "Preserve map-specific rendering, held-map and map data handling independent from item class identity.", "net/minecraft/item/Item.html"),
-    d!("Item", "shouldCauseReequipAnimation", V_112, "item_reequip_animation_predicate", "Held-item switch reequip animation", "items_render", "automatic_rename_candidate", "Preserve old/new stacks and slotChanged flag; returning false suppresses reequip animation without suppressing inventory update.", "net/minecraft/item/Item.html"),
+    d!("Item", "isMap", V_ALL, "item_map_predicate", "Map item classification", "items", "automatic_rename_candidate", "Preserve map-specific rendering, held-map and map data handling independent from item class identity.", "net/minecraft/item/Item.html"),
+    d!("Item", "shouldCauseReequipAnimation", V_18, "item_reequip_animation_predicate", "Held-item switch reequip animation", "items_render", "automatic_rename_candidate", "Preserve old/new stacks and slotChanged flag; returning false suppresses reequip animation without suppressing inventory update.", "net/minecraft/item/Item.html"),
 
     // Additional Block methods missing from the Forge 1.12.2 method summary.
     d!("Block", "getEnableStats", V_112, "block_stats_enabled", "Block statistics tracking flag", "blocks", "automatic_rename_candidate", "Preserve whether this block contributes mining/use statistics.", "net/minecraft/block/Block.html"),
@@ -3933,7 +3949,7 @@ fn documentation_url(version: &str, path: &str) -> Option<String> {
     let base = match version {
         "1.7.10" => "https://skmedix.github.io/ForgeJavaDocs/javadoc/forge/1.7.10-10.13.4.1614/",
         "1.8.9" => "https://skmedix.github.io/ForgeJavaDocs/javadoc/forge/1.8.9-11.15.1.2318/",
-        "1.12.2" => "https://nekoyue.github.io/ForgeJavaDocs-NG/javadoc/1.12.2/",
+        "1.12.2" => "https://skmedix.github.io/ForgeJavaDocs/javadoc/forge/1.12.2-14.23.5.2859/",
         _ => return None,
     };
     Some(format!("{base}{path}"))
@@ -6007,6 +6023,44 @@ mod tests {
     }
 
     #[test]
+    fn item_api_coverage_matches_each_legacy_forge_release() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+
+        for method in [
+            "getIconString", "func_150893_a", "func_150897_b", "isPotionIngredient",
+            "getItemStackLimit", "getMaxDamage", "getIdFromItem", "getItemById",
+            "getItemFromBlock", "registerItems",
+        ] {
+            assert!(has(&v17, "Item", method), "missing 1.7.10 Item#{method}");
+        }
+        for method in [
+            "canHarvestBlock", "getArmorModel", "getArmorTexture", "getByNameOrId",
+            "getChestGenBase", "getDamage", "getDigSpeed", "getModel", "getRegistryName",
+            "getStrVsBlock", "isPotionIngredient", "isValidArmor", "onArmorTick",
+            "registerItemBlock", "registerItems", "setHarvestLevel", "setNoRepair",
+            "setRegistryName", "getItemStackLimit", "getMaxDamage",
+        ] {
+            assert!(has(&v18, "Item", method), "missing 1.8.9 Item#{method}");
+        }
+        for method in [
+            "getAnimationParameters", "getNBTShareTag", "getXpRepairRatio", "getEquipmentSlot",
+            "getForgeRarity", "onHorseArmorTick", "hasCustomProperties", "isShield",
+        ] {
+            assert!(has(&v112, "Item", method), "missing 1.12.2 Item#{method}");
+        }
+
+        assert!(!has(&v17, "Item", "getModel"));
+        assert!(!has(&v17, "Item", "getNBTShareTag"));
+        assert!(!has(&v18, "Item", "getNBTShareTag"));
+        assert!(!has(&v112, "Item", "getStrVsBlock"));
+    }
+
+    #[test]
     fn mappings_include_versioned_javadoc_sources() {
         let item = legacy_api_dictionary_for_version("1.7.10").into_iter()
             .find(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick")
@@ -6015,6 +6069,6 @@ mod tests {
         let block = legacy_api_dictionary_for_version("1.12.2").into_iter()
             .find(|entry| entry.source_owner == "Block" && entry.source_method == "onBlockActivated")
             .unwrap();
-        assert!(block.documentation_urls.iter().any(|url| url.contains("javadoc/1.12.2/")));
+        assert!(block.documentation_urls.iter().any(|url| url.contains("javadoc/forge/1.12.2-14.23.5.2859/")));
     }
 }
