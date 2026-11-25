@@ -58,6 +58,7 @@ pub struct NativeEntityPlan {
     pub width: f64,
     pub height: f64,
     pub ai_classes: Vec<String>,
+    pub generated_as: String,
     pub warnings: Vec<String>,
 }
 
@@ -216,7 +217,16 @@ pub fn port_to_neoforge(
     deduplicate_items(&mut item_records, &mut warnings);
     deduplicate_blocks(&mut block_records, &mut warnings);
 
-    let generated_java_files = write_native_registries(output_root, &target_package, &target_mod_id, &item_records, &block_records)?;
+    let native_entities = collect_native_entities(&graph.entities);
+    let generated_java_files = write_native_registries(
+        output_root,
+        &resources_root,
+        &target_package,
+        &target_mod_id,
+        &item_records,
+        &block_records,
+        &native_entities,
+    )?;
     let generated_resource_files = write_native_resources(&resources_root, &target_mod_id, &item_records, &block_records)?;
 
     let items: Vec<NativeItemPlan> = item_records.iter().map(|item| NativeItemPlan {
@@ -241,15 +251,16 @@ pub fn port_to_neoforge(
         warnings: block.warnings.clone(),
     }).collect();
 
-    let entities: Vec<NativeEntityPlan> = graph.entities.values().map(|entity: &EntityMetadata| NativeEntityPlan {
+    let entities: Vec<NativeEntityPlan> = native_entities.iter().map(|entity| NativeEntityPlan {
         registry_name: normalized_id(&entity.registry_name),
         source_class: entity.class_name.clone(),
         health: entity.health,
         width: entity.width,
         height: entity.height,
         ai_classes: entity.ai_classes.clone(),
+        generated_as: "native PathfinderMob subclass with recovered attributes, conservative goals, and fallback humanoid renderer".to_owned(),
         warnings: vec![
-            "Entity discovered and described, but custom entity class, attributes, AI and renderer are not emitted in this pass.".to_owned()
+            "The source mob is represented by a generated PathfinderMob; custom superclass logic, exact AI goal parameters, attacks, animations, and model geometry are not yet reconstructed.".to_owned()
         ],
     }).collect();
 
@@ -562,22 +573,345 @@ fn deduplicate_blocks(blocks: &mut Vec<BlockRecord>, warnings: &mut Vec<String>)
 
 fn write_native_registries(
     output_root: &Path,
+    resources_root: &Path,
     package: &str,
     mod_id: &str,
     items: &[ItemRecord],
     blocks: &[BlockRecord],
+    entities: &[EntityMetadata],
 ) -> Result<Vec<String>> {
-    let java_root = output_root.join("src/main/java").join(package.replace('.', "/")).join("registry");
-    fs::create_dir_all(&java_root)?;
-    let blocks_text = generate_blocks_java(package, mod_id, blocks);
-    let items_text = generate_items_java(package, mod_id, items, blocks);
-    fs::write(java_root.join("ModBlocks.java"), blocks_text)?;
-    fs::write(java_root.join("ModItems.java"), items_text)?;
-    Ok(vec![
+    let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
+    let registry_root = java_base.join("registry");
+    fs::create_dir_all(&registry_root)?;
+
+    fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks))?;
+    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, blocks))?;
+
+    let mut generated = vec![
         format!("src/main/java/{}/registry/ModBlocks.java", package.replace('.', "/")),
         format!("src/main/java/{}/registry/ModItems.java", package.replace('.', "/")),
-    ])
+    ];
+
+    if !entities.is_empty() {
+        let entity_root = java_base.join("entity");
+        let client_root = java_base.join("client");
+        fs::create_dir_all(&entity_root)?;
+        fs::create_dir_all(&client_root)?;
+
+        fs::write(registry_root.join("ModEntities.java"), generate_entities_java(package, mod_id, entities))?;
+        fs::write(entity_root.join("ModEntityAttributes.java"), generate_entity_attributes_java(package, entities))?;
+        fs::write(java_base.join("NeoForgeMod.java"), generate_mod_entrypoint(package, mod_id))?;
+        fs::write(client_root.join("ModEntityRenderers.java"), generate_entity_renderers_java(
+            package, mod_id, resources_root, entities
+        ))?;
+
+        generated.push(format!("src/main/java/{}/registry/ModEntities.java", package.replace('.', "/")));
+        generated.push(format!("src/main/java/{}/entity/ModEntityAttributes.java", package.replace('.', "/")));
+        generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
+        generated.push(format!("src/main/java/{}/client/ModEntityRenderers.java", package.replace('.', "/")));
+
+        for entity in entities {
+            let class_name = generated_entity_class(entity);
+            fs::write(entity_root.join(format!("{class_name}.java")), generate_entity_java(package, entity))?;
+            generated.push(format!("src/main/java/{}/entity/{class_name}.java", package.replace('.', "/")));
+        }
+    }
+
+    generated.sort();
+    Ok(generated)
 }
+
+fn collect_native_entities(source: &BTreeMap<String, EntityMetadata>) -> Vec<EntityMetadata> {
+    let mut entities = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+
+    for metadata in source.values() {
+        let class_and_parent = format!("{} {}", metadata.class_name, metadata.superclass).to_ascii_lowercase();
+        if ["projectile", "arrow", "fireball", "throwable", "trident"]
+            .iter().any(|token| class_and_parent.contains(token)) {
+            continue;
+        }
+
+        let mut entity = metadata.clone();
+        let id = normalized_id(&entity.registry_name);
+        entity.registry_name = if id.is_empty() {
+            slug_from_class_name(&entity.class_name)
+        } else {
+            id
+        };
+        if entity.registry_name.is_empty() || !seen_ids.insert(entity.registry_name.clone()) {
+            continue;
+        }
+        entities.push(entity);
+    }
+    entities.sort_by(|a, b| a.registry_name.cmp(&b.registry_name).then(a.class_name.cmp(&b.class_name)));
+    entities
+}
+
+fn slug_from_class_name(value: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = value.chars().collect();
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if ch.is_ascii_uppercase() && index > 0 {
+            let previous = chars[index - 1];
+            let next_lower = chars.get(index + 1).is_some_and(|next| next.is_ascii_lowercase());
+            if previous.is_ascii_lowercase() || previous.is_ascii_digit()
+                || (previous.is_ascii_uppercase() && next_lower) {
+                result.push('_');
+            }
+        }
+        if ch.is_ascii_alphanumeric() {
+            result.push(ch.to_ascii_lowercase());
+        }
+    }
+    if result.is_empty() { "converted_entity".to_owned() } else { result }
+}
+
+fn java_type_identifier(value: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize = true;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            result.push(if capitalize { ch.to_ascii_uppercase() } else { ch });
+            capitalize = false;
+        } else {
+            capitalize = true;
+        }
+    }
+    if result.is_empty() { result = "ConvertedEntity".to_owned(); }
+    if result.as_bytes()[0].is_ascii_digit() { result.insert_str(0, "Entity"); }
+    result
+}
+
+fn generated_entity_class(entity: &EntityMetadata) -> String {
+    format!("Converted{}", java_type_identifier(&entity.class_name))
+}
+
+fn entity_category(entity: &EntityMetadata) -> &'static str {
+    let combined = format!("{} {} {}", entity.class_name, entity.superclass, entity.ai_classes.join(" "))
+        .to_ascii_lowercase();
+    if ["animal", "passive", "creature", "ambient", "wateranimal", "fish"]
+        .iter().any(|token| combined.contains(token)) {
+        if combined.contains("ambient") { "AMBIENT" }
+        else if combined.contains("water") || combined.contains("fish") { "WATER_CREATURE" }
+        else { "CREATURE" }
+    } else {
+        "MONSTER"
+    }
+}
+
+fn generate_entities_java(package: &str, mod_id: &str, entities: &[EntityMetadata]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import {package}.entity.*;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModEntities {{
+    public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, NeoForgeMod.MOD_ID);
+"#);
+    for entity in entities {
+        let field = java_field_name(&entity.registry_name, "ENTITY");
+        let class_name = generated_entity_class(entity);
+        let category = entity_category(entity);
+        let width = entity.width.clamp(0.1, 16.0);
+        let height = entity.height.clamp(0.1, 32.0);
+        body.push_str(&format!(
+            r#"    public static final DeferredHolder<EntityType<?>, EntityType<{class_name}>> {field} = ENTITY_TYPES.register("{id}", () -> EntityType.Builder.of({class_name}::new, MobCategory::{category}).sized({width}F, {height}F).build("{id}"));
+"#,
+            id = entity.registry_name
+        ));
+    }
+    body.push_str(r#"
+    private ModEntities() {}
+
+    public static void register(IEventBus modEventBus) {
+        ENTITY_TYPES.register(modEventBus);
+    }
+}
+"#);
+    let _ = mod_id;
+    body
+}
+
+fn generate_entity_java(package: &str, entity: &EntityMetadata) -> String {
+    let class_name = generated_entity_class(entity);
+    let ai = entity.ai_classes.join(" ").to_ascii_lowercase();
+    let has_melee = ["melee", "attackoncollide", "attackmelee"]
+        .iter().any(|token| ai.contains(token));
+    let has_target = ["nearestattackabletarget", "hurtbytarget"]
+        .iter().any(|token| ai.contains(token)) || has_melee;
+
+    let mut body = format!(r#"package {package}.entity;
+
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+"#);
+    if has_melee {
+        body.push_str("import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;\n");
+    }
+    if has_target {
+        body.push_str("import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;\n");
+        body.push_str("import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;\n");
+    }
+    body.push_str(&format!(r#"
+public final class {class_name} extends PathfinderMob {{
+    public {class_name}(EntityType<? extends PathfinderMob> entityType, Level level) {{
+        super(entityType, level);
+    }}
+
+    @Override
+    protected void registerGoals() {{
+        super.registerGoals();
+        this.goalSelector.addGoal(0, new FloatGoal(this));
+"#));
+    if has_melee {
+        body.push_str("        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0D, true));\n");
+    }
+    body.push_str(r#"        this.goalSelector.addGoal(5, new RandomStrollGoal(this, 1.0D));
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+"#);
+    if has_target {
+        body.push_str("        this.targetSelector.addGoal(1, new HurtByTargetGoal(this));\n");
+        body.push_str("        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));\n");
+    }
+    body.push_str("    }\n}\n");
+    body
+}
+
+fn generate_entity_attributes_java(package: &str, entities: &[EntityMetadata]) -> String {
+    let mut body = format!(r#"package {package}.entity;
+
+import {package}.registry.ModEntities;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
+
+public final class ModEntityAttributes {{
+    private ModEntityAttributes() {{}}
+
+    public static void createAttributes(EntityAttributeCreationEvent event) {{
+"#);
+    for entity in entities {
+        let field = java_field_name(&entity.registry_name, "ENTITY");
+        let health = entity.health.clamp(1.0, 2048.0);
+        let speed = entity.movement_speed.clamp(0.0, 10.0);
+        let attack = entity.attack_damage.clamp(0.0, 2048.0);
+        let follow = entity.follow_range.clamp(0.0, 2048.0);
+        let armor = entity.armor.clamp(0.0, 2048.0);
+        body.push_str(&format!(
+            r#"        event.put(ModEntities.{field}.get(), Mob.createMobAttributes()
+                .add(Attributes.MAX_HEALTH, {health}D)
+                .add(Attributes.MOVEMENT_SPEED, {speed}D)
+                .add(Attributes.ATTACK_DAMAGE, {attack}D)
+                .add(Attributes.FOLLOW_RANGE, {follow}D)
+                .add(Attributes.ARMOR, {armor}D)
+                .build());
+"#));
+    }
+    body.push_str("    }\n}\n");
+    body
+}
+
+fn generate_entity_renderers_java(
+    package: &str,
+    mod_id: &str,
+    resources_root: &Path,
+    entities: &[EntityMetadata],
+) -> String {
+    let mut body = format!(r#"package {package}.client;
+
+import {package}.NeoForgeMod;
+import {package}.registry.ModEntities;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.entity.MobRenderer;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+
+@EventBusSubscriber(modid = NeoForgeMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+public final class ModEntityRenderers {{
+    private ModEntityRenderers() {{}}
+
+    @SubscribeEvent
+    public static void register(EntityRenderersEvent.RegisterRenderers event) {{
+"#);
+    for entity in entities {
+        let field = java_field_name(&entity.registry_name, "ENTITY");
+        let class_name = generated_entity_class(entity);
+        let texture = find_entity_texture(resources_root, mod_id, entity)
+            .map(|path| format!("ResourceLocation.fromNamespaceAndPath(\"{mod_id}\", \"{path}\")"))
+            .unwrap_or_else(|| "ResourceLocation.withDefaultNamespace(\"textures/entity/steve.png\")".to_owned());
+        body.push_str(&format!(
+            r#"        event.registerEntityRenderer(ModEntities.{field}.get(), context -> new MobRenderer<{class_name}, HumanoidModel<{class_name}>>(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5F) {{
+            @Override
+            public ResourceLocation getTextureLocation({class_name} entity) {{
+                return {texture};
+            }}
+        }});
+"#));
+    }
+    body.push_str("    }\n}\n");
+    body
+}
+
+fn find_entity_texture(resources_root: &Path, mod_id: &str, entity: &EntityMetadata) -> Option<String> {
+    let namespace_root = resources_root.join("assets").join(mod_id);
+    let texture_root = namespace_root.join("textures/entity");
+    if !texture_root.is_dir() { return None; }
+    let wanted = BTreeSet::from([compact(&entity.registry_name), compact(&entity.class_name)]);
+    let mut paths: Vec<PathBuf> = WalkDir::new(&texture_root).follow_links(false).into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("png")))
+        .filter(|entry| wanted.contains(&compact(entry.path().file_stem().and_then(|value| value.to_str()).unwrap_or(""))))
+        .map(|entry| entry.into_path()).collect();
+    paths.sort();
+    let path = paths.first()?;
+    Some(path.strip_prefix(&namespace_root).ok()?.to_string_lossy().replace('\\', "/"))
+}
+
+fn generate_mod_entrypoint(package: &str, mod_id: &str) -> String {
+    format!(r#"package {package};
+
+import {package}.registry.ModBlockEntities;
+import {package}.registry.ModBlocks;
+import {package}.registry.ModEntities;
+import {package}.registry.ModItems;
+import {package}.entity.ModEntityAttributes;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+
+@Mod("{mod_id}")
+public final class NeoForgeMod {{
+    public static final String MOD_ID = "{mod_id}";
+
+    public NeoForgeMod(IEventBus modEventBus) {{
+        ModBlocks.register(modEventBus);
+        ModItems.register(modEventBus);
+        ModEntities.register(modEventBus);
+        ModBlockEntities.register(modEventBus);
+        modEventBus.addListener(ModEntityAttributes::createAttributes);
+    }}
+}}
+"#)
+}
+
 
 fn generate_blocks_java(package: &str, _mod_id: &str, blocks: &[BlockRecord]) -> String {
     let mut body = format!(r#"package {package}.registry;
