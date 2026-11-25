@@ -660,21 +660,9 @@ const DEFINITIONS: &[Definition] = &[
     d!("LivingEquipmentChangeEvent", "getFrom", V_112, "equipment_change_old_stack", "Previously equipped ItemStack", "events", "automatic_rename_candidate", "Preserve old stack identity and components.", "net/minecraftforge/event/entity/living/LivingEquipmentChangeEvent.html"),
     d!("LivingEquipmentChangeEvent", "getTo", V_112, "equipment_change_new_stack", "Newly equipped ItemStack", "events", "automatic_rename_candidate", "Preserve new stack identity and component changes.", "net/minecraftforge/event/entity/living/LivingEquipmentChangeEvent.html"),
     d!("PlayerEvent", "getPlayer", V_ALL, "player_event_player", "Player on PlayerEvent", "events", "automatic_rename_candidate", "Translate EntityPlayer and preserve server-side identity.", "net/minecraftforge/event/entity/player/PlayerEvent.html"),
-    d!("PlayerEvent.ItemCraftedEvent", "getCrafting", V_ALL, "player_crafted_inventory", "Crafting inventory/container", "events", "adapter_required", "Use crafting recipe and input container rather than direct legacy inventory mutation.", "net/minecraftforge/event/entity/player/PlayerEvent.ItemCraftedEvent.html"),
-    d!("PlayerEvent.ItemSmeltedEvent", "getSmelting", V_18, "player_smelted_stack", "Smelting result ItemStack", "events", "automatic_rename_candidate", "Preserve furnace result stack and player attribution.", "net/minecraftforge/event/entity/player/PlayerEvent.ItemSmeltedEvent.html"),
     d!("PlayerEvent.BreakSpeed", "getOriginalSpeed", V_18, "player_break_original_speed", "Original block break speed", "events", "automatic_rename_candidate", "Preserve pre-modifier speed and haste/mining-fatigue context.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
     d!("PlayerEvent.BreakSpeed", "getNewSpeed", V_18, "player_break_new_speed", "Current modified break speed", "events", "automatic_rename_candidate", "Preserve event-modified speed and cancellation.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
     d!("PlayerEvent.BreakSpeed", "setNewSpeed", V_18, "player_break_speed_write", "Set modified break speed", "events", "automatic_rename_candidate", "Port speed modifiers without dropping other event listeners' contributions.", "net/minecraftforge/event/entity/player/PlayerEvent.BreakSpeed.html"),
-    d!("PlayerEvent.PlayerLoggedInEvent", "getPlayer", V_ALL, "player_login_event", "ServerPlayer login event", "events", "automatic_rename_candidate", "Move login initialization to player login event and preserve server lifecycle.", "net/minecraftforge/event/entity/player/PlayerEvent.PlayerLoggedInEvent.html"),
-    d!("PlayerEvent.PlayerLoggedOutEvent", "getPlayer", V_ALL, "player_logout_event", "ServerPlayer logout event", "events", "automatic_rename_candidate", "Clean up player attachments and pending network state on disconnect.", "net/minecraftforge/event/entity/player/PlayerEvent.PlayerLoggedOutEvent.html"),
-    d!("PlayerEvent.PlayerChangedDimensionEvent", "getFromDim", V_ALL, "player_dimension_from", "ResourceKey<Level> source dimension", "events", "adapter_required", "Translate numeric source dimension IDs to dimension keys.", "net/minecraftforge/event/entity/player/PlayerEvent.PlayerChangedDimensionEvent.html"),
-    d!("PlayerEvent.PlayerChangedDimensionEvent", "getToDim", V_ALL, "player_dimension_to", "ResourceKey<Level> destination dimension", "events", "adapter_required", "Translate numeric destination dimension IDs to dimension keys.", "net/minecraftforge/event/entity/player/PlayerEvent.PlayerChangedDimensionEvent.html"),
-    d!("TickEvent", "phase", V_ALL, "tick_event_phase", "TickEvent.Phase START/END", "events", "automatic_rename_candidate", "Preserve START versus END ordering.", "net/minecraftforge/fml/common/gameevent/TickEvent.html"),
-    d!("TickEvent", "side", V_ALL, "tick_event_side", "Logical Side.CLIENT/SERVER", "events", "adapter_required", "Translate legacy Side to logical side; do not confuse with physical Dist.", "net/minecraftforge/fml/common/gameevent/TickEvent.html"),
-    d!("TickEvent.WorldTickEvent", "world", V_ALL, "world_tick_event_level", "Level on world tick event", "events", "event_adapter_required", "Move logic to level tick event and preserve phase ordering.", "net/minecraftforge/fml/common/gameevent/TickEvent.WorldTickEvent.html"),
-    d!("TickEvent.PlayerTickEvent", "player", V_ALL, "player_tick_event_player", "Player on player tick event", "events", "event_adapter_required", "Preserve logical side and START/END phase.", "net/minecraftforge/fml/common/gameevent/TickEvent.PlayerTickEvent.html"),
-    d!("TickEvent.ServerTickEvent", "server", V_18, "server_tick_event_server", "MinecraftServer on server tick event", "events", "event_adapter_required", "Move server-wide work to server tick event with phase checks.", "net/minecraftforge/fml/common/gameevent/TickEvent.ServerTickEvent.html"),
-    d!("TickEvent.ClientTickEvent", "side", V_ALL, "client_tick_event_side", "Logical client tick side", "events", "client_adapter_required", "Keep rendering/client state out of dedicated server classes.", "net/minecraftforge/fml/common/gameevent/TickEvent.ClientTickEvent.html"),
     d!("RegistryEvent.Register", "getRegistry", V_112, "registry_event_registry", "IForgeRegistry<T>", "registration", "adapter_required", "Translate registry-specific events to RegisterEvent/DeferredRegister.", "net/minecraftforge/event/RegistryEvent.Register.html"),
     d!("RegistryEvent.MissingMappings", "getAllMappings", V_112, "missing_registry_mappings", "Missing registry mappings collection", "registration", "manual_adapter_required", "Use modern missing-mapping/remapping event and preserve remap/ignore decisions.", "net/minecraftforge/event/RegistryEvent.MissingMappings.html"),
     d!("IForgeRegistry", "register", V_112, "forge_registry_register", "DeferredRegister / RegisterEvent", "registration", "registration_adapter_required", "Use typed registry keys and deferred registration rather than runtime mutation.", "net/minecraftforge/registries/IForgeRegistry.html"),
@@ -1347,7 +1335,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldEvent.PotentialSpawns", "getWorld", V_18, "potential_spawn_world", "MobSpawnSettings / world spawn context", "worldgen", "automatic_rename_candidate", "Preserve the queried world and dimension for the spawn-list calculation.", "net/minecraftforge/event/world/WorldEvent.PotentialSpawns.html"),
     d!("ChunkDataEvent", "getChunk", V_18, "chunk_data_event_chunk", "ChunkDataEvent / chunk persistent data lifecycle", "persistence", "automatic_rename_candidate", "Preserve the chunk whose NBT payload is being loaded or saved.", "net/minecraftforge/event/world/ChunkDataEvent.html"),
     d!("ChunkDataEvent", "getWorld", V_18, "chunk_data_event_world", "ChunkDataEvent / level lifecycle", "persistence", "automatic_rename_candidate", "Preserve dimension/world identity for chunk data migration and attachment restoration.", "net/minecraftforge/event/world/ChunkDataEvent.html"),
-    d!("ChunkWatchEvent", "getChunk", V_18, "chunk_watch_event_chunk", "Chunk tracking / per-player chunk visibility", "networking", "automatic_rename_candidate", "Preserve chunk coordinates and identity for player watch transitions.", "net/minecraftforge/event/world/ChunkWatchEvent.html"),
+    d!("ChunkWatchEvent", "getChunk", V_112, "chunk_watch_position_deprecated", "ChunkPos (deprecated) / ChunkWatchEvent#getChunkInstance", "networking", "adapter_required", "This deprecated accessor returns ChunkPos, not Chunk; use getChunkInstance for the affected Chunk. Preserve the distinct chunk-position and nullable loaded-chunk semantics.", "net/minecraftforge/event/world/ChunkWatchEvent.html"),
     d!("ExplosionEvent", "getWorld", V_18, "explosion_event_world", "Explosion level / world context", "events_combat", "automatic_rename_candidate", "Preserve the world in which the explosion executes, independently from its source entity.", "net/minecraftforge/event/world/ExplosionEvent.html"),
 
     // Base event inheritance and entity-wide lifecycle interception.
@@ -1423,6 +1411,87 @@ const DEFINITIONS: &[Definition] = &[
     d!("EnchantmentLevelSetEvent", "getPower", V_112, "enchanting_table_power", "EnchantmentMenu bookshelf power", "enchantments", "automatic_rename_candidate", "Preserve bookshelf power (0-15) as a distinct input to the vanilla enchanting formula.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
     d!("EnchantmentLevelSetEvent", "getWorld", V_112, "enchanting_table_world", "EnchantmentMenu level context", "enchantments", "automatic_rename_candidate", "Preserve the level used by the enchanting calculation and listener side effects.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
     d!("EnchantmentLevelSetEvent", "setLevel", V_112, "enchanting_table_level_write", "EnchantmentMenu option level", "enchantments", "adapter_required", "Preserve the modified option level (0-30) and its timing before generated enchantment choices.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+
+    // ChunkWatchEvent distinguishes the coordinate key from the loaded Chunk.
+    d!("ChunkWatchEvent", "getChunkInstance", V_112, "chunk_watch_instance", "ChunkWatchEvent#getChunkInstance -> Chunk", "networking", "adapter_required", "Returns the affected Chunk instance and may be null; do not substitute deprecated getChunk(), which returns ChunkPos.", "net/minecraftforge/event/world/ChunkWatchEvent.html"),
+
+    // Actual gameevent PlayerEvent item-pickup API; other legacy gameevent
+    // PlayerEvent subclasses expose public fields rather than getter methods.
+    d!("PlayerEvent.ItemPickupEvent", "getOriginalEntity", V_112, "player_pickup_original_entity", "ItemEntity / player pickup context", "events", "automatic_rename_candidate", "Preserve the original EntityItem being collected separately from the stack snapshot.", "net/minecraftforge/fml/common/gameevent/PlayerEvent.ItemPickupEvent.html"),
+    d!("PlayerEvent.ItemPickupEvent", "getStack", V_112, "player_pickup_stack_snapshot", "ItemStack / player pickup context", "events", "automatic_rename_candidate", "Preserve the event's ItemStack snapshot and its tags/count at pickup time.", "net/minecraftforge/fml/common/gameevent/PlayerEvent.ItemPickupEvent.html"),
+
+    // Client camera and view events.
+    d!("EntityViewRenderEvent", "getEntity", V_112, "view_render_entity", "EntityRenderer view entity / camera context", "client_render", "automatic_rename_candidate", "Preserve the entity being rendered from the player's view, which may differ from the local player.", "net/minecraftforge/client/event/EntityViewRenderEvent.html"),
+    d!("EntityViewRenderEvent", "getRenderer", V_112, "view_render_renderer", "EntityRenderer camera/render context", "client_render", "adapter_required", "Preserve the renderer instance and avoid treating it as a global singleton.", "net/minecraftforge/client/event/EntityViewRenderEvent.html"),
+    d!("EntityViewRenderEvent", "getRenderPartialTicks", V_112, "view_render_partial_ticks", "Render partial tick interpolation", "client_render", "automatic_rename_candidate", "Preserve interpolation fraction used for camera, fog and view-dependent effects.", "net/minecraftforge/client/event/EntityViewRenderEvent.html"),
+    d!("EntityViewRenderEvent", "getState", V_112, "view_render_block_state", "IBlockState / camera view context", "client_render", "automatic_rename_candidate", "Preserve the block state associated with the current view render event.", "net/minecraftforge/client/event/EntityViewRenderEvent.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "getPitch", V_112, "camera_pitch_read", "Camera angle / EntityRenderer camera setup", "client_render", "automatic_rename_candidate", "Preserve pitch in degrees and the camera setup timing.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "getRoll", V_112, "camera_roll_read", "Camera angle / EntityRenderer camera setup", "client_render", "automatic_rename_candidate", "Preserve roll independently from pitch and yaw.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "getYaw", V_112, "camera_yaw_read", "Camera angle / EntityRenderer camera setup", "client_render", "automatic_rename_candidate", "Preserve yaw in degrees and source interpolation state.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "setPitch", V_112, "camera_pitch_write", "Camera angle / EntityRenderer camera setup", "client_render", "adapter_required", "Apply pitch mutation at the camera setup point, preserving order with other camera listeners.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "setRoll", V_112, "camera_roll_write", "Camera angle / EntityRenderer camera setup", "client_render", "adapter_required", "Apply roll independently from player rotation and model head rotation.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.CameraSetup", "setYaw", V_112, "camera_yaw_write", "Camera angle / EntityRenderer camera setup", "client_render", "adapter_required", "Apply yaw mutation while preserving camera-versus-entity rotation semantics.", "net/minecraftforge/client/event/EntityViewRenderEvent.CameraSetup.html"),
+    d!("EntityViewRenderEvent.FogColors", "getBlue", V_112, "fog_blue_read", "Fog color RGB channels", "client_render", "automatic_rename_candidate", "Preserve normalized blue fog channel before listener mutation.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogColors", "getGreen", V_112, "fog_green_read", "Fog color RGB channels", "client_render", "automatic_rename_candidate", "Preserve normalized green fog channel before listener mutation.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogColors", "getRed", V_112, "fog_red_read", "Fog color RGB channels", "client_render", "automatic_rename_candidate", "Preserve normalized red fog channel before listener mutation.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogColors", "setBlue", V_112, "fog_blue_write", "Fog color RGB channels", "client_render", "adapter_required", "Preserve floating-point channel values and apply before fog color is consumed.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogColors", "setGreen", V_112, "fog_green_write", "Fog color RGB channels", "client_render", "adapter_required", "Preserve floating-point channel values and apply before fog color is consumed.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogColors", "setRed", V_112, "fog_red_write", "Fog color RGB channels", "client_render", "adapter_required", "Preserve floating-point channel values and apply before fog color is consumed.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogColors.html"),
+    d!("EntityViewRenderEvent.FogDensity", "getDensity", V_112, "fog_density_read", "Fog density / RenderGlobal fog setup", "client_render", "automatic_rename_candidate", "Preserve the density value used by the fog render pass.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogDensity.html"),
+    d!("EntityViewRenderEvent.FogDensity", "setDensity", V_112, "fog_density_write", "Fog density / RenderGlobal fog setup", "client_render", "adapter_required", "Preserve custom density; the event's cancelability/reset semantics must be handled separately.", "net/minecraftforge/client/event/EntityViewRenderEvent.FogDensity.html"),
+    d!("EntityViewRenderEvent.FOVModifier", "getFOV", V_112, "view_fov_read", "EntityRenderer field-of-view calculation", "client_render", "automatic_rename_candidate", "Preserve the currently calculated FOV and distinguish it from player-specific FOV update.", "net/minecraftforge/client/event/EntityViewRenderEvent.FOVModifier.html"),
+    d!("EntityViewRenderEvent.FOVModifier", "setFOV", V_112, "view_fov_write", "EntityRenderer field-of-view calculation", "client_render", "adapter_required", "Preserve FOV override before projection matrix construction.", "net/minecraftforge/client/event/EntityViewRenderEvent.FOVModifier.html"),
+    d!("FOVUpdateEvent", "getEntity", V_112, "player_fov_entity", "EntityPlayer / FOV update event", "client_render", "automatic_rename_candidate", "Preserve the player whose FOV is being calculated.", "net/minecraftforge/client/event/FOVUpdateEvent.html"),
+    d!("FOVUpdateEvent", "getFov", V_112, "player_fov_original", "EntityPlayer FOV calculation", "client_render", "automatic_rename_candidate", "Preserve original computed FOV independently from mutable output FOV.", "net/minecraftforge/client/event/FOVUpdateEvent.html"),
+    d!("FOVUpdateEvent", "getNewfov", V_112, "player_fov_current", "EntityPlayer FOV calculation", "client_render", "automatic_rename_candidate", "Read current FOV after earlier listeners have modified it.", "net/minecraftforge/client/event/FOVUpdateEvent.html"),
+    d!("FOVUpdateEvent", "setNewfov", V_112, "player_fov_write", "EntityPlayer FOV calculation", "client_render", "adapter_required", "Preserve FOV modifier composition and exact event order.", "net/minecraftforge/client/event/FOVUpdateEvent.html"),
+    d!("GuiOpenEvent", "getGui", V_112, "gui_open_target_read", "GuiScreen / client screen transition", "client_gui", "automatic_rename_candidate", "Preserve the requested screen, including null when closing the current GUI.", "net/minecraftforge/client/event/GuiOpenEvent.html"),
+    d!("GuiOpenEvent", "setGui", V_112, "gui_open_target_write", "GuiScreen / client screen transition", "client_gui", "adapter_required", "Replace the requested screen before opening and preserve event cancellation and null-to-close behavior.", "net/minecraftforge/client/event/GuiOpenEvent.html"),
+    d!("InputUpdateEvent", "getMovementInput", V_112, "player_movement_input", "MovementInput / client player movement", "client_input", "adapter_required", "Preserve mutable forward/strafe/jump/sneak inputs at the post-input-update point before movement is processed.", "net/minecraftforge/client/event/InputUpdateEvent.html"),
+    d!("MouseEvent", "getButton", V_112, "mouse_button", "Mouse input event / GLFW button", "client_input", "automatic_rename_candidate", "Preserve button index and distinguish wheel events from button events.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getDwheel", V_112, "mouse_wheel_delta", "Mouse scroll input", "client_input", "automatic_rename_candidate", "Preserve signed wheel delta and event ordering.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getDx", V_112, "mouse_delta_x", "Mouse movement input", "client_input", "automatic_rename_candidate", "Preserve relative horizontal movement delta, not absolute screen position.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getDy", V_112, "mouse_delta_y", "Mouse movement input", "client_input", "automatic_rename_candidate", "Preserve relative vertical movement delta and sign convention.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getNanoseconds", V_112, "mouse_event_time", "Input event timestamp", "client_input", "automatic_rename_candidate", "Preserve event timestamp units in nanoseconds for debounce/double-click timing.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getX", V_112, "mouse_position_x", "Mouse absolute input coordinates", "client_input", "automatic_rename_candidate", "Preserve current absolute cursor X position in the display coordinate space.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "getY", V_112, "mouse_position_y", "Mouse absolute input coordinates", "client_input", "automatic_rename_candidate", "Preserve current absolute cursor Y position and screen coordinate origin.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("MouseEvent", "isButtonstate", V_112, "mouse_button_state", "Mouse button input state", "client_input", "automatic_rename_candidate", "Preserve press/release boolean separately from the button index.", "net/minecraftforge/client/event/MouseEvent.html"),
+    d!("DrawBlockHighlightEvent", "getContext", V_112, "block_highlight_render_context", "RenderGlobal block highlight context", "client_render", "automatic_rename_candidate", "Preserve the RenderGlobal instance used for block selection highlighting.", "net/minecraftforge/client/event/DrawBlockHighlightEvent.html"),
+    d!("DrawBlockHighlightEvent", "getPartialTicks", V_112, "block_highlight_partial_ticks", "Render partial tick interpolation", "client_render", "automatic_rename_candidate", "Preserve interpolation fraction used to draw the targeted block outline.", "net/minecraftforge/client/event/DrawBlockHighlightEvent.html"),
+    d!("DrawBlockHighlightEvent", "getPlayer", V_112, "block_highlight_player", "EntityPlayer targeted block context", "client_render", "automatic_rename_candidate", "Preserve the player whose targeted block is being highlighted.", "net/minecraftforge/client/event/DrawBlockHighlightEvent.html"),
+    d!("DrawBlockHighlightEvent", "getSubID", V_112, "block_highlight_sub_id", "Block selection sub-hit index", "client_render", "automatic_rename_candidate", "Preserve sub-hit index for multipart/custom block selections.", "net/minecraftforge/client/event/DrawBlockHighlightEvent.html"),
+    d!("DrawBlockHighlightEvent", "getTarget", V_112, "block_highlight_raytrace", "RayTraceResult targeted block/entity hit", "client_render", "automatic_rename_candidate", "Preserve the full hit result including block/entity, hit face and hit location.", "net/minecraftforge/client/event/DrawBlockHighlightEvent.html"),
+    d!("RenderBlockOverlayEvent", "getBlockForOverlay", V_112, "block_overlay_state", "IBlockState overlay source", "client_render", "automatic_rename_candidate", "Preserve block state used when drawing the overlay texture; meaningful for BLOCK overlay type.", "net/minecraftforge/client/event/RenderBlockOverlayEvent.html"),
+    d!("RenderBlockOverlayEvent", "getBlockPos", V_112, "block_overlay_position", "BlockPos overlay source", "client_render", "automatic_rename_candidate", "Preserve world block position associated with the overlay.", "net/minecraftforge/client/event/RenderBlockOverlayEvent.html"),
+    d!("RenderBlockOverlayEvent", "getOverlayType", V_112, "block_overlay_type", "RenderBlockOverlayEvent.OverlayType", "client_render", "automatic_rename_candidate", "Distinguish BLOCK, FIRE and WATER overlay rendering paths.", "net/minecraftforge/client/event/RenderBlockOverlayEvent.html"),
+    d!("RenderBlockOverlayEvent", "getPlayer", V_112, "block_overlay_player", "EntityPlayer overlay context", "client_render", "automatic_rename_candidate", "Preserve the player receiving the first-person overlay.", "net/minecraftforge/client/event/RenderBlockOverlayEvent.html"),
+    d!("RenderBlockOverlayEvent", "getRenderPartialTicks", V_112, "block_overlay_partial_ticks", "Render partial tick interpolation", "client_render", "automatic_rename_candidate", "Preserve interpolation fraction for overlay animation.", "net/minecraftforge/client/event/RenderBlockOverlayEvent.html"),
+    d!("RenderGameOverlayEvent", "getPartialTicks", V_112, "gui_overlay_partial_ticks", "ScaledResolution GUI overlay render", "client_render", "automatic_rename_candidate", "Preserve frame interpolation timing for HUD overlay rendering.", "net/minecraftforge/client/event/RenderGameOverlayEvent.html"),
+    d!("RenderGameOverlayEvent", "getResolution", V_112, "gui_overlay_resolution", "ScaledResolution GUI overlay render", "client_render", "automatic_rename_candidate", "Preserve scaled dimensions and GUI scale used for the overlay pass.", "net/minecraftforge/client/event/RenderGameOverlayEvent.html"),
+    d!("RenderGameOverlayEvent", "getType", V_112, "gui_overlay_element_type", "RenderGameOverlayEvent.ElementType", "client_render", "automatic_rename_candidate", "Preserve exact HUD element stage (ALL, HELMET, CROSSHAIRS, HOTBAR, TEXT, etc.) and Pre/Post timing.", "net/minecraftforge/client/event/RenderGameOverlayEvent.html"),
+    d!("RenderHandEvent", "getContext", V_112, "hand_render_context", "RenderGlobal first-person hand context", "client_render", "automatic_rename_candidate", "Preserve rendering context used for first-person hand passes.", "net/minecraftforge/client/event/RenderHandEvent.html"),
+    d!("RenderHandEvent", "getPartialTicks", V_112, "hand_render_partial_ticks", "First-person hand render interpolation", "client_render", "automatic_rename_candidate", "Preserve partial tick interpolation for hand animations.", "net/minecraftforge/client/event/RenderHandEvent.html"),
+    d!("RenderHandEvent", "getRenderPass", V_112, "hand_render_pass", "First-person hand render pass index", "client_render", "automatic_rename_candidate", "Preserve render pass selection and avoid conflating pass IDs with GUI overlay types.", "net/minecraftforge/client/event/RenderHandEvent.html"),
+    d!("RenderTooltipEvent", "getFontRenderer", V_112, "tooltip_render_font", "FontRenderer tooltip drawing", "client_render", "automatic_rename_candidate", "Preserve selected font renderer, including custom tooltip font behavior.", "net/minecraftforge/client/event/RenderTooltipEvent.html"),
+    d!("RenderTooltipEvent", "getLines", V_112, "tooltip_render_lines", "Tooltip ordered String line list", "client_render", "adapter_required", "Preserve mutable line ordering and formatting, converting to Components only after all source callbacks run.", "net/minecraftforge/client/event/RenderTooltipEvent.html"),
+    d!("RenderTooltipEvent", "getStack", V_112, "tooltip_render_stack", "ItemStack tooltip rendering", "client_render", "automatic_rename_candidate", "Preserve stack components/tags and item identity used to create the tooltip.", "net/minecraftforge/client/event/RenderTooltipEvent.html"),
+    d!("RenderTooltipEvent", "getX", V_112, "tooltip_render_x", "Tooltip screen coordinate", "client_render", "automatic_rename_candidate", "Preserve tooltip X coordinate after source placement calculations.", "net/minecraftforge/client/event/RenderTooltipEvent.html"),
+    d!("RenderTooltipEvent", "getY", V_112, "tooltip_render_y", "Tooltip screen coordinate", "client_render", "automatic_rename_candidate", "Preserve tooltip Y coordinate after source placement calculations.", "net/minecraftforge/client/event/RenderTooltipEvent.html"),
+    d!("RenderItemInFrameEvent", "getEntityItemFrame", V_112, "rendered_item_frame", "EntityItemFrame / renderer context", "client_render", "automatic_rename_candidate", "Preserve item-frame entity orientation, world position and displayed stack context.", "net/minecraftforge/client/event/RenderItemInFrameEvent.html"),
+    d!("RenderItemInFrameEvent", "getItem", V_112, "rendered_frame_item_stack", "ItemStack / item-frame rendering", "client_render", "automatic_rename_candidate", "Preserve exact displayed ItemStack including tags and model overrides.", "net/minecraftforge/client/event/RenderItemInFrameEvent.html"),
+    d!("RenderItemInFrameEvent", "getRenderer", V_112, "render_item_frame_renderer", "RenderItemFrame renderer instance", "client_render", "automatic_rename_candidate", "Preserve renderer context for item-frame render customization.", "net/minecraftforge/client/event/RenderItemInFrameEvent.html"),
+    d!("RenderPlayerEvent", "getPartialRenderTick", V_112, "player_render_partial_ticks", "RenderPlayer interpolation", "client_render", "automatic_rename_candidate", "Preserve partial render tick for player model/armor animation.", "net/minecraftforge/client/event/RenderPlayerEvent.html"),
+    d!("RenderPlayerEvent", "getRenderer", V_112, "player_render_renderer", "RenderPlayer renderer", "client_render", "automatic_rename_candidate", "Preserve concrete player renderer and its model/layer state.", "net/minecraftforge/client/event/RenderPlayerEvent.html"),
+    d!("RenderPlayerEvent", "getX", V_112, "player_render_x", "Player render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render X coordinate, not entity block position.", "net/minecraftforge/client/event/RenderPlayerEvent.html"),
+    d!("RenderPlayerEvent", "getY", V_112, "player_render_y", "Player render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render Y coordinate, not entity block position.", "net/minecraftforge/client/event/RenderPlayerEvent.html"),
+    d!("RenderPlayerEvent", "getZ", V_112, "player_render_z", "Player render world position", "client_render", "automatic_rename_candidate", "Preserve interpolated render Z coordinate, not entity block position.", "net/minecraftforge/client/event/RenderPlayerEvent.html"),
+    d!("RenderWorldLastEvent", "getContext", V_112, "world_render_context", "RenderGlobal world render context", "client_render", "automatic_rename_candidate", "Preserve world renderer context for custom world-space overlays and effects.", "net/minecraftforge/client/event/RenderWorldLastEvent.html"),
+    d!("RenderWorldLastEvent", "getPartialTicks", V_112, "world_render_partial_ticks", "World render partial tick interpolation", "client_render", "automatic_rename_candidate", "Preserve interpolation for world-space render effects.", "net/minecraftforge/client/event/RenderWorldLastEvent.html"),
+    d!("GuiContainerEvent", "getGuiContainer", V_112, "container_gui_render_target", "GuiContainer / client menu render", "client_gui", "automatic_rename_candidate", "Preserve the open GuiContainer instance and its inventory/container state.", "net/minecraftforge/client/event/GuiContainerEvent.html"),
+    d!("PotionBrewEvent", "getItem", V_112, "brewing_slot_stack_read", "BrewingStand container slot ItemStack", "brewing", "automatic_rename_candidate", "Preserve exact stack at the indexed brewing slot and return an empty stack for empty slots.", "net/minecraftforge/event/brewing/PotionBrewEvent.html"),
+    d!("PotionBrewEvent", "getLength", V_112, "brewing_slot_count", "BrewingStand container slots", "brewing", "automatic_rename_candidate", "Preserve number of brew slots and source iteration bounds.", "net/minecraftforge/event/brewing/PotionBrewEvent.html"),
+    d!("PotionBrewEvent", "setItem", V_112, "brewing_slot_stack_write", "BrewingStand container slot ItemStack", "brewing", "adapter_required", "Preserve replacement stack by slot index and brewing process timing; do not omit bottle/fuel slots.", "net/minecraftforge/event/brewing/PotionBrewEvent.html"),
+    d!("PlayerBrewedPotionEvent", "getStack", V_112, "player_brewed_stack", "Potion result ItemStack / brewing pickup", "brewing", "automatic_rename_candidate", "Preserve the brewed ItemStack collected by a player and its potion NBT/effects.", "net/minecraftforge/event/brewing/PlayerBrewedPotionEvent.html"),
 
 ];
 
@@ -1835,6 +1904,50 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         // Forge event inheritance is important for usage matching: source
         // receivers are often typed as a concrete nested event while a method
         // such as getPlayer/getWorld is declared on one of its event bases.
+        "InputUpdateEvent" | "RenderPlayerEvent" => {
+            candidates.insert("PlayerEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "EntityViewRenderEvent.CameraSetup" | "EntityViewRenderEvent.FogColors"
+        | "EntityViewRenderEvent.FogDensity" | "EntityViewRenderEvent.FOVModifier"
+        | "EntityViewRenderEvent.RenderFogEvent" => {
+            candidates.insert("EntityViewRenderEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "GuiScreenEvent" | "GuiScreenEvent.ActionPerformedEvent"
+        | "GuiScreenEvent.ActionPerformedEvent.Pre" | "GuiScreenEvent.ActionPerformedEvent.Post"
+        | "GuiScreenEvent.BackgroundDrawnEvent" | "GuiScreenEvent.DrawScreenEvent"
+        | "GuiScreenEvent.DrawScreenEvent.Pre" | "GuiScreenEvent.DrawScreenEvent.Post"
+        | "GuiScreenEvent.InitGuiEvent" | "GuiScreenEvent.InitGuiEvent.Pre"
+        | "GuiScreenEvent.InitGuiEvent.Post" | "GuiScreenEvent.KeyboardInputEvent"
+        | "GuiScreenEvent.KeyboardInputEvent.Pre" | "GuiScreenEvent.KeyboardInputEvent.Post"
+        | "GuiScreenEvent.MouseInputEvent" | "GuiScreenEvent.MouseInputEvent.Pre"
+        | "GuiScreenEvent.MouseInputEvent.Post" | "GuiScreenEvent.PotionShiftEvent" => {
+            candidates.insert("GuiScreenEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "RenderTooltipEvent.Color" | "RenderTooltipEvent.Pre"
+        | "RenderTooltipEvent.Post" | "RenderTooltipEvent.PostBackground"
+        | "RenderTooltipEvent.PostText" => {
+            candidates.insert("RenderTooltipEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "RenderGameOverlayEvent.BossInfo" | "RenderGameOverlayEvent.Chat"
+        | "RenderGameOverlayEvent.Pre" | "RenderGameOverlayEvent.Post"
+        | "RenderGameOverlayEvent.Text" => {
+            candidates.insert("RenderGameOverlayEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ColorHandlerEvent.Block" | "ColorHandlerEvent.Item" => {
+            candidates.insert("ColorHandlerEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "GuiContainerEvent.DrawForeground" => {
+            candidates.insert("GuiContainerEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
         "LivingEvent.LivingJumpEvent" | "LivingEvent.LivingUpdateEvent"
         | "AnimalTameEvent" | "LivingDestroyBlockEvent" | "LivingKnockBackEvent"
         | "LivingAttackEvent" | "LivingDeathEvent" | "LivingDropsEvent"
@@ -2448,6 +2561,37 @@ mod tests {
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
+    }
+
+
+    #[test]
+    fn forge_client_render_and_brewing_hooks_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("EntityViewRenderEvent", "getRenderPartialTicks"),
+            ("EntityViewRenderEvent.CameraSetup", "setRoll"),
+            ("EntityViewRenderEvent.FogColors", "setRed"),
+            ("EntityViewRenderEvent.FogDensity", "setDensity"),
+            ("EntityViewRenderEvent.FOVModifier", "setFOV"),
+            ("FOVUpdateEvent", "setNewfov"),
+            ("GuiOpenEvent", "setGui"),
+            ("InputUpdateEvent", "getMovementInput"),
+            ("MouseEvent", "getDwheel"),
+            ("DrawBlockHighlightEvent", "getTarget"),
+            ("RenderGameOverlayEvent", "getType"),
+            ("RenderTooltipEvent", "getLines"),
+            ("RenderPlayerEvent", "getRenderer"),
+            ("RenderWorldLastEvent", "getContext"),
+            ("PotionBrewEvent", "setItem"),
+            ("PlayerBrewedPotionEvent", "getStack"),
+            ("PlayerEvent.ItemPickupEvent", "getOriginalEntity"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+        assert!(!has("PlayerEvent.PlayerChangedDimensionEvent", "getFromDim"));
+        assert!(!has("PlayerEvent.ItemSmeltedEvent", "getSmelting"));
     }
 
     #[test]
