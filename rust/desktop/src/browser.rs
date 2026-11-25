@@ -115,10 +115,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             .find(|registration| registration.entity_class == *entity_name);
         let entity_source_path = graph.java_files.get(entity_name)
             .or_else(|| graph.class_files.get(entity_name)).cloned();
-        let texture_refs = entity_source_path.as_ref()
-            .filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("java")))
-            .and_then(|path| fs::read_to_string(path).ok())
-            .map(|source| declared_texture_refs(&source)).unwrap_or_default();
+        let texture_refs = entity_source_texture_refs(entity_name, &graph.java_files);
         let model_source = registration.and_then(|registration| {
             let model = registration.model_class.rsplit(['.', '/', '$']).next().unwrap_or("");
             graph.java_files.get(model).or_else(|| graph.class_files.get(model)).cloned()
@@ -918,6 +915,95 @@ fn is_food_source(source: &str, superclass: &str) -> bool {
         || source.contains("setPotionEffect")
 }
 
+fn entity_source_texture_refs(
+    entity_class: &str,
+    java_files: &BTreeMap<String, PathBuf>,
+) -> Vec<String> {
+    let mut all_sources = Vec::<(String, String)>::new();
+    let mut direct_sources = Vec::<String>::new();
+    let mut seen = HashSet::<PathBuf>::new();
+    for (class_name, path) in java_files {
+        if !seen.insert(path.clone()) { continue; }
+        if !path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("java")) {
+            continue;
+        }
+        let Ok(source) = fs::read_to_string(path) else { continue; };
+        if class_name == entity_class
+            || path.file_stem().and_then(|value| value.to_str()) == Some(entity_class)
+        {
+            direct_sources.push(source.clone());
+        }
+        all_sources.push((class_name.clone(), source));
+    }
+
+    let mut selected = BTreeSet::<String>::new();
+    let two_arg = Regex::new(
+        r#"(?is)ResourceLocation\\s+([A-Za-z0-9_$]+)\\s*=\\s*(?:new\\s+ResourceLocation|ResourceLocation\\.(?:fromNamespaceAndPath|tryBuild))\\s*\\(\\s*"[^"]+"\\s*,\\s*"([^"]+)""#
+    ).unwrap();
+    let one_arg = Regex::new(
+        r#"(?is)ResourceLocation\\s+([A-Za-z0-9_$]+)\\s*=\\s*(?:new\\s+ResourceLocation|ResourceLocation\\.(?:parse|tryParse|withDefaultNamespace))\\s*\\(\\s*"([^"]+)""#
+    ).unwrap();
+    let variant_selector = Regex::new(
+        &format!(
+            r#"(?is)if\\s*\\(\\s*"{}"\\s*\\.equals\\s*\\([^)]*\\)\\s*\\)\\s*\\{{?\\s*return\\s+([A-Za-z0-9_$]+)"#,
+            regex::escape(entity_class)
+        )
+    ).unwrap();
+
+    for (_, source) in &all_sources {
+        let mut constants = HashMap::<String, String>::new();
+        for capture in two_arg.captures_iter(source) {
+            constants.insert(capture[1].to_owned(), capture[2].to_owned());
+        }
+        for capture in one_arg.captures_iter(source) {
+            constants.insert(capture[1].to_owned(), capture[2].to_owned());
+        }
+        for capture in variant_selector.captures_iter(source) {
+            if let Some(reference) = constants.get(&capture[1]) {
+                selected.insert(reference.clone());
+            }
+        }
+    }
+    if !selected.is_empty() {
+        return selected.into_iter().collect();
+    }
+
+    let mut direct = BTreeSet::<String>::new();
+    for source in &direct_sources {
+        let texture_method = Regex::new(
+            r#"(?s)\\b(?:getTexture|getEntityTexture|getTextureLocation|getEntityTextureLocation)\\s*\\([^)]*\\)\\s*\\{{"#
+        ).unwrap();
+        for found in texture_method.find_iter(source) {
+            let Some(open) = source[found.start()..found.end()].rfind('{')
+                .map(|offset| found.start() + offset) else { continue; };
+            let Ok((body, _)) = extract_balanced(source, open, '{', '}') else { continue; };
+            let mut constants = HashMap::<String, String>::new();
+            for capture in two_arg.captures_iter(source) {
+                constants.insert(capture[1].to_owned(), capture[2].to_owned());
+            }
+            for capture in one_arg.captures_iter(source) {
+                constants.insert(capture[1].to_owned(), capture[2].to_owned());
+            }
+            let returned = Regex::new(r"(?m)\\breturn\\s+([A-Za-z0-9_$]+)\\s*;").unwrap();
+            if let Some(last) = returned.captures_iter(&body).last() {
+                if let Some(reference) = constants.get(&last[1]) {
+                    direct.insert(reference.clone());
+                }
+            }
+            for reference in declared_texture_refs(&body) {
+                direct.insert(reference);
+            }
+        }
+        let entity_paths = Regex::new(
+            r#"(?i)textures/(?:entity|entities|mob|mobs)/[^"\\s]+?\\.png"#
+        ).unwrap();
+        for capture in entity_paths.captures_iter(source) {
+            direct.insert(capture[0].replace('\\', "/"));
+        }
+    }
+    direct.into_iter().collect()
+}
+
 fn declared_texture_refs(source: &str) -> Vec<String> {
     let mut refs = Vec::new();
 
@@ -1606,6 +1692,61 @@ fn humanize(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selects_entity_specific_texture_from_legacy_variant_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let entity = temp.path().join("EntityRedAnt.java");
+        let registry = temp.path().join("EntityTextures.java");
+        fs::write(&entity, r#"
+            public class EntityRedAnt extends EntityMob { }
+        "#).unwrap();
+        fs::write(&registry, r#"
+            public class EntityTextures {
+                private static final ResourceLocation RED_ANT =
+                    new ResourceLocation("demo", "textures/entity/red_ant.png");
+                private static final ResourceLocation BLUE_ANT =
+                    new ResourceLocation("demo", "textures/entity/blue_ant.png");
+                ResourceLocation getTexture(Entity entity) {
+                    if ("EntityRedAnt".equals(entity.getClass().getSimpleName())) {
+                        return RED_ANT;
+                    }
+                    return BLUE_ANT;
+                }
+            }
+        "#).unwrap();
+        let files = BTreeMap::from([
+            ("EntityRedAnt".to_owned(), entity),
+            ("EntityTextures".to_owned(), registry),
+        ]);
+        assert_eq!(
+            entity_source_texture_refs("EntityRedAnt", &files),
+            vec!["textures/entity/red_ant.png".to_owned()]
+        );
+    }
+
+    #[test]
+    fn entity_texture_fallback_uses_the_last_get_texture_return() {
+        let temp = tempfile::tempdir().unwrap();
+        let entity = temp.path().join("EntityStormDrake.java");
+        fs::write(&entity, r#"
+            public class EntityStormDrake extends EntityMob {
+                private static final ResourceLocation EYES =
+                    new ResourceLocation("demo", "textures/entity/storm_drake_eyes.png");
+                private static final ResourceLocation BODY =
+                    new ResourceLocation("demo", "textures/entity/storm_drake.png");
+                ResourceLocation getTexture() {
+                    renderEyes(EYES);
+                    return BODY;
+                }
+            }
+        "#).unwrap();
+        let files = BTreeMap::from([("EntityStormDrake".to_owned(), entity)]);
+        assert_eq!(
+            entity_source_texture_refs("EntityStormDrake", &files),
+            vec!["textures/entity/storm_drake.png".to_owned()]
+        );
+    }
 
     #[test]
     fn tooltip_extraction_preserves_legacy_formatting_and_unicode_literals() {
