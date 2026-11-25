@@ -142,6 +142,19 @@ fn parse_animated_texture(
 }
 
 fn preferred_texture_index(entry: &BrowserEntry, textures: &[PathBuf]) -> usize {
+    // When a model references multiple images, show an animated block/item
+    // texture by default instead of silently choosing a static first texture.
+    if textures.len() > 1 {
+        if let Some(index) = textures.iter().position(|path| {
+            let metadata_path = PathBuf::from(format!("{}.mcmeta", path.display()));
+            fs::read(&metadata_path).ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .and_then(|metadata| metadata.get("animation").cloned())
+                .is_some()
+        }) {
+            return index;
+        }
+    }
     if entry.category != "Armor" || textures.len() < 2 {
         return 0;
     }
@@ -1126,6 +1139,35 @@ mod texture_animation_tests {
 #[cfg(test)]
 mod armor_texture_selection_tests {
     use super::*;
+
+    #[test]
+    fn animated_texture_is_preferred_for_multi_texture_blocks() {
+        let temp = tempfile::tempdir().unwrap();
+        let static_texture = temp.path().join("stone.png");
+        let animated_texture = temp.path().join("water.png");
+        fs::write(&static_texture, b"png").unwrap();
+        fs::write(&animated_texture, b"png").unwrap();
+        fs::write(
+            PathBuf::from(format!("{}.mcmeta", animated_texture.display())),
+            r#"{"animation":{"frametime":2}}"#,
+        ).unwrap();
+        let textures = vec![static_texture, animated_texture];
+        let entry = BrowserEntry {
+            category: "Blocks".into(),
+            name: "Animated Water".into(),
+            detail: "animated_water".into(),
+            icon_kind: IconKind::Texture,
+            icon_path: None,
+            model_source: None,
+            resource_model_source: None,
+            texture_paths: textures.clone(),
+            render_shape: Some("custom".into()),
+            lore: Vec::new(),
+            components_json: "{}".into(),
+            metadata_json: "{}".into(),
+        };
+        assert_eq!(preferred_texture_index(&entry, &textures), 1);
+    }
 
     #[test]
     fn leggings_select_layer_two_while_other_armor_selects_layer_one() {
