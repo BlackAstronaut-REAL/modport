@@ -85,6 +85,7 @@ pub struct MojModelBridgeApp {
     draft_name: String,
     draft_lore: String,
     components_json: String,
+    metadata_json: String,
     minecraftia_available: bool,
 }
 
@@ -211,6 +212,7 @@ impl MojModelBridgeApp {
             draft_name: String::new(),
             draft_lore: String::new(),
             components_json: "{}".to_owned(),
+            metadata_json: "{}".to_owned(),
             minecraftia_available,
         }
     }
@@ -276,6 +278,7 @@ impl MojModelBridgeApp {
         self.draft_name = entry.name.clone();
         self.draft_lore = entry.lore.join("\n");
         self.components_json = entry.components_json.clone();
+        self.metadata_json = entry.metadata_json.clone();
         self.scene = None;
         self.texture_paths.clear();
         self.texture_images.clear();
@@ -851,20 +854,20 @@ impl MojModelBridgeApp {
             ui.label("Name");
             ui.add(egui::TextEdit::singleline(&mut self.draft_name).desired_width(f32::INFINITY));
         });
-        ui.label("Lore");
-        ui.add(
-            egui::TextEdit::multiline(&mut self.draft_lore)
-                .desired_rows(3)
-                .desired_width(f32::INFINITY)
-                .hint_text("One lore line per row. Use § color/style codes."),
-        );
-        ui.label("Components (Minecraft component JSON)");
-        ui.add(
-            egui::TextEdit::multiline(&mut self.components_json)
-                .desired_rows(3)
-                .desired_width(f32::INFINITY)
-                .hint_text(r#"{"minecraft:custom_name":{"text":"Legendary Sword","color":"gold","bold":true},"minecraft:lore":[{"text":"Forged in the deep","color":"gray","italic":true}]}"#),
-        );
+        if !self.draft_lore.trim().is_empty() {
+            ui.label("Detected lore");
+            ui.add(egui::TextEdit::multiline(&mut self.draft_lore)
+                .desired_rows(3).desired_width(f32::INFINITY)
+                .hint_text("One lore line per row. Use § color/style codes."));
+        }
+        if self.components_json.trim() != "{}" && !self.components_json.trim().is_empty() {
+            ui.heading("Item components");
+            show_json_object_editor(ui, &mut self.components_json, "components");
+        }
+        if self.metadata_json.trim() != "{}" && !self.metadata_json.trim().is_empty() {
+            ui.heading("Mob metadata");
+            show_json_object_editor(ui, &mut self.metadata_json, "mob_metadata");
+        }
 
         ui.add_space(5.0);
         ui.horizontal(|ui| {
@@ -909,6 +912,85 @@ impl MojModelBridgeApp {
                 }
             });
         ui.label(RichText::new("Draft fields are local to this editor preview; workspace write-back is a separate editing stage.").size(9.0).color(MUTED));
+    }
+}
+
+fn show_json_field_editor(ui: &mut egui::Ui, label: &str, value: &mut serde_json::Value) -> bool {
+    use serde_json::Value;
+    match value {
+        Value::Object(object) => {
+            let mut changed = false;
+            egui::CollapsingHeader::new(label).default_open(true).show(ui, |ui| {
+                for (key, field) in object.iter_mut() {
+                    changed |= show_json_field_editor(ui, key, field);
+                }
+            });
+            changed
+        }
+        Value::Array(values) => {
+            let mut changed = false;
+            egui::CollapsingHeader::new(label).default_open(true).show(ui, |ui| {
+                for (index, field) in values.iter_mut().enumerate() {
+                    if let Value::String(text) = field {
+                        ui.label(format!("• {text}"));
+                    } else {
+                        changed |= show_json_field_editor(ui, &format!("[{index}]"), field);
+                    }
+                }
+            });
+            changed
+        }
+        Value::Number(_) => {
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                ui.label(label);
+                if let Some(mut integer) = value.as_i64() {
+                    if ui.add(egui::DragValue::new(&mut integer).speed(1.0)).changed() {
+                        *value = Value::from(integer);
+                        changed = true;
+                    }
+                } else if let Some(mut number) = value.as_f64() {
+                    if ui.add(egui::DragValue::new(&mut number).speed(0.05)).changed() {
+                        if let Some(number) = serde_json::Number::from_f64(number) {
+                            *value = Value::Number(number);
+                            changed = true;
+                        }
+                    }
+                }
+            });
+            changed
+        }
+        Value::Bool(flag) => ui.checkbox(flag, label).changed(),
+        Value::String(text) => {
+            ui.label(format!("{label}: {text}"));
+            false
+        }
+        Value::Null => {
+            ui.label(format!("{label}: not recovered"));
+            false
+        }
+    }
+}
+
+fn show_json_object_editor(ui: &mut egui::Ui, encoded: &mut String, id: &str) {
+    match serde_json::from_str::<serde_json::Value>(encoded) {
+        Ok(serde_json::Value::Object(mut object)) => {
+            let mut changed = false;
+            for (key, value) in object.iter_mut() {
+                changed |= show_json_field_editor(ui, key, value);
+            }
+            if changed {
+                *encoded = serde_json::to_string_pretty(&serde_json::Value::Object(object))
+                    .unwrap_or_else(|_| "{}".to_owned());
+            }
+        }
+        Ok(_) => {
+            ui.label(format!("{id}: expected an object"));
+        }
+        Err(error) => {
+            ui.label(format!("{id} JSON error: {error}"));
+            ui.add(egui::TextEdit::multiline(encoded).desired_rows(3).desired_width(f32::INFINITY));
+        }
     }
 }
 
@@ -1063,6 +1145,7 @@ mod armor_texture_selection_tests {
             render_shape: None,
             lore: Vec::new(),
             components_json: "{}".into(),
+            metadata_json: "{}".into(),
         };
         assert_eq!(preferred_texture_index(&leggings, &textures), 1);
 
