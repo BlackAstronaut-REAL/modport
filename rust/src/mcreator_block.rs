@@ -371,14 +371,14 @@ fn extract_block_drop(
     source_text: &str,
     field_registry_map: &BTreeMap<String, BTreeSet<String>>,
 ) -> Option<(String, i64)> {
-    if Regex::new(r"(?s)return\\s+Collections\\.emptyList\\s*\\(\\s*\\)")
+    if Regex::new(r"(?s)return\s+Collections\.emptyList\s*\(\s*\)")
         .ok()?.is_match(source_text)
     {
         return Some((String::new(), 0));
     }
 
     let pattern = Regex::new(
-        r#"new\\s+ItemStack\\s*\\(\\s*([A-Za-z_$][\\w$\\.]*)\\s*(?:,\\s*(\\d+)\\s*)?\\)"#,
+        r#"new\s+ItemStack\s*\(\s*([A-Za-z_$][\w$\.]*)\s*(?:,\s*(\d+)\s*)?\)"#,
     ).ok()?;
     let capture = pattern.captures(source_text)?;
     let raw_reference = capture.get(1)?.as_str();
