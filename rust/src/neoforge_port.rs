@@ -87,6 +87,15 @@ pub struct NativeEntityPlan {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct NativeProjectilePlan {
+    pub registry_name: String,
+    pub source_class: String,
+    pub bound_item: Option<String>,
+    pub generated_as: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NativeArmorPlan {
     pub source_prefix: String,
     pub material_id: String,
@@ -116,6 +125,7 @@ pub struct NeoForgePortReport {
     pub entities: Vec<NativeEntityPlan>,
     pub armor_sets: Vec<NativeArmorPlan>,
     pub projectiles: Vec<String>,
+    pub native_projectiles: Vec<NativeProjectilePlan>,
     pub resource_files_copied: usize,
     pub native_recipes: NativeRecipeReport,
     pub generated_java_files: Vec<String>,
@@ -163,6 +173,7 @@ struct ItemRecord {
     stack_size: u32,
     kind: String,
     lore: Vec<String>,
+    projectile_entity: Option<String>,
     food: Option<FoodRecord>,
     durability: Option<u32>,
     rarity: Option<String>,
@@ -197,6 +208,26 @@ struct ToolRecord {
     durability: u32,
     lore: Vec<String>,
     warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectileRecord {
+    id: String,
+    class_name: String,
+    source_path: String,
+    bound_item: Option<String>,
+}
+
+fn generated_projectile_class(projectile: &ProjectileRecord) -> String {
+    format!("ConvertedProjectile{}", java_type_identifier(&projectile.class_name))
+}
+
+fn projectile_entity_field(projectile: &ProjectileRecord) -> String {
+    java_field_name(&projectile.id, "PROJECTILE")
+}
+
+fn projectile_launcher_class(item_id: &str) -> String {
+    format!("ProjectileLauncher{}", java_type_identifier(item_id))
 }
 
 struct BlockRecord {
@@ -363,6 +394,30 @@ pub fn port_to_neoforge(
         &target_mod_id,
     )?;
     let native_entities = collect_native_entities(&graph.entities);
+    let mut native_projectile_records = collect_native_projectiles(&projectile_sources, &equipment);
+    for projectile in &mut native_projectile_records {
+        projectile.source_path = prepared.display_source_path(&projectile.source_path);
+    }
+    for item in &mut item_records {
+        item.projectile_entity = native_projectile_records.iter()
+            .find(|projectile| projectile.bound_item.as_deref() == Some(item.id.as_str()))
+            .map(|projectile| projectile.id.clone());
+    }
+    let native_projectiles: Vec<NativeProjectilePlan> = native_projectile_records.iter().map(|projectile| {
+        let mut warnings = vec![
+            "The source projectile is emitted as a generic ThrowableItemProjectile. Original impact effects, damage, explosions, pickup rules, custom gravity, and specialized physics are not ported.".to_owned()
+        ];
+        if projectile.bound_item.is_none() {
+            warnings.push("No registered source item was linked; the generated entity displays a snowball by default and can be summoned, but no launcher item is generated.".to_owned());
+        }
+        NativeProjectilePlan {
+            registry_name: projectile.id.clone(),
+            source_class: projectile.class_name.clone(),
+            bound_item: projectile.bound_item.clone(),
+            generated_as: "native ThrowableItemProjectile with ThrownItemRenderer and generated launcher for a linked registered item".to_owned(),
+            warnings,
+        }
+    }).collect();
     let generated_java_files = write_native_registries(
         output_root,
         &resources_root,
@@ -373,6 +428,7 @@ pub fn port_to_neoforge(
         &block_records,
         &native_armors,
         &native_entities,
+        &native_projectile_records,
     )?;
     let generated_resource_files = write_native_resources(
         &resources_root, &target_mod_id, &item_records, &tool_records, &block_records, &native_armors
@@ -489,6 +545,12 @@ pub fn port_to_neoforge(
     let projectiles: Vec<String> = projectile_sources.iter().map(|source: &ProjectileSource| {
         format!("{} ({})", source.class_name, source.registry_name)
     }).collect();
+    if !projectiles.is_empty() {
+        warnings.push(format!(
+            "{} projectile class(es) were discovered; {} throwable-family projectile(s) now have native entity and launcher placeholders. Arrow, fireball, and specialized projectile families remain inventoried only.",
+            projectiles.len(), native_projectile_records.len()
+        ));
+    }
 
     if !tool_records.is_empty() {
         warnings.push(format!("{} registered tool/weapon item(s) were emitted as native NeoForge tool classes; custom attack behavior, mining tags, repair ingredients, and special abilities may need further reconstruction.", tool_records.len()));
@@ -502,9 +564,7 @@ pub fn port_to_neoforge(
     if !armor_sets.is_empty() {
         warnings.push(format!("{} armor set(s) were emitted as wearable native ArmorMaterial/ArmorItem registrations; source-specific repair recipes, special effects and armor attributes remain partial.", armor_sets.len()));
     }
-    if !projectiles.is_empty() {
-        warnings.push(format!("{} projectile class(es) were recognized but their entity behavior and item bindings are not yet emitted.", projectiles.len()));
-    }
+
     if block_records.iter().any(|block| block.plant_like) {
         warnings.push("Plant-like blocks use cross models and non-colliding properties where generated; crop growth, placement rules, age/state variants, drops, and specialized spreading remain pending.".to_owned());
     }
@@ -539,6 +599,7 @@ pub fn port_to_neoforge(
         entities,
         armor_sets,
         projectiles,
+        native_projectiles,
         resource_files_copied,
         native_recipes: native_recipes.clone(),
         generated_java_files,
@@ -575,13 +636,15 @@ pub fn port_to_neoforge(
             "armor_sets": report.armor_sets.len(),
             "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
+            "throwable_projectiles": report.native_projectiles.len(),
             "recipes": report.native_recipes.generated.len(),
             "resource_files": resource_files_copied
         },
         "recognized_but_pending": {
             "custom_entity_ai_and_models": report.entities.len(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
-            "projectiles": report.projectiles.len()
+            "custom_projectile_impact_logic": report.native_projectiles.len(),
+            "non_throwable_projectile_families": report.projectiles.len().saturating_sub(report.native_projectiles.len())
         },
         "documentation_domains": report.detected_domains,
         "notes": [
@@ -877,6 +940,7 @@ fn collect_items(
             stack_size,
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
             lore,
+            projectile_entity: None,
             food,
             durability: item_properties.durability,
             rarity: item_properties.rarity,
@@ -1644,6 +1708,56 @@ fn armor_item_type(part: &str) -> &'static str {
         "boots" => "BOOTS",
         _ => "HELMET",
     }
+}
+
+fn collect_native_projectiles(
+    sources: &[ProjectileSource],
+    equipment: &[EquipmentSource],
+) -> Vec<ProjectileRecord> {
+    let mut records = Vec::new();
+    let mut seen = BTreeSet::new();
+    for source in sources {
+        let superclass = source.superclass.to_ascii_lowercase();
+        // This adapter is intentionally limited to legacy throwable classes.
+        // Arrows and fireballs have different contracts (damage, pickup, gravity,
+        // and impact handling) and remain inventoried until their own adapters land.
+        if ![
+            "entitythrowable",
+            "throwableitemprojectile",
+            "throwableprojectile",
+            "entitysnowball",
+            "entityegg",
+            "entityenderpearl",
+        ].iter().any(|token| superclass.contains(token)) {
+            continue;
+        }
+        let id = normalized_id(&source.registry_name);
+        if id.is_empty() || !seen.insert(id.clone()) { continue; }
+
+        let constructor_pattern = Regex::new(&format!(
+            r"(?s)\bnew\s+{}\s*\(",
+            regex::escape(&source.class_name)
+        )).expect("static projectile constructor regex");
+        let mut candidates: Vec<(u8, String)> = equipment.iter()
+            .filter(|item| constructor_pattern.is_match(&item.source_text))
+            .map(|item| {
+                let priority = if item.tool_type.is_some() { 1 } else { 2 };
+                (priority, normalized_id(&item.registry_name))
+            })
+            .filter(|(_, item_id)| !item_id.is_empty())
+            .collect();
+        candidates.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        candidates.dedup_by(|a, b| a.1 == b.1);
+
+        records.push(ProjectileRecord {
+            id,
+            class_name: source.class_name.clone(),
+            source_path: source.source_path.clone(),
+            bound_item: candidates.first().map(|(_, item_id)| item_id.clone()),
+        });
+    }
+    records.sort_by(|a, b| a.id.cmp(&b.id).then(a.class_name.cmp(&b.class_name)));
+    records
 }
 
 fn collect_native_entities(source: &BTreeMap<String, EntityMetadata>) -> Vec<EntityMetadata> {
