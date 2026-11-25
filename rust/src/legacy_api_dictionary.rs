@@ -2254,6 +2254,72 @@ const DEFINITIONS: &[Definition] = &[
     d!("MessageContext", "getClientHandler", V_112, "network_context_client_handler", "NetHandlerPlayClient", "networking", "automatic_rename_candidate", "Valid only for client-side message context; preserve wrong-side/null handling.", "net/minecraftforge/fml/common/network/simpleimpl/MessageContext.html"),
     d!("MessageContext", "getServerHandler", V_112, "network_context_server_handler", "NetHandlerPlayServer", "networking", "automatic_rename_candidate", "Valid only for server-side message context; preserve wrong-side/null handling.", "net/minecraftforge/fml/common/network/simpleimpl/MessageContext.html"),
 
+    // Capability serialization and dispatch contract.
+    d!("CapabilityDispatcher", "areCompatible", V_112, "capability_dispatcher_compatibility", "Capability attachment provider compatibility", "capabilities", "automatic_rename_candidate", "Preserve compatibility comparison of provider names and underlying capability instances.", "net/minecraftforge/common/capabilities/CapabilityDispatcher.html"),
+    d!("CapabilityDispatcher", "deserializeNBT", V_112, "capability_dispatcher_deserialize", "INBTSerializable<NBTTagCompound> capability state", "capabilities", "adapter_required", "Preserve namespaced attachment keys and dispatch each nested provider's NBT restoration.", "net/minecraftforge/common/capabilities/CapabilityDispatcher.html"),
+    d!("CapabilityDispatcher", "serializeNBT", V_112, "capability_dispatcher_serialize", "INBTSerializable<NBTTagCompound> capability state", "capabilities", "adapter_required", "Preserve namespaced attachment keys and each provider's NBT payload.", "net/minecraftforge/common/capabilities/CapabilityDispatcher.html"),
+    d!("Capability.IStorage", "readNBT", V_112, "capability_storage_read", "Capability.IStorage NBT deserialization", "capabilities", "adapter_required", "Preserve capability instance, nullable EnumFacing and exact NBTBase subtype.", "net/minecraftforge/common/capabilities/Capability.IStorage.html"),
+    d!("Capability.IStorage", "writeNBT", V_112, "capability_storage_write", "Capability.IStorage NBT serialization", "capabilities", "adapter_required", "Preserve capability instance, nullable EnumFacing and exact NBTBase subtype.", "net/minecraftforge/common/capabilities/Capability.IStorage.html"),
+    d!("Capability", "getDefaultInstance", V_112, "capability_default_instance", "Capability default implementation factory", "capabilities", "automatic_rename_candidate", "Creates a new default instance each call; do not reuse a shared mutable singleton.", "net/minecraftforge/common/capabilities/Capability.html"),
+    d!("Capability", "getName", V_112, "capability_name", "Capability registry name", "capabilities", "automatic_rename_candidate", "Preserve capability identity name and namespace.", "net/minecraftforge/common/capabilities/Capability.html"),
+    d!("Capability", "getStorage", V_112, "capability_storage", "Capability.IStorage strategy", "capabilities", "automatic_rename_candidate", "Preserve storage object identity and serialize using the capability's own storage implementation.", "net/minecraftforge/common/capabilities/Capability.html"),
+    d!("Capability", "readNBT", V_112, "capability_read_nbt", "Capability NBT deserialization shortcut", "capabilities", "automatic_rename_candidate", "Delegates to Capability.IStorage; preserve instance, optional side and tag type.", "net/minecraftforge/common/capabilities/Capability.html"),
+    d!("Capability", "writeNBT", V_112, "capability_write_nbt", "Capability NBT serialization shortcut", "capabilities", "automatic_rename_candidate", "Delegates to Capability.IStorage; preserve instance, optional side and tag type.", "net/minecraftforge/common/capabilities/Capability.html"),
+    d!("CapabilityManager", "injectCapabilities", V_112, "capability_manager_inject", "ASM @CapabilityInject population lifecycle", "capabilities", "manual_adapter_required", "Preserve ASM scan table and injection timing after the capability registry is populated.", "net/minecraftforge/common/capabilities/CapabilityManager.html"),
+    d!("INBTSerializable", "deserializeNBT", V_112, "capability_nbt_deserialize_interface", "INBTSerializable generic NBT deserialization", "capabilities", "automatic_rename_candidate", "Preserve serialized tag type and generic NBT payload; commonly used for capability persistence.", "net/minecraftforge/common/util/INBTSerializable.html"),
+    d!("INBTSerializable", "serializeNBT", V_112, "capability_nbt_serialize_interface", "INBTSerializable generic NBT serialization", "capabilities", "automatic_rename_candidate", "Preserve exact NBT subtype and deep-copy semantics expected by the owning capability.", "net/minecraftforge/common/util/INBTSerializable.html"),
+
+    // IFluidTank is older tank-level API; it deliberately exposes a narrower
+    // transaction surface than the IFluidHandler capability.
+    d!("IFluidTank", "drain", V_112, "fluid_tank_drain", "IFluidTank single-tank fluid drain", "fluids", "automatic_rename_candidate", "Preserve requested max amount and simulation flag; may return null for empty tank.", "net/minecraftforge/fluids/IFluidTank.html"),
+    d!("IFluidTank", "fill", V_112, "fluid_tank_fill", "IFluidTank single-tank fluid fill", "fluids", "automatic_rename_candidate", "Preserve resource type, amount and simulation flag; return accepted amount.", "net/minecraftforge/fluids/IFluidTank.html"),
+    d!("IFluidTank", "getFluidAmount", V_112, "fluid_tank_amount", "IFluidTank contained fluid amount", "fluids", "automatic_rename_candidate", "Preserve zero for empty tank and millibucket units.", "net/minecraftforge/fluids/IFluidTank.html"),
+    d!("IFluidTank", "getInfo", V_112, "fluid_tank_info", "FluidTankInfo snapshot", "fluids", "automatic_rename_candidate", "Preserve capacity and contained FluidStack snapshot; do not expose mutable internal state.", "net/minecraftforge/fluids/IFluidTank.html"),
+    d!("FluidTank", "canDrain", V_112, "fluid_tank_can_drain", "IFluidHandler tank drain permission", "fluids", "automatic_rename_candidate", "Preserve can-drain policy independently from current tank contents.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "canDrainFluidType", V_112, "fluid_tank_can_drain_type", "FluidStack-specific drain predicate", "fluids", "automatic_rename_candidate", "Preserve fluid identity comparison and owner restriction behavior.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "canFill", V_112, "fluid_tank_can_fill", "IFluidHandler tank fill permission", "fluids", "automatic_rename_candidate", "Preserve can-fill policy independently from current tank capacity.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "canFillFluidType", V_112, "fluid_tank_can_fill_type", "FluidStack-specific fill predicate", "fluids", "automatic_rename_candidate", "Preserve fluid identity/type comparison and owner restriction behavior.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "drainInternal", V_112, "fluid_tank_drain_internal", "FluidTank owner-only drain bypass", "fluids", "adapter_required", "Bypasses canDrainFluidType restrictions; retain caller ownership and only use where the legacy source explicitly did.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "fillInternal", V_112, "fluid_tank_fill_internal", "FluidTank owner-only fill bypass", "fluids", "adapter_required", "Bypasses canFillFluidType restrictions; preserve access policy and simulation behavior.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "getInfo", V_112, "fluid_tank_info_snapshot", "FluidTankInfo snapshot", "fluids", "automatic_rename_candidate", "Preserve capacity plus a copy of contained FluidStack, not a mutable live reference.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("FluidTank", "getTankProperties", V_112, "fluid_tank_properties", "IFluidTankProperties[] fluid handler view", "fluids", "automatic_rename_candidate", "Properties are read-only hints; real transfer must still use simulated then committed fill/drain.", "net/minecraftforge/fluids/FluidTank.html"),
+    d!("IFluidTankProperties", "canDrain", V_112, "fluid_tank_property_can_drain", "Read-only tank drain availability", "fluids", "automatic_rename_candidate", "This indicates whether the tank can drain in principle, including while empty.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("IFluidTankProperties", "canDrainFluidType", V_112, "fluid_tank_property_can_drain_type", "Read-only FluidStack drain compatibility", "fluids", "automatic_rename_candidate", "Preserve exact FluidStack type check, separate from current contents.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("IFluidTankProperties", "canFill", V_112, "fluid_tank_property_can_fill", "Read-only tank fill availability", "fluids", "automatic_rename_candidate", "This indicates whether filling is possible in principle, even when currently full.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("IFluidTankProperties", "canFillFluidType", V_112, "fluid_tank_property_can_fill_type", "Read-only FluidStack fill compatibility", "fluids", "automatic_rename_candidate", "Preserve fluid type compatibility separately from remaining capacity.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("IFluidTankProperties", "getCapacity", V_112, "fluid_tank_property_capacity", "Read-only tank capacity in millibuckets", "fluids", "automatic_rename_candidate", "Preserve capacity units and current tank index/identity.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("IFluidTankProperties", "getContents", V_112, "fluid_tank_property_contents", "Read-only contained FluidStack snapshot", "fluids", "automatic_rename_candidate", "Returns a copy and may be null; mutate through IFluidHandler instead.", "net/minecraftforge/fluids/capability/IFluidTankProperties.html"),
+    d!("FluidTankProperties", "convert", V_112, "fluid_tank_info_conversion", "FluidTankInfo[] to IFluidTankProperties[] conversion", "fluids", "automatic_rename_candidate", "Preserve order and snapshot semantics for every legacy tank info entry.", "net/minecraftforge/fluids/capability/FluidTankProperties.html"),
+
+    // FML event channel methods use FMLProxyPacket directly and are not the
+    // same contract as SimpleNetworkWrapper's IMessage dispatcher.
+    d!("FMLEventChannel", "fireUserEvent", V_112, "fml_channel_user_event", "ChannelHandlerContext user-event delivery", "networking", "adapter_required", "Preserve event object identity, channel context and bus dispatch ordering.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "register", V_112, "fml_channel_listener_register", "FMLEventChannel event listener registration", "networking", "automatic_rename_candidate", "Preserve channel-specific event bus scope and listener object identity.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendTo", V_112, "fml_channel_send_player", "FMLProxyPacket send to a specific player", "networking", "automatic_rename_candidate", "Preserve target player connection and channel payload format.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendToAll", V_112, "fml_channel_send_all", "FMLProxyPacket server broadcast", "networking", "automatic_rename_candidate", "Preserve recipient set and channel send ordering.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendToAllAround", V_112, "fml_channel_send_around", "FMLProxyPacket NetworkRegistry.TargetPoint broadcast", "networking", "automatic_rename_candidate", "Preserve target dimension, XYZ and radius selection.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendToAllTracking", V_112, "fml_channel_send_tracking", "FMLProxyPacket entity or target point tracking broadcast", "networking", "adapter_required", "Entity overload uses entity-specific tracking distance; TargetPoint overload ignores its range field. Keep overload behavior distinct.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendToDimension", V_112, "fml_channel_send_dimension", "FMLProxyPacket dimension broadcast", "networking", "automatic_rename_candidate", "Preserve numeric dimension selection and server recipient set.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "sendToServer", V_112, "fml_channel_send_server", "FMLProxyPacket client-to-server send", "networking", "automatic_rename_candidate", "Preserve client-side channel direction and server packet handler.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEventChannel", "unregister", V_112, "fml_channel_listener_unregister", "FMLEventChannel listener lifecycle", "networking", "automatic_rename_candidate", "Remove only the same registered listener object from this channel's event bus.", "net/minecraftforge/fml/common/network/FMLEventChannel.html"),
+    d!("FMLEmbeddedChannel", "cleanAttributes", V_112, "fml_embedded_channel_clean_attributes", "Netty channel attribute cleanup", "networking", "adapter_required", "Remove FML-specific channel attributes while preserving unrelated Netty state.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+    d!("FMLEmbeddedChannel", "findChannelHandlerNameForType", V_112, "fml_channel_find_handler", "Netty ChannelPipeline handler lookup", "networking", "automatic_rename_candidate", "Preserve nullable result and assignable-type matching across pipeline handlers.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+    d!("FMLEmbeddedChannel", "generatePacketFrom", V_112, "fml_channel_generate_packet", "Outbound packet codec conversion", "networking", "adapter_required", "Preserve outbound handler order and packet codec conversion; commonly used to build tile-entity description packets.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+    d!("FMLProxyPacket", "channel", V_112, "fml_packet_channel", "FML custom payload channel name", "networking", "automatic_rename_candidate", "Preserve exact channel identifier string.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "copy", V_112, "fml_packet_copy", "FMLProxyPacket deep/copy semantics", "networking", "automatic_rename_candidate", "Preserve payload copy semantics and dispatcher/target association.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "getDispatcher", V_112, "fml_packet_dispatcher", "NetworkDispatcher packet origin context", "networking", "automatic_rename_candidate", "Preserve current NetworkDispatcher association; may be absent before dispatch.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "getOrigin", V_112, "fml_packet_origin", "NetworkManager packet origin", "networking", "automatic_rename_candidate", "Preserve nullable origin NetworkManager for locally generated packets.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "getTarget", V_112, "fml_packet_target_side", "FML Side packet destination", "networking", "automatic_rename_candidate", "Preserve CLIENT/SERVER direction and channel payload target.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "handler", V_112, "fml_packet_handler", "INetHandler packet dispatch target", "networking", "automatic_rename_candidate", "Preserve handler identity and null-before-processing state.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "payload", V_112, "fml_packet_payload", "PacketBuffer / ByteBuf payload", "networking", "automatic_rename_candidate", "Preserve reader/writer indices and payload ownership; do not flatten to byte array unless copied deliberately.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "processPacket", V_112, "fml_packet_process", "FMLProxyPacket Packet<INetHandler> dispatch", "networking", "adapter_required", "Preserve direction-specific packet handler and main-thread scheduling rules.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "readPacketData", V_112, "fml_packet_read", "PacketBuffer custom payload decoding", "networking", "adapter_required", "Preserve channel name, multipart payload boundaries, max-length checks and IOException behavior.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "setDispatcher", V_112, "fml_packet_dispatcher_write", "NetworkDispatcher association", "networking", "adapter_required", "Preserve packet-to-connection dispatcher association before event channel delivery.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "setTarget", V_112, "fml_packet_target_write", "FML Side packet destination", "networking", "adapter_required", "Preserve CLIENT/SERVER direction before packet translation or send.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "toC17Packet", V_112, "fml_packet_to_clientbound_vanilla", "CPacketCustomPayload conversion", "networking", "adapter_required", "Preserve channel name and payload while translating the wrapper packet to the vanilla C17 clientbound custom-payload packet.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "toS3FPackets", V_112, "fml_packet_to_serverbound_vanilla", "SPacketCustomPayload multipart conversion", "networking", "adapter_required", "Preserve multipart ordering and max packet payload chunking for serverbound conversion.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+    d!("FMLProxyPacket", "writePacketData", V_112, "fml_packet_write", "PacketBuffer custom payload encoding", "networking", "adapter_required", "Preserve channel, payload bytes, packet length checks and multipart framing.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3613,6 +3679,32 @@ mod tests {
             ("IMessage", "fromBytes"),
             ("IMessageHandler", "onMessage"),
             ("MessageContext", "getServerHandler"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn forge_capability_fluid_and_fml_packet_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("CapabilityDispatcher", "areCompatible"),
+            ("CapabilityDispatcher", "serializeNBT"),
+            ("Capability.IStorage", "readNBT"),
+            ("Capability", "getDefaultInstance"),
+            ("CapabilityManager", "injectCapabilities"),
+            ("INBTSerializable", "deserializeNBT"),
+            ("IFluidTank", "getInfo"),
+            ("FluidTank", "drainInternal"),
+            ("IFluidTankProperties", "getContents"),
+            ("FluidTankProperties", "convert"),
+            ("FMLEventChannel", "sendToAllTracking"),
+            ("FMLEmbeddedChannel", "generatePacketFrom"),
+            ("FMLProxyPacket", "toS3FPackets"),
+            ("FMLProxyPacket", "writePacketData"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
