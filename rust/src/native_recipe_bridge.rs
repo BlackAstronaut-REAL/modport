@@ -58,7 +58,7 @@ pub fn export_native_recipes(
         }
 
         if !generated_keys.insert(key.clone()) {
-            report.warnings.push(format!("Duplicate recipe path '{}' found; retained the first sorted source.", key));
+            report.warnings.push(format!("Duplicate recipe path '{}' found; retained the first sorted source.", key.display()));
             continue;
         }
 
