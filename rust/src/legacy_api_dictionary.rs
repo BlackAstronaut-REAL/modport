@@ -3369,6 +3369,49 @@ const DEFINITIONS: &[Definition] = &[
     d!("Slot", "putStack", V_ALL, "slot_stack_write", "Slot backing inventory stack replacement", "inventory_gui", "Preserve inventory set-slot write and onSlotChanged callback timing.", "net/minecraft/inventory/Slot.html"),
 
 
+    // Goal lifecycle and task scheduler contracts.
+    d!("EntityAIBase", "isInterruptible", V_112, "ai_goal_interruptible", "AI goal interruption policy", "entities_ai", "Preserve whether a higher-priority goal can preempt this task while it is executing.", "net/minecraft/entity/ai/EntityAIBase.html"),
+    d!("EntityAITasks", "disableControlFlag", V_112, "ai_task_disable_control_flag", "AI task control category disable", "entities_ai", "Preserve mutex flag state and whether currently executing tasks are reset immediately.", "net/minecraft/entity/ai/EntityAITasks.html"),
+    d!("EntityAITasks", "enableControlFlag", V_112, "ai_task_enable_control_flag", "AI task control category enable", "entities_ai", "Preserve mutex flag state and subsequent scheduler eligibility.", "net/minecraft/entity/ai/EntityAITasks.html"),
+    d!("EntityAITasks", "setControlFlag", V_112, "ai_task_set_control_flag", "AI task mutex category control", "entities_ai", "Preserve control flag and enabled/disabled state independently from task registration.", "net/minecraft/entity/ai/EntityAITasks.html"),
+
+    // PathNavigate and pathfinding lifecycle.
+    d!("PathNavigate", "canNavigate", V_ALL, "navigation_can_navigate", "Navigator movement eligibility", "entities_ai", "Preserve entity alive/on-ground/in-water/flight constraints used before path creation.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "clearPath", V_ALL, "navigation_clear_path", "Navigator current path cancellation", "entities_ai", "Preserve path reset, stuck counter and movement controller stop behavior.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "getPathToPos", V_ALL, "navigation_path_to_block", "Path calculation to BlockPos", "entities_ai", "Preserve target BlockPos, search range and node evaluator state.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "getPathToEntityLiving", V_ALL, "navigation_path_to_living", "Path calculation to living entity", "entities_ai", "Preserve target entity tracking and path recalculation as target moves.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "getPathFinder", V_112, "navigation_path_finder", "PathFinder instance", "entities_ai", "Preserve configured node processor and search range; custom pathfinders may use additional node costs.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "getPathSearchRange", V_112, "navigation_search_range", "Navigator path search range", "entities_ai", "Preserve entity-follow-range attribute scaling and per-navigator range overrides.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "setCanEnterDoors", V_112, "navigation_enter_doors_write", "Navigator door path node policy", "entities_ai", "Preserve whether pathfinder may traverse wooden/iron door nodes.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "setCanOpenDoors", V_ALL, "navigation_open_doors_write", "Navigator door opening capability", "entities_ai", "Preserve pathfinding door capability separately from whether the entity can pass an open door.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "setSpeed", V_112, "navigation_speed_write", "Navigator movement speed modifier", "entities_ai", "Preserve speed separately from entity movement attribute and MoveHelper target speed.", "net/minecraft/pathfinding/PathNavigate.html"),
+
+    // Common living mob AI/navigation extension hooks.
+    d!("EntityLiving", "getExperiencePoints", V_112, "living_experience_drop_value", "Mob XP reward amount", "entities_progression", "Preserve attacked-by player context, loot reward rules and custom XP override.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "getRNG", V_ALL, "living_random_source", "Living entity Random instance", "entities_ai", "Preserve per-entity random generator state/consumption for deterministic AI and drops.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "onLivingUpdate", V_ALL, "living_mob_tick", "Living mob update and AI tick", "entities_ai", "Preserve AI task scheduler, navigator, target tasks, despawn and mob-specific tick order.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "setRevengeTarget", V_112, "living_revenge_target_write", "Mob revenge target assignment", "entities_ai", "Preserve attacker assignment, last-attacked timestamp and revenge AI triggering.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "updateAITasks", V_ALL, "living_ai_task_update", "Mob AI goal scheduler update", "entities_ai", "Protected per-tick AI hook; preserve target task scheduler before normal goal scheduler order.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "updateEntityActionState", V_ALL, "living_entity_action_state", "Mob AI movement/look action state update", "entities_ai", "Preserve navigator, move helper, look helper, jumping and target selection ordering.", "net/minecraft/entity/EntityLiving.html"),
+
+    // Interfaces implemented by custom mobs and multipart entities.
+    d!("IRangedAttackMob", "attackEntityWithRangedAttack", V_112, "mob_ranged_attack", "Ranged attack ability callback", "entities_combat", "Preserve target, charge/pull progress and projectile creation/damage attribution.", "net/minecraft/entity/IRangedAttackMob.html"),
+    d!("IRangedAttackMob", "setSwingingArms", V_112, "mob_ranged_arm_animation", "Ranged attack arm swing animation state", "entities_animation", "Preserve client synchronized arm animation state independently from attack cooldown.", "net/minecraft/entity/IRangedAttackMob.html"),
+    d!("IEntityOwnable", "getOwner", V_112, "entity_owner_lookup", "Ownable entity owner resolution", "entities", "Preserve nullable owner resolution and UUID-to-player/entity lookup behavior.", "net/minecraft/entity/IEntityOwnable.html"),
+    d!("IEntityOwnable", "getOwnerId", V_112, "entity_owner_uuid", "Ownable entity persistent owner UUID", "entities", "Preserve nullable owner UUID independently from currently loaded owner entity.", "net/minecraft/entity/IEntityOwnable.html"),
+    d!("IEntityOwnable", "isOwner", V_112, "entity_owner_predicate", "Ownable entity owner comparison", "entities_combat", "Preserve owner equality semantics for tameable/owned entity attack restrictions.", "net/minecraft/entity/IEntityOwnable.html"),
+    d!("IEntityMultiPart", "getParts", V_112, "multipart_entity_parts", "Multipart entity hitbox part array", "entities", "Preserve part order and stable part identity for dragon/serpent multi-hitbox collision.", "net/minecraft/entity/IEntityMultiPart.html"),
+    d!("IEntityMultiPart", "attackEntityFrom", V_112, "multipart_entity_part_damage", "Multipart hitbox damage forwarding", "entities_combat", "Preserve exact struck part and source/damage values forwarded to parent entity.", "net/minecraft/entity/IEntityMultiPart.html"),
+    d!("IJumpingMount", "canJump", V_112, "mount_can_jump", "Rideable mount jump eligibility", "entities_movement", "Preserve rider control and mount-specific charge/jump readiness.", "net/minecraft/entity/IJumpingMount.html"),
+    d!("IJumpingMount", "handleStartJump", V_112, "mount_start_jump", "Rideable mount jump charge start", "entities_movement", "Preserve charge power and jump animation state.", "net/minecraft/entity/IJumpingMount.html"),
+    d!("IJumpingMount", "handleStopJump", V_112, "mount_stop_jump", "Rideable mount jump release", "entities_movement", "Preserve charge power and computed launch velocity on release.", "net/minecraft/entity/IJumpingMount.html"),
+    d!("ISteerable", "boost", V_112, "steerable_mount_boost", "Boostable steerable mount movement", "entities_movement", "Preserve boost timer, random boost duration and movement speed interpolation.", "net/minecraft/entity/ISteerable.html"),
+    d!("ISteerable", "getControllingPassenger", V_112, "steerable_mount_controller", "Steerable mount controlling passenger", "entities_movement", "Preserve controller identity and saddle/steer-item requirements.", "net/minecraft/entity/ISteerable.html"),
+    d!("ISteerable", "getSaddled", V_112, "steerable_mount_saddled", "Steerable mount saddle state", "entities_movement", "Preserve saddle state separately from whether a valid rider has the steering item.", "net/minecraft/entity/ISteerable.html"),
+    d!("ISteerable", "getSteeringSpeed", V_112, "steerable_mount_speed", "Steerable mount speed", "entities_movement", "Preserve base mount speed and boost multiplier behavior.", "net/minecraft/entity/ISteerable.html"),
+    d!("ISteerable", "travel", V_112, "steerable_mount_travel", "Steerable mount player-controlled travel", "entities_movement", "Preserve controlling passenger input, boost state, friction and normal mob movement fallback.", "net/minecraft/entity/ISteerable.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5133,6 +5176,24 @@ mod tests {
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
+    }
+
+
+    #[test]
+    fn forge_ai_navigation_and_mob_behavior_contracts_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|entry|
+            entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("EntityAIBase", "shouldExecute"), ("EntityAIBase", "shouldContinueExecuting"),
+            ("EntityAITasks", "addTask"), ("EntityAITasks", "onUpdateTasks"),
+            ("PathNavigate", "getPathToPos"), ("PathNavigate", "setPath"),
+            ("PathNavigate", "tryMoveToEntityLiving"), ("EntityLiving", "despawnEntity"),
+            ("EntityLiving", "onInitialSpawn"), ("EntityLiving", "setAttackTarget"),
+            ("EntityLiving", "updateAITasks"), ("IRangedAttackMob", "attackEntityWithRangedAttack"),
+            ("IEntityOwnable", "getOwnerId"), ("IEntityMultiPart", "attackEntityFrom"),
+            ("IJumpingMount", "handleStopJump"), ("ISteerable", "getSteeringSpeed"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
     #[test]
