@@ -1073,7 +1073,7 @@ fn entity_source_texture_refs(
         r#"(?is)ResourceLocation\s+([A-Za-z0-9_$]+)\s*=\s*(?:new\s+ResourceLocation|ResourceLocation\.(?:parse|tryParse|withDefaultNamespace))\s*\(\s*"([^"]+)"\s*\)"#
     ).unwrap();
     let variant_selector = Regex::new(&format!(
-        r#"(?is)if\s*\(\s*"{}"\s*\.(?:equals|equalsIgnoreCase)\s*\([^{}]*\)\s*\)\s*\{{?\s*return\s+([A-Za-z0-9_$]+)"#,
+        r#"(?is)if\s*\(\s*"{}"\s*\.(?:equals|equalsIgnoreCase)\s*\([^{{}}]*\)\s*\)\s*\{{?\s*return\s+([A-Za-z0-9_$]+)"#,
         regex::escape(entity_class)
     )).unwrap();
 
