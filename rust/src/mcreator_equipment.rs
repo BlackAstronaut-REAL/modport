@@ -519,12 +519,19 @@ pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
     for (suffix, kind) in [
         ("fishingrod", "Fishing Rod"), ("crossbow", "Bow"), ("blaster", "Bow"),
         ("launcher", "Bow"), ("cannon", "Bow"), ("rifle", "Bow"), ("pistol", "Bow"),
-        ("shotgun", "Bow"), ("gun", "Bow"), ("pickaxe", "Pickaxe"),
-        ("shears", "Shears"), ("shovel", "Shovel"), ("spade", "Shovel"),
+        ("shotgun", "Bow"), ("sniper", "Bow"), ("zapper", "Bow"), ("raygun", "Bow"),
+        ("raygun", "Bow"), ("laser", "Bow"), ("bazooka", "Bow"), ("rocketlauncher", "Bow"),
+        ("gun", "Bow"), ("pickaxe", "Pickaxe"), ("shears", "Shears"),
+        ("shovel", "Shovel"), ("spade", "Shovel"),
+        ("greatsword", "Sword"), ("longsword", "Sword"), ("shortsword", "Sword"),
+        ("claymore", "Sword"), ("scimitar", "Sword"), ("cutlass", "Sword"),
+        ("saber", "Sword"), ("sabre", "Sword"), ("maul", "Sword"),
+        ("warhammer", "Sword"), ("battleaxe", "Axe"),
         ("sword", "Sword"), ("dagger", "Sword"), ("knife", "Sword"), ("katana", "Sword"),
         ("blade", "Sword"), ("spear", "Sword"), ("pike", "Sword"), ("trident", "Sword"),
         ("staff", "Sword"), ("wand", "Sword"), ("mace", "Sword"), ("club", "Sword"),
-        ("flail", "Sword"), ("halberd", "Sword"), ("rapier", "Sword"),
+        ("fist", "Sword"), ("claw", "Sword"), ("gauntlet", "Sword"), ("knuckle", "Sword"),
+        ("whip", "Sword"), ("flail", "Sword"), ("halberd", "Sword"), ("rapier", "Sword"),
         ("hammer", "Sword"), ("scythe", "Sword"), ("weapon", "Sword"),
         ("axe", "Axe"), ("hoe", "Hoe"), ("bow", "Bow"),
     ] {
@@ -919,6 +926,21 @@ fn custom_weapon_tool_type(class: &str, source_text: &str) -> Option<String> {
     {
         return Some("Bow".to_owned());
     }
+    // Legacy ranged weapons do not always use ItemBow or put "gun" in the
+    // concrete class name. Look for projectile-launch behavior paired with
+    // a standard item-use entry point, including SRG-era Minecraft methods.
+    let projectile_behavior = [
+        "entityarrow", "entityprojectile", "setthrowableheading", "shootprojectile",
+        "fireprojectile", "spawnentity", "onplayerstoppedusing", "func_77615_a",
+        "getprojectile", "projectileitem",
+    ].iter().any(|token| text.contains(token));
+    let ranged_item_use = [
+        "onitemrightclick", "func_77659_a", "getmaxitemuseduration",
+        "getitemuseaction", "onplayerstoppedusing", "func_77615_a",
+    ].iter().any(|token| text.contains(token));
+    if projectile_behavior && ranged_item_use {
+        return Some("Bow".to_owned());
+    }
     let damage_signal = [
         "getdamagevsentity", "func_150931_i", "weapondamage",
         "damagevsentity", "attackdamage", "getattackdamage",
@@ -930,13 +952,19 @@ fn custom_weapon_tool_type(class: &str, source_text: &str) -> Option<String> {
     if damage_signal && combat_signal {
         return Some("Sword".to_owned());
     }
+    let attack_attribute_signal = [
+        "attackdamage", "generic.attack_damage", "generic_attack_damage",
+        "weapondamage", "getdamagevsentity", "func_150931_i",
+    ].iter().any(|token| text.contains(token));
+    let melee_signal = [
+        "hitentity", "onleftclickentity", "onentityswing", "onitemattack",
+        "hurtentity", "meleeattack", "dealmeleedamage",
+    ].iter().any(|token| text.contains(token));
     let named_weapon_base = [
         "itemweapon", "meleeweapon", "weaponbase", "weaponitem", "combatitem",
         "itemmelee", "meleeitem",
     ].iter().any(|token| text.contains(token));
-    if named_weapon_base && (text.contains("attackdamage") || text.contains("weapondamage")
-        || text.contains("getdamagevsentity") || text.contains("hitentity"))
-    {
+    if attack_attribute_signal && (melee_signal || named_weapon_base) {
         return Some("Sword".to_owned());
     }
     None
@@ -2095,6 +2123,34 @@ mod equipment_discovery_tests {
         assert_eq!(weapon.tool_type.as_deref(), Some("Sword"));
         assert!(weapon.source_text.contains("hitEntity"));
         assert!(weapon.source_text.contains("weaponDamage"));
+    }
+
+    #[test]
+    fn identifies_unusual_ranged_and_melee_weapon_subclasses() {
+        assert_eq!(classify_tool("Item", "ArcZapper"), Some("Bow".to_owned()));
+        assert_eq!(classify_tool("Item", "SelectionSniper"), Some("Bow".to_owned()));
+        assert_eq!(classify_tool("Item", "DualityGauntlet"), Some("Sword".to_owned()));
+        assert_eq!(classify_tool("Item", "QuantumClaymore"), Some("Sword".to_owned()));
+
+        let ranged_source = r#"
+            public ItemStack onItemRightClick(World world, EntityPlayer player, EnumHand hand) {
+                EntityArrow projectile = new EntityArrow(world, player);
+                world.spawnEntity(projectile);
+                return player.getHeldItem(hand);
+            }
+        "#;
+        assert_eq!(
+            custom_weapon_tool_type("ItemPulseDevice", ranged_source),
+            Some("Bow".to_owned())
+        );
+        let melee_source = r#"
+            public float getAttackDamage() { return 18.0F; }
+            public void onEntitySwing(ItemStack stack, EntityLivingBase target) { }
+        "#;
+        assert_eq!(
+            custom_weapon_tool_type("ItemUnknownRelic", melee_source),
+            Some("Sword".to_owned())
+        );
     }
 
     #[test]
