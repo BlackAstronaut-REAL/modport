@@ -352,23 +352,43 @@ fn draw_crossed_plane(
     pixels: &mut [u8],
     depth_buffer: &mut [f32],
 ) {
-    let texture_index = texture_index_for_face(cube, 4, default_texture_index);
+    let face_index = if face_is_visible(cube, 4) { 4 } else { 5 };
+    let texture_index = texture_index_for_face(cube, face_index, default_texture_index);
     let texture = textures.get(texture_index).or_else(|| textures.first());
     let (texture_width, texture_height) = texture
         .map(|image| (image.width().max(1) as f32, image.height().max(1) as f32))
         .unwrap_or((texture_size[0].max(1) as f32, texture_size[1].max(1) as f32));
     let [x0, y0, _] = cube.min;
     let [x1, y1, _] = cube.max;
-    let points = [
-        [x0, y0, 0.0],
-        [x1, y0, 0.0],
-        [x1, y1, 0.0],
-        [x0, y1, 0.0],
-    ];
+    let points = if face_index == 4 {
+        [
+            [x1, y0, 0.0],
+            [x0, y0, 0.0],
+            [x0, y1, 0.0],
+            [x1, y1, 0.0],
+        ]
+    } else {
+        [
+            [x0, y0, 0.0],
+            [x1, y0, 0.0],
+            [x1, y1, 0.0],
+            [x0, y1, 0.0],
+        ]
+    };
     let rect = cube.face_uvs
-        .and_then(|faces| faces.get(4).copied())
+        .and_then(|faces| faces.get(face_index).copied())
         .unwrap_or([0.0, 0.0, texture_width, texture_height]);
-    let vertices = quad_from_rect(points, rect, cube.mirror, texture_width, texture_height);
+    let mut vertices = quad_from_rect(points, rect, cube.mirror, texture_width, texture_height);
+    let rotation = cube.face_uv_rotations
+        .and_then(|rotations| rotations.get(face_index).copied())
+        .unwrap_or(0);
+    if rotation != 0 {
+        let uv = vertices.map(|vertex| vertex.uv);
+        let rotated = rotate_face_uv_coordinates(uv, rotation, face_index);
+        for index in 0..4 {
+            vertices[index].uv = rotated[index];
+        }
+    }
     let projected: Option<[ProjectedVertex; 4]> = vertices.map(|vertex| {
         project_vertex(vertex, world, camera, width, height, focal)
     }).into_iter().collect::<Option<Vec<_>>>()
