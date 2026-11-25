@@ -725,7 +725,7 @@ fn main() -> Result<()> {
             } else {
                 println!("NeoForge {} guidance for '{}' — {} page(s):", index.manifest().minecraft_version, domain, results.len());
                 for (position, result) in results.iter().enumerate() {
-                    println!("\\n{}. {}", position + 1, result.title);
+                    println!("\n{}. {}", position + 1, result.title);
                     println!("   {} · {}", result.section, result.path);
                     if query.is_some() { println!("   Match score: {:.2}", result.score); }
                     println!("   {}", result.snippet);

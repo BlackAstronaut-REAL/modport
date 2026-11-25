@@ -399,7 +399,7 @@ fn extract_headings(body: &str) -> Vec<String> {
 
 fn extract_api_symbols(body: &str) -> Vec<String> {
     let qualified_identifier = Regex::new(
-        r"@?[A-Z][A-Za-z0-9_$]*(?:(?:\\.|#|::)[A-Za-z_$][A-Za-z0-9_$]*)*"
+        r"@?[A-Z][A-Za-z0-9_$]*(?:(?:\.|#|::)[A-Za-z_$][A-Za-z0-9_$]*)*"
     ).expect("static qualified identifier regex is valid");
     let method_reference = Regex::new(r"#[a-z_][A-Za-z0-9_]*")
         .expect("static method reference regex is valid");
