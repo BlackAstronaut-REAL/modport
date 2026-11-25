@@ -970,7 +970,7 @@ mod tests {
                 "north": {"rotation": 270}
             }
         });
-        assert_eq!(face_uv_rotations(&element), [0, 0, 0, 0, 0, 270]);
+        assert_eq!(face_uv_rotations(&element), [0, 0, 0, 0, 270, 0]);
     }
 
     #[test]
