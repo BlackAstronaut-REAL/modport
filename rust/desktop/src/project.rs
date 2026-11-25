@@ -105,6 +105,17 @@ pub fn load_recent_project() -> Option<StoredProject> {
     load_project(Path::new(manifest.trim())).ok()
 }
 
+pub fn list_projects() -> Vec<StoredProject> {
+    let directory = projects_directory();
+    let Ok(entries) = fs::read_dir(directory) else { return Vec::new(); };
+    let mut projects = entries.filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false))
+        .filter_map(|entry| load_project(&entry.path().join("project.json")).ok())
+        .collect::<Vec<_>>();
+    projects.sort_by_key(|project| project.name.to_ascii_lowercase());
+    projects
+}
+
 fn project_slug(name: &str) -> String {
     let mut slug = String::new();
     let mut previous_separator = false;
