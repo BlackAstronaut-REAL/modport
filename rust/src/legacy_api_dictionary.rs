@@ -3241,6 +3241,27 @@ const DEFINITIONS: &[Definition] = &[
     d!("World", "updateWeather", V_112, "world_update_weather", "World rain/thunder state tick", "world_weather", "Protected lifecycle method; preserve weather timers, event packets and provider effects.", "net/minecraft/world/World.html"),
     d!("World", "updateWeatherBody", V_112, "world_update_weather_body", "World weather state transition implementation", "world_weather", "Preserve clear/rain/thunder transitions, timers and server-to-client synchronization.", "net/minecraft/world/World.html"),
 
+    // TileEntity 1.12.2 lifecycle, persistence, synchronization and render hooks.
+    d!("TileEntity", "addInfoToCrashReport", V_112, "tile_entity_crash_report_details", "CrashReportCategory tile entity diagnostics", "block_entities_debug", "Preserve tile entity class, registry key, block position and current state in crash diagnostics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "canRenderBreaking", V_112, "tile_entity_breaking_render_predicate", "Tile entity custom block destruction overlay", "block_entities_render", "Preserve whether the renderer handles block-damage crack-stage geometry for this tile entity.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "canRenderInPass", V_112, "tile_entity_render_pass_predicate", "Tile entity render pass eligibility", "block_entities_render", "Preserve legacy render pass ID selection for multi-pass tile entity renderers.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "clearRemoved", V_112, "tile_entity_clear_removed_flag", "Tile entity removal state reset", "block_entities", "Preserve reattachment behavior when a tile entity is moved/reinserted rather than newly constructed.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getDistanceSq", V_112, "tile_entity_distance_squared", "Tile entity distance squared from XYZ", "block_entities_render", "Preserve precise tile position and center offset for render-distance culling.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getGlobalPos", V_112, "tile_entity_global_position", "GlobalPos dimension plus BlockPos", "block_entities", "Preserve dimension key and position together for cross-dimension references and persistent data.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getName", V_112, "tile_entity_display_name", "Tile entity custom/default display name", "block_entities_gui", "Preserve ITextComponent name and fallback to custom name or translation key.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getTileData", V_112, "tile_entity_persistent_custom_data", "Tile entity persistent custom NBTTagCompound", "block_entities_persistence", "Preserve Forge tile data compound independently from vanilla writeToNBT fields.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getUpdatePacket", V_112, "tile_entity_update_packet", "SPacketUpdateTileEntity synchronization", "block_entities_networking", "Preserve packet type, tile position, update type and custom NBT payload; client packet arrives through onDataPacket.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "hasWorld", V_112, "tile_entity_has_world", "Tile entity world attachment predicate", "block_entities", "Preserve unattached/null-world state during construction and deserialization.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "isRemoved", V_112, "tile_entity_removed_predicate", "Tile entity detached/removed state", "block_entities", "Preserve removed flag independently from world reference and chunk unload state.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onLoad", V_112, "tile_entity_on_load_callback", "Tile entity world/chunk load callback", "block_entities", "Preserve invocation after world and position are assigned; used to register ticking, capabilities and render state.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onNeighborChange", V_112, "tile_entity_neighbor_change_callback", "Tile entity neighbor block change callback", "block_entities", "Preserve changed neighbor BlockPos, distinct from block's neighborChanged callback.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onSynced", V_112, "tile_entity_synchronized_callback", "Tile entity update packet applied callback", "block_entities_networking", "Preserve callback timing after packet/tag state has been applied to client tile data.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "receiveClientEvent", V_ALL, "tile_entity_client_event", "Tile entity block event client dispatch", "block_entities_networking", "Preserve event ID and integer parameter and returned handled flag.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "requestModelDataUpdate", V_112, "tile_entity_model_data_invalidate", "Tile entity baked model data invalidation", "block_entities_render", "Preserve model data cache invalidation and render chunk rebuild scheduling.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "updateContainingBlockInfo", V_112, "tile_entity_refresh_block_info", "Tile entity cached state refresh", "block_entities", "Preserve cached BlockState invalidation after block replacement/neighbor updates.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "writeToNBTInternal", V_112, "tile_entity_write_nbt_internal", "Tile entity base persistent NBT fields", "block_entities_persistence", "Protected serialization helper; preserve id/x/y/z and Forge capability/tile-data payload ordering.", "net/minecraft/tileentity/TileEntity.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -4927,6 +4948,25 @@ mod tests {
             "updateWeatherBody",
         ] {
             assert!(has("World", method), "missing World#{method}");
+        }
+    }
+
+
+    #[test]
+    fn tile_entity_sync_load_render_and_persistence_hooks_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for method in [
+            "addInfoToCrashReport", "canRenderBreaking", "canRenderInPass",
+            "clearRemoved", "getBlockType", "getGlobalPos", "getMaxRenderDistanceSquared",
+            "getRenderBoundingBox", "getTileData", "getUpdatePacket", "getUpdateTag",
+            "hasFastRenderer", "hasWorld", "isRemoved", "onChunkUnload", "onDataPacket",
+            "onLoad", "onNeighborChange", "onSynced", "receiveClientEvent",
+            "requestModelDataUpdate", "shouldRefresh", "updateContainingBlockInfo",
+            "writeToNBTInternal",
+        ] {
+            assert!(has("TileEntity", method), "missing TileEntity#{method}");
         }
     }
 
