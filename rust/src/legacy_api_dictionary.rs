@@ -3858,6 +3858,66 @@ const DEFINITIONS: &[Definition] = &[
     // Item callbacks for entity combat/use and item-entity lifecycle.
     d!("Item", "onItemExpire", V_112, "item_entity_expire_callback", "ItemEntity expiration callback", "items_entities", "Preserve EntityItem and lifespan reset behavior; custom items may prevent despawn.", "net/minecraft/item/Item.html"),
 
+    // ModelBase and ModelRenderer animation/geometry hooks.
+    d!("ModelBase", "getRandomModelBox", V_112, "model_random_part_lookup", "Random ModelRenderer part lookup", "client_models", "Preserve model part list order and Random state; used for particle origins and randomized attachment points.", "net/minecraft/client/model/ModelBase.html"),
+    d!("ModelBase", "setModelAttributes", V_ALL, "model_copy_attributes", "Copy child/riding/swing animation state between models", "client_models_animation", "Preserve isChild/isRiding/swingProgress/held-item flags when armor models reuse biped state.", "net/minecraft/client/model/ModelBase.html"),
+    d!("ModelBase", "setTextureOffset", V_112, "model_texture_offset", "ModelBase texture UV offset registration", "client_models", "Preserve texture name and UV origin used by ModelRenderer cube construction.", "net/minecraft/client/model/ModelBase.html"),
+    d!("ModelRenderer", "addSprite", V_112, "model_renderer_add_sprite", "ModelRenderer flat sprite geometry", "client_models", "Preserve dimensions, offset and texture UV; sprite planes are not full cubes.", "net/minecraft/client/model/ModelRenderer.html"),
+    d!("ModelRenderer", "postRender", V_ALL, "model_renderer_post_transform", "Apply ModelRenderer transform without rendering", "client_models_animation", "Preserve pivot/rotation/scale matrix order for held-item and attachment transforms.", "net/minecraft/client/model/ModelRenderer.html"),
+    d!("ModelRenderer", "renderWithRotation", V_ALL, "model_renderer_render_rotation", "ModelRenderer render with alternate rotation path", "client_models", "Preserve pivot and rotation transform ordering, including custom entity attachment points.", "net/minecraft/client/model/ModelRenderer.html"),
+    d!("ModelRenderer", "setTextureOffset", V_ALL, "model_renderer_texture_offset", "ModelRenderer cube UV origin assignment", "client_models", "Preserve texture offset update timing relative to addBox calls.", "net/minecraft/client/model/ModelRenderer.html"),
+    d!("ModelRenderer", "setTextureSize", V_ALL, "model_renderer_texture_size", "ModelRenderer texture dimensions assignment", "client_models", "Preserve non-64x32 texture sizes and UV scaling for legacy custom models.", "net/minecraft/client/model/ModelRenderer.html"),
+
+    // Render base and living renderer extensibility.
+    d!("Render", "bindEntityTexture", V_112, "renderer_bind_entity_texture", "Entity texture bind", "client_render", "Preserve getEntityTexture result, ResourceLocation caching and render pass texture binding.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "canRenderName", V_112, "renderer_name_tag_predicate", "Entity render-name visibility", "client_render", "Preserve team/visibility/range and custom entity name rendering conditions.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "getFontRendererFromRenderManager", V_ALL, "renderer_font_renderer", "Entity name renderer font lookup", "client_render", "Preserve manager-provided FontRenderer instance for custom name tags.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "getRenderOffset", V_112, "renderer_entity_offset", "Entity render offset vector", "client_render", "Preserve per-entity interpolated offset separate from model pivot/size.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "getTeamColor", V_112, "renderer_team_color", "Entity scoreboard team packed color", "client_render", "Preserve team formatting code and packed RGB output for name tags/glowing outlines.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "renderName", V_112, "renderer_render_name", "Entity display-name rendering", "client_render", "Preserve partial ticks, distance, visibility and name component style.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "renderMultipass", V_112, "renderer_multipass", "Entity secondary render pass", "client_render", "Preserve extra pass timing for translucent/glowing/custom entity effects.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "shouldRender", V_ALL, "renderer_should_render", "Entity render culling predicate", "client_render", "Preserve camera frustum, render bounding box and render-distance weighting.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("RenderLivingBase", "canRenderName", V_112, "living_renderer_can_render_name", "Living entity name tag visibility", "client_render", "Preserve entity-specific visibility and player/team rules before rendering name.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "getMainModel", V_112, "living_renderer_main_model", "Living entity ModelBase lookup", "client_render", "Preserve renderer model instance and any dynamic model swapping.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "getSwingProgress", V_ALL, "living_renderer_swing_progress", "Living entity attack/swing animation interpolation", "client_models_animation", "Preserve partial tick interpolation and swing progress timing.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "interpolateRotation", V_ALL, "living_renderer_rotation_interpolation", "Living entity wrapped yaw/pitch interpolation", "client_models_animation", "Preserve 360-degree wrap correction and partial tick interpolation.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "renderLayers", V_112, "living_renderer_layer_pass", "RenderLayer collection execution", "client_render", "Preserve ordered armor/held-item/cape/custom layer rendering and visibility conditions.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "renderModel", V_ALL, "living_renderer_model_pass", "Living model render call", "client_render", "Preserve color/alpha, brightness, damage tint and model animation state.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "rotateCorpse", V_ALL, "living_renderer_corpse_rotation", "Entity body/death/riptide rotation transform", "client_models_animation", "Preserve entity yaw, partial ticks, death rotation and upside-down name handling.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+    d!("RenderLivingBase", "setLightmap", V_112, "living_renderer_lightmap", "Living renderer entity packed light value", "client_render", "Preserve block/sky light sampling and custom full-bright entity effects.", "net/minecraft/client/renderer/entity/RenderLivingBase.html"),
+
+    // Special block-entity rendering callbacks and distance control.
+    d!("TileEntitySpecialRenderer", "bindTexture", V_112, "tile_renderer_bind_texture", "TileEntitySpecialRenderer texture binding", "client_render", "Preserve texture atlas/resource identity and rendering state.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "getFontRenderer", V_112, "tile_renderer_font", "Tile entity renderer FontRenderer", "client_render", "Preserve font renderer for in-world labels/signs and custom block entity UI.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "getMaxRenderDistanceSquared", V_112, "tile_renderer_render_distance", "Tile entity renderer max render distance", "client_render", "Preserve squared distance threshold independent from entity render range.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "isGlobalRenderer", V_112, "tile_renderer_global_predicate", "Tile entity renderer global culling behavior", "client_render", "Preserve global rendering flag for objects extending beyond their chunk bounds.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "renderTileEntityAt", V_ALL, "tile_renderer_render_at_legacy", "Legacy TileEntity render callback", "client_render", "Preserve world-space translation and partial tick semantics for old renderer overrides.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "renderTileEntityFast", V_112, "tile_renderer_fast_render", "Fast buffer-based tile entity render callback", "client_render", "Preserve buffer builder, combined light, overlay, destroy stage and render chunk-local coordinates.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+
+    // GUI lifecycle, input and draw hooks commonly overridden by mods.
+    d!("GuiScreen", "actionPerformed", V_ALL, "gui_button_action", "GUI button click callback", "client_gui", "Preserve button identity/ID and screen state; action may transition screens or send packets.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "confirmClicked", V_ALL, "gui_confirm_result", "GUI confirmation dialog callback", "client_gui", "Preserve boolean result and dialog ID for confirmation/cancel branches.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "doesGuiPauseGame", V_ALL, "gui_pause_predicate", "GUI game pause policy", "client_gui", "Preserve pause behavior for tick/world simulation while screen is open.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "drawBackground", V_112, "gui_background_draw", "GUI background rendering callback", "client_gui", "Preserve tint/alpha and GUI z-level/texture state.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "drawDefaultBackground", V_ALL, "gui_default_background", "Vanilla GUI dim/gradient background", "client_gui", "Preserve background dimming and pause-screen blur behavior.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "drawHoveringText", V_ALL, "gui_hover_tooltip", "GUI ordered tooltip text rendering", "client_gui", "Preserve ordered text/components, mouse coordinates, font renderer and screen bounds clamping.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "handleComponentHover", V_112, "gui_component_hover", "Text component hover/click tooltip handling", "client_gui", "Preserve Style hover events, tooltip component tree and mouse position.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "handleKeyboardInput", V_112, "gui_keyboard_input", "GUI raw keyboard event handling", "client_gui", "Preserve key code, modifiers, repeat/press state and event consumption.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "handleMouseInput", V_112, "gui_mouse_input", "GUI raw mouse event handling", "client_gui", "Preserve mouse button/wheel/motion event order and scaled GUI coordinates.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "mouseReleased", V_ALL, "gui_mouse_released", "GUI mouse release callback", "client_gui", "Preserve scaled coordinates and button ID for drag/widget release behavior.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "onGuiClosed", V_ALL, "gui_screen_close", "GUI screen close lifecycle callback", "client_gui", "Preserve cleanup and container/network state before current screen is replaced.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "onResize", V_112, "gui_screen_resize", "GUI resize callback", "client_gui", "Preserve previous screen state, resolution and screen initialization order.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "sendChatMessage", V_ALL, "gui_send_chat_message", "GUI chat/command submission", "client_gui", "Preserve addToChat/history flag and outgoing ClientChatEvent processing.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "setWorldAndResolution", V_112, "gui_screen_set_world_resolution", "GUI world/resolution attachment", "client_gui", "Preserve Minecraft/world references, scaled dimensions and initGui call timing.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiScreen", "updateScreen", V_ALL, "gui_screen_tick", "GUI per-tick update callback", "client_gui", "Preserve tick cadence and open-container/item animation update timing.", "net/minecraft/client/gui/GuiScreen.html"),
+    d!("GuiContainer", "drawGuiContainerBackgroundLayer", V_ALL, "gui_container_background", "Inventory/container GUI background render", "client_gui", "Preserve partial ticks, mouse position, GUI texture and slot/background draw order.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "drawGuiContainerForegroundLayer", V_ALL, "gui_container_foreground", "Inventory/container GUI foreground render", "client_gui", "Preserve mouse coordinates, font, labels and z-level relative to item slots.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "drawSlot", V_112, "gui_container_draw_slot", "Single inventory slot render callback", "client_gui", "Preserve slot index, stack overlays, highlights and tooltip hover state.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "handleMouseClick", V_ALL, "gui_container_handle_slot_click", "GUI slot click/drag dispatch", "client_gui", "Preserve Slot, slot ID, mouse button and ClickType; server container packet follows this UI action.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "getSlotUnderMouse", V_112, "gui_container_slot_under_mouse", "GUI hovered slot lookup", "client_gui", "Preserve scaled mouse coordinates, slot bounds and hidden/disabled slot behavior.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "isPointInRegion", V_ALL, "gui_container_point_in_region", "GUI rectangle hit test", "client_gui", "Preserve GUI origin, width/height and scaled coordinate semantics.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+    d!("GuiContainer", "mouseClickMove", V_ALL, "gui_container_mouse_drag", "GUI slot drag callback", "client_gui", "Preserve button, drag duration and slot transitions for quick-craft and split-stack behavior.", "net/minecraft/client/gui/inventory/GuiContainer.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5833,6 +5893,25 @@ mod tests {
             ("Item", "hitEntity"), ("Item", "itemInteractionForEntity"),
             ("Item", "onDroppedByPlayer"), ("Item", "onEntityItemUpdate"),
             ("Item", "onLeftClickEntity"), ("Item", "onUpdate"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn render_model_and_gui_screen_callbacks_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("ModelBase", "setRotationAngles"), ("ModelRenderer", "renderWithRotation"),
+            ("ModelRenderer", "postRender"), ("Render", "shouldRender"),
+            ("RenderLivingBase", "renderLayers"), ("RenderLivingBase", "rotateCorpse"),
+            ("TileEntitySpecialRenderer", "renderTileEntityFast"),
+            ("TileEntitySpecialRenderer", "isGlobalRenderer"),
+            ("GuiScreen", "initGui"), ("GuiScreen", "drawScreen"),
+            ("GuiScreen", "handleMouseInput"), ("GuiScreen", "keyTyped"),
+            ("GuiScreen", "onGuiClosed"), ("GuiContainer", "handleMouseClick"),
+            ("GuiContainer", "drawGuiContainerBackgroundLayer"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
