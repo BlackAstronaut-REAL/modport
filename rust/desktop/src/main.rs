@@ -1,4 +1,5 @@
 mod app;
+mod project;
 mod browser;
 mod renderer;
 mod resource_model;
