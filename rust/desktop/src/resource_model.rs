@@ -701,17 +701,50 @@ pub fn load_block_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, 
 /// several independent models (for example a fence post plus connected sides),
 /// each with its own texture table. Their geometry and per-face texture indices
 /// are merged into a single renderer-neutral scene.
-pub fn load_block_models(paths: &[PathBuf], roots: &[PathBuf]) -> Result<(ViewerScene, Vec<PathBuf>)> {
+fn apply_blockstate_rotation(scene: &mut ViewerScene, rotation: [i32; 2], name: &str) {
+    if rotation == [0, 0] { return; }
+    let wrapper = ViewerNode {
+        name: format!("{name}_blockstate_rotation"),
+        parent: None,
+        local_translation: [0.0; 3],
+        base_rotation: [
+            (rotation[0] as f32).to_radians(),
+            (rotation[1] as f32).to_radians(),
+            0.0,
+        ],
+        cubes: Vec::new(),
+    };
+    for node in &mut scene.nodes {
+        node.parent = Some(node.parent.map(|parent| parent + 1).unwrap_or(0));
+    }
+    scene.nodes.insert(0, wrapper);
+}
+
+pub fn load_block_models(
+    paths: &[PathBuf],
+    rotations: &[[i32; 2]],
+    roots: &[PathBuf],
+) -> Result<(ViewerScene, Vec<PathBuf>)> {
     let Some((first_path, rest)) = paths.split_first() else {
         bail!("Cannot compose a block preview without any resource models.");
     };
     let (mut scene, first_textures) = load_block_model(first_path, roots)?;
+    apply_blockstate_rotation(
+        &mut scene,
+        rotations.first().copied().unwrap_or([0, 0]),
+        first_path.file_stem().and_then(|value| value.to_str()).unwrap_or("block"),
+    );
     let mut textures = first_textures;
     scene.texture_variants = textures.iter().map(|path| path.to_string_lossy().to_string()).collect();
     scene.texture = textures.first().map(|path| path.to_string_lossy().to_string()).unwrap_or_default();
 
-    for path in rest {
+    for (additional_index, path) in rest.iter().enumerate() {
         let (mut additional, additional_textures) = load_block_model(path, roots)?;
+        apply_blockstate_rotation(
+            &mut additional,
+            rotations.get(additional_index + 1).copied().unwrap_or([0, 0]),
+            path.file_stem().and_then(|value| value.to_str()).unwrap_or("multipart"),
+        );
         let mut texture_remap = Vec::<usize>::with_capacity(additional_textures.len());
         for texture in &additional_textures {
             let index = if let Some(index) = textures.iter().position(|existing| existing == texture) {
@@ -814,16 +847,22 @@ mod tests {
             "elements":[{"from":[6,6,0],"to":[10,10,16],"faces":{"south":{"texture":"#all"}}}]
         }"##).unwrap();
 
-        let (scene, textures) = load_block_models(&[post, side], &[root.to_path_buf()]).unwrap();
-        assert_eq!(scene.nodes.len(), 2);
+        let (scene, textures) = load_block_models(
+            &[post, side],
+            &[[0, 0], [0, 90]],
+            &[root.to_path_buf()],
+        ).unwrap();
+        assert_eq!(scene.nodes.len(), 3);
         assert_eq!(textures.len(), 2);
         assert_eq!(scene.texture_variants.len(), 2);
+        assert_eq!(scene.nodes[1].base_rotation[1], 90.0_f32.to_radians());
+        assert_eq!(scene.nodes[2].parent, Some(1));
         assert_eq!(
             scene.nodes[0].cubes[0].face_texture_indices.unwrap()[4],
             0
         );
         assert_eq!(
-            scene.nodes[1].cubes[0].face_texture_indices.unwrap()[5],
+            scene.nodes[2].cubes[0].face_texture_indices.unwrap()[5],
             1
         );
     }
