@@ -540,10 +540,11 @@ pub fn port_to_neoforge(
         waterloggable: block.properties.get("waterloggable").and_then(Value::as_bool).unwrap_or(false),
         has_gravity: block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false),
         recovered_properties: block.properties.clone(),
-        generated_as: if block.plant_like {
-            "native Block + BlockItem with cross model and non-collision properties".to_owned()
-        } else {
-            "native Block + BlockItem with recovered properties and datapack loot/tags".to_owned()
+        generated_as: match block.shape.as_str() {
+            "cross" => "native non-colliding plant Block + cross model".to_owned(),
+            "slab" => "native SlabBlock + slab state variants and models".to_owned(),
+            "stairs" => "native StairBlock + stair state variants and models".to_owned(),
+            _ => "native Block + BlockItem with recovered properties and datapack loot/tags".to_owned(),
         },
         warnings: block.warnings.clone(),
     }).collect();
@@ -2391,12 +2392,14 @@ fn generate_blocks_java(
 import {package}.NeoForgeMod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -2428,6 +2431,21 @@ public final class ModBlocks {{
 
         let entity = block_entities.iter()
             .find(|candidate| candidate.associated_blocks.iter().any(|id| id == &block.id));
+        let block_parent = match block.shape.as_str() {
+            "slab" => "SlabBlock",
+            "stairs" => "StairBlock",
+            _ => "Block",
+        };
+        let constructor_super = match block.shape.as_str() {
+            "slab" => "super(properties);",
+            "stairs" => "super(Blocks.STONE_STAIRS.defaultBlockState(), properties);",
+            _ => "super(properties);",
+        };
+        let block_factory = match block.shape.as_str() {
+            "slab" => format!("new SlabBlock({properties})"),
+            "stairs" => format!("new StairBlock(Blocks.STONE_STAIRS.defaultBlockState(), {properties})"),
+            _ => format!("new Block({properties})"),
+        };
         if let Some(entity) = entity {
             let block_class = generated_entity_block_class(&block.id);
             let be_field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
@@ -2436,8 +2454,8 @@ public final class ModBlocks {{
                 id = block.id
             ));
             body.push_str(&format!(
-                r#"    public static final class {block_class} extends Block implements EntityBlock {{
-        public {block_class}(BlockBehaviour.Properties properties) {{ super(properties); }}
+                r#"    public static final class {block_class} extends {block_parent} implements EntityBlock {{
+        public {block_class}(BlockBehaviour.Properties properties) {{ {constructor_super} }}
 
         @Override
         public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {{
@@ -2449,7 +2467,7 @@ public final class ModBlocks {{
             ));
         } else {
             body.push_str(&format!(
-                "    public static final DeferredBlock<Block> {field} = BLOCKS.registerSimpleBlock(\"{id}\", {properties});\n",
+                "    public static final DeferredBlock<Block> {field} = BLOCKS.register(\"{id}\", () -> {block_factory});\n",
                 id = block.id
             ));
         }
