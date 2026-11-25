@@ -855,13 +855,13 @@ fn java_field_name(value: &str, prefix: &str) -> String {
 
 fn recover_constant_getter(source_text: &str, method_name: &str) -> Option<f64> {
     let declaration = Regex::new(&format!(
-        r"(?i)\\b{}\\s*\\(\\s*\\)\\s*\\{{",
+        r"(?i)\b{}\s*\(\s*\)\s*\{{",
         regex::escape(method_name)
     )).ok()?;
     let body_start = declaration.find(source_text)?.end();
     let body_end = source_text[body_start..].find('}')? + body_start;
     let body = &source_text[body_start..body_end];
-    let returned = Regex::new(r"(?is)\\breturn\\s+(-?\\d+(?:\\.\\d+)?)[fFdD]?\\s*;").ok()?;
+    let returned = Regex::new(r"(?is)\breturn\s+(-?\d+(?:\.\d+)?)[fFdD]?\s*;").ok()?;
     returned.captures(body)?.get(1)?.as_str().parse::<f64>().ok()
 }
 
