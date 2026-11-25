@@ -933,15 +933,15 @@ const DEFINITIONS: &[Definition] = &[
     // Exact 1.7.10 EntityLivingBase hooks verified against its method summary.
     d!("EntityLivingBase", "canBreatheUnderwater", V_ALL, "living_underwater_breathing", "LivingEntity#canBreatheUnderwater / air supply", "abilities", "adapter_required", "Preserve entity-specific breathing and air-depletion behavior.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "canEntityBeSeen", V_ALL, "living_line_of_sight", "Sensing#hasLineOfSight", "combat_ai", "adapter_required", "Preserve entity-specific visibility and ray obstruction checks used by ranged attacks and abilities.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "getLastAttackerTime", V_ALL, "last_attacker_tick", "LivingEntity#getLastHurtByMobTimestamp", "combat_ai", "automatic_rename_candidate", "Preserve tick timestamp semantics for retaliation windows and target memory.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getLastAttackerTime", V_17_18, "last_attacker_tick", "LivingEntity#getLastHurtByMobTimestamp", "combat_ai", "automatic_rename_candidate", "Preserve tick timestamp semantics for retaliation windows and target memory.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getLook", V_ALL, "living_look_vector", "Entity#getLookAngle", "entities", "adapter_required", "Translate partial-tick interpolation and preserve normalized direction for aiming/ray tracing.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getRNG", V_ALL, "living_random_source", "Entity#getRandom", "entities", "adapter_required", "Preserve entity-seeded random behavior where deterministic per-entity outcomes matter.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getRotationYawHead", V_ALL, "living_head_yaw_read", "LivingEntity#getYHeadRot", "rendering", "automatic_rename_candidate", "Preserve head yaw separately from body yaw for look and animation logic.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getSwingProgress", V_ALL, "living_swing_progress", "LivingEntity#getAttackAnim", "combat", "adapter_required", "Preserve partial-tick interpolation for attack animation and timing-sensitive effects.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getTeam", V_ALL, "living_team_read", "Entity#getTeam", "combat_ai", "automatic_rename_candidate", "Preserve scoreboard team membership used by target filtering and friendly-fire rules.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "handleHealthUpdate", V_ALL, "living_health_status_sync", "LivingEntity#handleEntityEvent", "networking", "adapter_required", "Translate legacy status bytes into entity event IDs and preserve client-side animation/sound effects.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "handleHealthUpdate", V_17_18, "living_health_status_sync", "LivingEntity#handleEntityEvent", "networking", "adapter_required", "Translate legacy status bytes into entity event IDs and preserve client-side animation/sound effects.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "isOnSameTeam", V_ALL, "living_team_predicate", "Entity#isAlliedTo", "combat_ai", "adapter_required", "Preserve team alliance semantics rather than comparing display names.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "isOnTeam", V_ALL, "living_team_membership", "Entity#isAlliedTo / Team membership", "combat_ai", "adapter_required", "Preserve team membership and scoreboard collision rules.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "isOnTeam", V_17_18, "living_team_membership", "Entity#isAlliedTo / Team membership", "combat_ai", "adapter_required", "Preserve team membership and scoreboard collision rules.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "isPlayerSleeping", V_ALL, "living_sleep_state", "Player#isSleeping", "player_abilities", "automatic_rename_candidate", "Preserve sleeping state for bed, time-skip and dimension transition behavior.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "isMovementBlocked", V_ALL, "living_movement_blocked", "LivingEntity#isImmobile", "abilities", "adapter_required", "Preserve movement locks from death, sleep, stun or other state gates.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "onChangedPotionEffect", V_ALL, "potion_effect_changed_hook", "LivingEntity#onEffectUpdated", "abilities", "adapter_required", "Preserve attribute modifier refresh and synchronized potion metadata after an effect changes.", "net/minecraft/entity/EntityLivingBase.html"),
@@ -949,13 +949,13 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityLivingBase", "onFinishedPotionEffect", V_ALL, "potion_effect_removed_hook", "LivingEntity#onEffectRemoved", "abilities", "adapter_required", "Remove effect-owned attributes and preserve expiry/cure/removal distinction.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "onNewPotionEffect", V_ALL, "potion_effect_added_hook", "LivingEntity#onEffectAdded", "abilities", "adapter_required", "Apply effect-owned attributes and synchronize initial effect metadata exactly once.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "performHurtAnimation", V_ALL, "living_hurt_animation", "LivingEntity#animateHurt", "combat", "adapter_required", "Preserve hurt animation state independently from damage acceptance and health changes.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "rayTrace", V_ALL, "living_ray_trace", "Entity#pick / Level#clip", "combat_ai", "adapter_required", "Translate reach, partial tick and block/entity hit selection for ability targeting.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "rayTrace", V_17_18, "living_ray_trace", "Entity#pick / Level#clip", "combat_ai", "adapter_required", "Translate reach, partial tick and block/entity hit selection for ability targeting.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "removePotionEffectClient", V_17_18, "client_effect_remove", "LivingEntity#removeEffectNoUpdate / effect synchronization", "abilities", "adapter_required", "Preserve client-only visual removal without changing authoritative server effect state.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "renderBrokenItemStack", V_112, "equipment_break_feedback", "LivingEntity#broadcastBreakEvent", "combat", "adapter_required", "Preserve break animation, status packet and hand/armor slot identity.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "setJumping", V_ALL, "living_jump_state", "LivingEntity#setJumping", "movement", "automatic_rename_candidate", "Preserve jump input state used by AI, movement and animation.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "setRotationYawHead", V_ALL, "living_head_yaw_write", "LivingEntity#setYHeadRot", "rendering", "automatic_rename_candidate", "Preserve head rotation separately from body rotation and interpolation.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "updateAITasks", V_ALL, "living_ai_task_update", "Mob#serverAiStep / custom AI goal lifecycle", "ai", "manual_adapter_required", "Rebuild server AI scheduling, target selection, navigation and custom task ordering.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "updateAITick", V_ALL, "living_ai_tick", "Mob#aiStep", "ai", "manual_adapter_required", "Preserve per-tick AI timing, movement controls, attack cadence and ability cooldowns.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updateAITasks", V_17_18, "living_ai_task_update", "Mob#serverAiStep / custom AI goal lifecycle", "ai", "manual_adapter_required", "Rebuild server AI scheduling, target selection, navigation and custom task ordering.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updateAITick", V_17_18, "living_ai_tick", "Mob#aiStep", "ai", "manual_adapter_required", "Preserve per-tick AI timing, movement controls, attack cadence and ability cooldowns.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "updateArmSwingProgress", V_ALL, "living_arm_swing_tick", "LivingEntity#updateSwingTime", "combat", "adapter_required", "Preserve swing progression and animation state used by attack effects.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "updateEntityActionState", V_ALL, "living_action_state_tick", "Mob#aiStep / travel", "ai", "manual_adapter_required", "Translate legacy action-state updates into AI, navigation and movement phases without changing order.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "updatePotionEffects", V_ALL, "potion_effect_tick", "LivingEntity#tickEffects", "abilities", "adapter_required", "Preserve effect duration decrement, periodic ticks, attribute updates, expiration and synchronization.", "net/minecraft/entity/EntityLivingBase.html"),
@@ -985,7 +985,6 @@ const DEFINITIONS: &[Definition] = &[
     d!("DamageSource", "setProjectile", V_ALL, "damage_projectile_flag_write", "DamageSource#isProjectile", "combat", "automatic_rename_candidate", "Preserve projectile classification for protection enchantments and event filters.", "net/minecraft/util/DamageSource.html"),
     d!("Enchantment", "isAllowedOnBooks", V_112, "enchantment_book_eligibility", "Enchantment#isAllowedOnBooks", "enchantments", "automatic_rename_candidate", "Preserve whether the enchantment can be obtained through books/table paths.", "net/minecraft/enchantment/Enchantment.html"),
     d!("Enchantment", "getMinLevel", V_112, "enchantment_min_level", "Enchantment#getMinLevel", "enchantments", "automatic_rename_candidate", "Preserve minimum legal level independently from maximum level.", "net/minecraft/enchantment/Enchantment.html"),
-    d!("Enchantment", "getWeight", V_17, "enchantment_weight", "Enchantment#rarity / enchanting weight", "enchantments", "adapter_required", "Translate numeric selection weight into modern enchantment rarity without changing relative probabilities.", "net/minecraft/enchantment/Enchantment.html"),
     d!("Enchantment", "setName", V_ALL, "enchantment_name_write", "Enchantment#descriptionId / registry name", "enchantments", "adapter_required", "Preserve localization identity separately from registry identity.", "net/minecraft/enchantment/Enchantment.html"),
 
 ];
@@ -1804,6 +1803,25 @@ mod tests {
         assert!(mapping.target_api_methods.iter().all(|target|
             target.documentation_url.contains("/neoforge/1.21.1/")
         ));
+    }
+
+    #[test]
+    fn special_ability_hooks_are_version_scoped_and_documented() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        assert!(has(&v17, "Potion", "performEffect"));
+        assert!(has(&v17, "EntityThrowable", "onImpact"));
+        assert!(has(&v17, "EntityLivingBase", "getActivePotionEffects"));
+        assert!(!has(&v17, "EntityLivingBase", "getRevengeTarget"));
+        assert!(has(&v112, "EntityLivingBase", "getRevengeTarget"));
+        assert!(has(&v112, "EntityLivingBase", "getLastAttackedEntity"));
+        assert!(has(&v112, "Enchantment", "onEntityDamaged"));
+        assert!(has(&v112, "Enchantment", "isCurse"));
+        assert!(has(&v112, "EntityArrow", "onHit"));
+        assert!(has(&v112, "DamageSource", "setDamageBypassesArmor"));
     }
 
     #[test]
