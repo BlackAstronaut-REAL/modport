@@ -365,6 +365,66 @@ fn number_after(source: &str, patterns: &[&str]) -> Option<f64> {
     None
 }
 
+/// Recover the statically identifiable ItemStack emitted by a block's drop
+/// routine. Dynamic loot tables remain untouched instead of guessing an item.
+fn extract_block_drop(
+    source_text: &str,
+    field_registry_map: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<(String, i64)> {
+    if Regex::new(r"(?s)return\\s+Collections\\.emptyList\\s*\\(\\s*\\)")
+        .ok()?.is_match(source_text)
+    {
+        return Some((String::new(), 0));
+    }
+
+    let pattern = Regex::new(
+        r#"new\\s+ItemStack\\s*\\(\\s*([A-Za-z_$][\\w$\\.]*)\\s*(?:,\\s*(\\d+)\\s*)?\\)"#,
+    ).ok()?;
+    let capture = pattern.captures(source_text)?;
+    let raw_reference = capture.get(1)?.as_str();
+    let count = capture.get(2)
+        .and_then(|value| value.as_str().parse::<i64>().ok())
+        .unwrap_or(1)
+        .max(0);
+
+    let field = raw_reference.rsplit('.').next().unwrap_or(raw_reference);
+    if field.eq_ignore_ascii_case("this") || field.eq_ignore_ascii_case("self") {
+        return Some((String::new(), count));
+    }
+
+    // Keep vanilla references canonical. A Block used as an ItemStack drop
+    // maps to MCreator's item token with the same registry path.
+    if let Some((owner, name)) = raw_reference.split_once('.') {
+        if owner.eq_ignore_ascii_case("Items") || owner.eq_ignore_ascii_case("Blocks") {
+            return Some((format!("Items.{name}"), count));
+        }
+    }
+
+    if let Some(registries) = field_registry_map.get(field) {
+        if let Some(registry) = registries.iter().next() {
+            let token = registry.chars()
+                .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' })
+                .collect::<String>();
+            return Some((format!("Items.{token}"), count));
+        }
+    }
+    None
+}
+
+fn apply_block_drop_updates(
+    definition: &mut Map<String, Value>,
+    source_text: &str,
+    field_registry_map: &BTreeMap<String, BTreeSet<String>>,
+) -> bool {
+    let Some((drop, amount)) = extract_block_drop(source_text, field_registry_map) else {
+        return false;
+    };
+    definition.insert("customDrop".to_owned(), json!(drop));
+    definition.insert("dropAmount".to_owned(), json!(amount));
+    definition.insert("useLootTableForDrops".to_owned(), json!(false));
+    true
+}
+
 /// Extract source-authored block settings for the desktop content editor.
 /// These values mirror the fields used by the native MCreator block builder,
 /// but remain separate metadata so the browser does not present them as lore.
@@ -448,6 +508,11 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     if let Some(tool) = destroy_tool {
         properties.insert("destroy_tool".to_owned(), json!(tool));
     }
+    if let Some((drop, amount)) = extract_block_drop(text, &BTreeMap::new()) {
+        properties.insert("custom_drop".to_owned(), json!(drop));
+        properties.insert("drop_amount".to_owned(), json!(amount));
+        properties.insert("use_loot_table_for_drops".to_owned(), json!(false));
+    }
     properties
 }
 
@@ -483,6 +548,7 @@ pub fn build_block_element(
     model_info: &Value,
     texture_fields: &BTreeMap<String,String>,
     imported_fv: i64,
+    field_registry_map: &BTreeMap<String, BTreeSet<String>>,
 ) -> (Value, Vec<String>) {
     let mut definition=template.get("definition").and_then(Value::as_object).cloned().unwrap_or_default();
     let mut warnings=Vec::new();
@@ -560,8 +626,9 @@ pub fn build_block_element(
     if model_info.as_object().is_none_or(Map::is_empty) {
         warnings.push("No block model/blockstate JSON could be resolved; template render defaults were retained.".to_owned());
     }
-    if source.source_text.contains("getDrops") || source.source_text.contains("getDrop") {
-        warnings.push("Custom block drop behavior was detected but is not yet reconstructed into MCreator loot/drop fields.".to_owned());
+    let has_static_drop = apply_block_drop_updates(&mut definition, &source.source_text, field_registry_map);
+    if !has_static_drop && (source.source_text.contains("getDrops") || source.source_text.contains("getDrop")) {
+        warnings.push("Custom block drop behavior was detected but could not be reduced to a static ItemStack; its loot behavior needs manual reconstruction.".to_owned());
     }
 
     let fv=template.get("_fv").and_then(Value::as_i64).unwrap_or(imported_fv).clamp(0,89);
@@ -586,6 +653,7 @@ pub fn export_blocks_to_workspace(
         .filter(|source| !is_plant_source(source))
         .collect();
     let template=definition_template(&workspace_root)?;
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
 
     let mut report=BlockWorkspaceExportReport{
         workspace_file:workspace_file.clone(),discovered:discovered.len(),exported:0,skipped:0,records:Vec::new(),warnings:Vec::new()
@@ -646,7 +714,7 @@ pub fn export_blocks_to_workspace(
             suffix+=1;
         }
 
-        let (element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv);
+        let (element,mut warnings)=build_block_element(&template,&source,&info,&textures,imported_fv,&field_registry_map);
         if source.source_text.trim().is_empty() {
             warnings.push("Block class and registry ID were recovered from compiled bytecode only; source-defined state properties, hardness, drops, and special behavior may need manual reconstruction.".to_owned());
         }
@@ -805,7 +873,7 @@ mod tests{
         let template:Value=serde_json::from_str(include_str!("../../oldVer/mcreator_templates/BlockSchema.mod.json")).unwrap();
         let info=json!({"renderType":11,"customModelName":"Single texture","texture":"demo_block","modelPath":"block.json"});
         let textures=BTreeMap::from([("texture".to_owned(),"demo_block".to_owned())]);
-        let (element,warnings)=build_block_element(&template,&source,&info,&textures,89);
+        let (element,warnings)=build_block_element(&template,&source,&info,&textures,89,&BTreeMap::new());
         assert!(warnings.is_empty());
         assert_eq!(element["_type"],"block");
         assert_eq!(element["definition"]["hardness"],2.5);
@@ -814,6 +882,53 @@ mod tests{
         assert_eq!(element["definition"]["renderType"],11);
         assert_eq!(element["definition"]["texture"],"demo_block");
         assert_eq!(element["definition"]["requiresCorrectTool"],true);
+    }
+
+    #[test]
+    fn recovers_static_custom_block_drops_and_explicit_empty_drops() {
+        let item_source = BlockSource {
+            class_name: "RubyOre".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "ruby_ore".to_owned(),
+            source_path: "RubyOre.java".to_owned(),
+            source_text: "return new ItemStack(RUBY, 3);".to_owned(),
+        };
+        let registry = BTreeMap::from([(
+            "RUBY".to_owned(),
+            BTreeSet::from(["ruby_gem".to_owned()]),
+        )]);
+        let template: Value = serde_json::from_str(include_str!(
+            "../../oldVer/mcreator_templates/BlockSchema.mod.json"
+        )).unwrap();
+        let (element, warnings) = build_block_element(
+            &template,
+            &item_source,
+            &json!({"renderType": 11, "customModelName": "Single texture", "texture": "ruby_ore"}),
+            &BTreeMap::new(),
+            89,
+            &registry,
+        );
+        assert!(warnings.is_empty());
+        assert_eq!(element["definition"]["customDrop"], "Items.RUBY_GEM");
+        assert_eq!(element["definition"]["dropAmount"], 3);
+        assert_eq!(element["definition"]["useLootTableForDrops"], false);
+
+        let empty_source = BlockSource {
+            source_text: "return Collections.emptyList();".to_owned(),
+            ..item_source
+        };
+        let (empty, warnings) = build_block_element(
+            &template,
+            &empty_source,
+            &json!({"renderType": 11, "customModelName": "Single texture", "texture": "ruby_ore"}),
+            &BTreeMap::new(),
+            89,
+            &BTreeMap::new(),
+        );
+        assert!(warnings.is_empty());
+        assert_eq!(empty["definition"]["customDrop"], "");
+        assert_eq!(empty["definition"]["dropAmount"], 0);
+        assert_eq!(empty["definition"]["useLootTableForDrops"], false);
     }
 
     #[test]
