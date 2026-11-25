@@ -4,6 +4,7 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use walkdir::WalkDir;
 
 const FILE_LIMIT: usize = 200_000;
@@ -60,14 +61,19 @@ fn unique_existing(paths: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {
     result
 }
 
+fn texture_reference_regexes() -> &'static [Regex] {
+    static REGEXES: OnceLock<Vec<Regex>> = OnceLock::new();
+    REGEXES.get_or_init(|| vec![
+        Regex::new(r"(?i)(?:[a-z0-9_.-]+:)?(?:assets/)?(?:textures/)?[a-z0-9_./\\-]+\.png")
+            .expect("fixed texture reference regex"),
+        Regex::new(r"(?i)(?:[a-z0-9_.-]+:)?textures/[a-z0-9_./\\-]+\.png")
+            .expect("fixed texture reference regex"),
+    ])
+}
+
 fn extract_text_references(text: &str) -> Vec<String> {
-    let patterns = [
-        r"(?i)(?:[a-z0-9_.-]+:)?(?:assets/)?(?:textures/)?[a-z0-9_./\\-]+\.png",
-        r"(?i)(?:[a-z0-9_.-]+:)?textures/[a-z0-9_./\\-]+\.png",
-    ];
     let mut refs = HashSet::new();
-    for pattern in patterns {
-        let regex = Regex::new(pattern).expect("fixed texture reference regex");
+    for regex in texture_reference_regexes() {
         for matched in regex.find_iter(text) {
             let value = matched.as_str()
                 .replace('\\', "/")
@@ -84,7 +90,10 @@ fn extract_text_references(text: &str) -> Vec<String> {
 }
 
 fn extract_model_mentions(text: &str) -> Vec<String> {
-    let regex = Regex::new(r"\bModel[A-Za-z0-9_$]+\b").expect("fixed model mention regex");
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    let regex = REGEX.get_or_init(|| {
+        Regex::new(r"\bModel[A-Za-z0-9_$]+\b").expect("fixed model mention regex")
+    });
     let mut mentions: HashSet<String> = regex.find_iter(text)
         .map(|matched| matched.as_str().split('$').next().unwrap_or(matched.as_str()).to_owned())
         .collect();
@@ -95,11 +104,13 @@ fn extract_model_mentions(text: &str) -> Vec<String> {
 
 fn is_auxiliary_texture(path: &Path) -> bool {
     let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
-    let tokens: HashSet<String> = Regex::new(r"[^a-z0-9]+").unwrap()
-        .split(&stem).filter(|token| !token.is_empty()).map(str::to_owned).collect();
-    let joined = stem.chars().filter(|ch| ch.is_ascii_alphanumeric()).collect::<String>();
-    tokens.iter().any(|token| AUXILIARY_WORDS.contains(&token.as_str()))
-        || AUXILIARY_WORDS.iter().any(|word| joined.ends_with(word))
+    if stem.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(|token| AUXILIARY_WORDS.contains(&token))
+    {
+        return true;
+    }
+    let joined: String = stem.chars().filter(|ch| ch.is_ascii_alphanumeric()).collect();
+    AUXILIARY_WORDS.iter().any(|word| joined.ends_with(word))
 }
 
 fn canonical_name(value: &str) -> String {
@@ -395,22 +406,6 @@ impl TextureIndex {
         matches
     }
 
-    fn family_match(path: &Path, aliases: &HashSet<String>) -> bool {
-        let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
-        for alias in aliases {
-            if alias.is_empty() { continue; }
-            for prefix in ["", "model", "render", "renderer", "entity"] {
-                let prefix_name = format!("{prefix}{alias}");
-                if let Some(suffix) = stem.strip_prefix(&prefix_name) {
-                    if suffix.len() > 1 && suffix.chars().next().map(|ch| matches!(ch, '_' | '-' | '.')).unwrap_or(false) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
     /// Resolve a primary body texture and compatible colour variants, optionally
     /// constrained to an explicit file or directory.
     pub fn resolve_set(&self, source: &Path, model_name: &str, explicit: Option<&Path>, max_variants: usize) -> Result<TextureSetResolution> {
@@ -569,6 +564,14 @@ mod tests {
         assert!(exact.iter().any(|(path, score, _)| path == &texture && *score == 100_000.0));
         let basename = index.match_reference("other:entity/creature/creature.png");
         assert!(basename.iter().any(|(path, score, _)| path == &texture && *score == 50_000.0));
+    }
+
+    #[test]
+    fn auxiliary_texture_detection_keeps_token_and_suffix_semantics() {
+        assert!(is_auxiliary_texture(Path::new("pig_eyes.png")));
+        assert!(is_auxiliary_texture(Path::new("pig_glowing.png")));
+        assert!(!is_auxiliary_texture(Path::new("pig.png")));
+        assert!(!is_auxiliary_texture(Path::new("pig_blue.png")));
     }
 
     #[test]
