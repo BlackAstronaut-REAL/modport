@@ -3,7 +3,7 @@ use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::{scan_mod_graph, EntityMetadata};
 use mojmodelbridge::mcreator_armor::{compiled_armor_stats, discover_armor_sources};
 use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
-use mojmodelbridge::mcreator_equipment::{discover_equipment_sources, source_tool_materials, ToolMaterialStats};
+use mojmodelbridge::mcreator_equipment::{compiled_tool_materials, discover_equipment_sources, source_tool_materials, ToolMaterialStats};
 use mojmodelbridge::source::java::{extract_balanced, split_top_level};
 use regex::Regex;
 use serde_json::Value;
@@ -97,7 +97,8 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
 
     let source_roots = vec![root.clone()];
     let equipment = discover_equipment_sources(&source_roots)?;
-    let tool_materials = source_tool_materials(&source_roots, &source_modid);
+    let mut tool_materials = compiled_tool_materials(&source_roots)?;
+    tool_materials.extend(source_tool_materials(&source_roots, &source_modid));
     let blocks = discover_block_sources(&source_roots)?;
     let armor_sets = discover_armor_sources(&source_roots)?;
     let compiled_armor = compiled_armor_stats(&source_roots)?;
