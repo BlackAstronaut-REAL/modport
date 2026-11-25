@@ -392,7 +392,12 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     properties.insert("light_level".to_owned(), json!(light));
     properties.insert(
         "has_gravity".to_owned(),
-        json!(text.contains("SandBlock") || text.contains("FallingBlock")),
+        json!(
+            text.contains("SandBlock")
+                || text.contains("FallingBlock")
+                || source.superclass.contains("FallingBlock")
+                || source.class_name.contains("Sand")
+        ),
     );
     properties.insert(
         "waterloggable".to_owned(),
@@ -443,7 +448,7 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     if let Some(tool) = destroy_tool {
         properties.insert("destroy_tool".to_owned(), json!(tool));
     }
-    Value::Object(properties).as_object().cloned().unwrap_or_default()
+    properties
 }
 
 fn block_display(registry: &str) -> String {
