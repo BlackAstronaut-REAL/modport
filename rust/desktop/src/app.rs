@@ -344,7 +344,9 @@ impl MojModelBridgeApp {
             }
         } else if let Some(source) = entry.resource_model_source.as_ref() {
             let loaded = if entry.category == "Blocks" {
-                crate::resource_model::load_block_model(source, &self.browser.texture_roots)
+                let mut model_sources = vec![source.clone()];
+                model_sources.extend(entry.additional_resource_model_sources.iter().cloned());
+                crate::resource_model::load_block_models(&model_sources, &self.browser.texture_roots)
             } else {
                 crate::resource_model::load_item_model(source, &self.browser.texture_roots)
             };
@@ -1160,6 +1162,7 @@ mod armor_texture_selection_tests {
             icon_path: None,
             model_source: None,
             resource_model_source: None,
+            additional_resource_model_sources: Vec::new(),
             texture_paths: textures.clone(),
             render_shape: Some("custom".into()),
             lore: Vec::new(),
@@ -1190,6 +1193,7 @@ mod armor_texture_selection_tests {
             icon_path: Some(layer_one.clone()),
             model_source: None,
             resource_model_source: None,
+            additional_resource_model_sources: Vec::new(),
             texture_paths: textures.clone(),
             render_shape: None,
             lore: Vec::new(),
