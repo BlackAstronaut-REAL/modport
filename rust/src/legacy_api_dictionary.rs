@@ -589,9 +589,6 @@ const DEFINITIONS: &[Definition] = &[
     d!("Fluid", "getStill", V_18, "fluid_still_texture", "FluidType#initializeClient / fluid render resources", "fluids", "client_adapter_required", "Move still/flow textures to the FluidType client extension.", "net/minecraftforge/fluids/Fluid.html"),
     d!("Fluid", "getFlowing", V_18, "fluid_flow_texture", "FluidType#initializeClient / fluid render resources", "fluids", "client_adapter_required", "Move flowing texture to FluidType client extension.", "net/minecraftforge/fluids/Fluid.html"),
     d!("FluidStack", "getFluid", V_18, "fluid_stack_identity", "FluidStack#getFluid", "fluids", "automatic_rename_candidate", "Preserve registry identity and empty stack semantics.", "net/minecraftforge/fluids/FluidStack.html"),
-    d!("FluidStack", "getAmount", V_18, "fluid_stack_amount", "FluidStack#getAmount", "fluids", "automatic_rename_candidate", "Preserve amount units (millibuckets) and capacity bounds.", "net/minecraftforge/fluids/FluidStack.html"),
-    d!("FluidStack", "grow", V_18, "fluid_stack_grow", "FluidStack#grow", "fluids", "automatic_rename_candidate", "Preserve amount clamping and empty-stack normalization.", "net/minecraftforge/fluids/FluidStack.html"),
-    d!("FluidStack", "shrink", V_18, "fluid_stack_shrink", "FluidStack#shrink", "fluids", "automatic_rename_candidate", "Preserve amount clamping and empty-stack normalization.", "net/minecraftforge/fluids/FluidStack.html"),
     d!("IFluidHandler", "fill", V_18, "fluid_handler_fill", "IFluidHandler#fill", "fluids", "signature_adapter_required", "Translate FluidAction simulation/execute semantics and fluid contents.", "net/minecraftforge/fluids/capability/IFluidHandler.html"),
     d!("IFluidHandler", "drain", V_18, "fluid_handler_drain", "IFluidHandler#drain", "fluids", "signature_adapter_required", "Preserve simulation and amount-versus-fluid-stack overload distinctions.", "net/minecraftforge/fluids/capability/IFluidHandler.html"),
     d!("IFluidHandler", "getTankProperties", V_18, "fluid_handler_tanks", "IFluidHandler#getTanks / tank capacity queries", "fluids", "adapter_required", "Modern fluid handlers may expose tank count and per-tank state through different extension methods.", "net/minecraftforge/fluids/capability/IFluidHandler.html"),
@@ -2320,6 +2317,70 @@ const DEFINITIONS: &[Definition] = &[
     d!("FMLProxyPacket", "toS3FPackets", V_112, "fml_packet_to_serverbound_vanilla", "SPacketCustomPayload multipart conversion", "networking", "adapter_required", "Preserve multipart ordering and max packet payload chunking for serverbound conversion.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
     d!("FMLProxyPacket", "writePacketData", V_112, "fml_packet_write", "PacketBuffer custom payload encoding", "networking", "adapter_required", "Preserve channel, payload bytes, packet length checks and multipart framing.", "net/minecraftforge/fml/common/network/internal/FMLProxyPacket.html"),
 
+    // Fluid definition metadata and overridable behavior.
+    d!("Fluid", "canBePlacedInWorld", V_112, "fluid_can_place_in_world", "Fluid block placement capability", "fluids", "automatic_rename_candidate", "Preserve whether this Fluid has an associated placeable block representation.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "doesVaporize", V_112, "fluid_vaporization_predicate", "WorldProvider water vaporization / custom fluid vaporization", "fluids", "automatic_rename_candidate", "Preserve FluidStack-sensitive vaporization predicate for Nether-like dimensions.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getBlock", V_112, "fluid_block_association", "Fluid linked Block", "fluids", "automatic_rename_candidate", "Preserve nullable Block association; not every Fluid has a world block.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getColor", V_112, "fluid_color", "Fluid tint / FluidStack and world color hooks", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve dynamic color behavior.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getDensity", V_112, "fluid_density", "Fluid density property", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve negative-density buoyancy behavior.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getEmptySound", V_112, "fluid_empty_sound", "Fluid container empty sound", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve custom sound selection.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getFillSound", V_112, "fluid_fill_sound", "Fluid container fill sound", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve custom sound selection.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getLuminosity", V_112, "fluid_luminosity", "Fluid light emission level", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve dynamic light emission.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getOverlay", V_112, "fluid_overlay_texture", "Fluid overlay ResourceLocation", "fluids", "automatic_rename_candidate", "Preserve nullable overlay resource separately from still/flowing textures.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getRarity", V_112, "fluid_rarity", "Fluid tooltip EnumRarity", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve stack-specific rarity.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getTemperature", V_112, "fluid_temperature", "Fluid temperature in Kelvin", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve stack/world-dependent temperature.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getUnlocalizedName", V_112, "fluid_unlocalized_name", "FluidStack-sensitive unlocalized name", "fluids", "automatic_rename_candidate", "Overloads accept no context and FluidStack; preserve stack-sensitive localization key.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "getViscosity", V_112, "fluid_viscosity", "Fluid flow viscosity", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve viscosity used by fluid flow.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "isGaseous", V_112, "fluid_gaseous_predicate", "Fluid gas/air classification", "fluids", "automatic_rename_candidate", "Overloads accept no context, FluidStack, or World+BlockPos; preserve negative density and gaseous behavior as separate properties.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "isLighterThanAir", V_112, "fluid_lighter_than_air", "Fluid buoyancy classification", "fluids", "automatic_rename_candidate", "Preserve density-based buoyancy check separately from isGaseous.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setBlock", V_112, "fluid_block_association_write", "Fluid linked Block registration", "fluids", "registration_adapter_required", "Preserve nullable block association and fluid/block registration ordering.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setColor", V_112, "fluid_color_write", "Fluid baked-model/universal-bucket tint", "fluids", "automatic_rename_candidate", "Overloads accept java.awt.Color or packed ARGB integer; preserve alpha channel.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setDensity", V_112, "fluid_density_write", "Fluid density property", "fluids", "automatic_rename_candidate", "Preserve signed density; negative values indicate lighter-than-air fluids.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setEmptySound", V_112, "fluid_empty_sound_write", "Fluid container empty SoundEvent", "fluids", "automatic_rename_candidate", "Preserve registered sound event identity.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setFillSound", V_112, "fluid_fill_sound_write", "Fluid container fill SoundEvent", "fluids", "automatic_rename_candidate", "Preserve registered sound event identity.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setGaseous", V_112, "fluid_gaseous_write", "Fluid gaseous classification", "fluids", "automatic_rename_candidate", "Preserve explicit gas flag independently from density.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setLuminosity", V_112, "fluid_luminosity_write", "Fluid light emission level", "fluids", "automatic_rename_candidate", "Preserve light level and its interaction with world lighting.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setRarity", V_112, "fluid_rarity_write", "Fluid tooltip rarity", "fluids", "automatic_rename_candidate", "Preserve EnumRarity used in filled bucket/tooltips.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setTemperature", V_112, "fluid_temperature_write", "Fluid temperature property", "fluids", "automatic_rename_candidate", "Preserve absolute temperature units and fluid-stack-sensitive overrides.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setUnlocalizedName", V_112, "fluid_unlocalized_name_write", "Fluid localization key", "fluids", "automatic_rename_candidate", "Preserve unlocalized name independently from the registry fluid name.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "setViscosity", V_112, "fluid_viscosity_write", "Fluid flow viscosity", "fluids", "automatic_rename_candidate", "Preserve non-negative viscosity and resulting fluid flow speed.", "net/minecraftforge/fluids/Fluid.html"),
+    d!("Fluid", "vaporize", V_112, "fluid_vaporize_action", "Custom fluid Nether vaporization action", "fluids", "adapter_required", "Preserve nullable player, world, position and FluidStack; subclasses may implement explosion/custom effects instead of smoke.", "net/minecraftforge/fluids/Fluid.html"),
+
+    // FluidStack comparisons and NBT serialization. Amount is a public field
+    // in 1.12.2 rather than a getAmount/grow/shrink method.
+    d!("FluidStack", "areFluidStackTagsEqual", V_112, "fluid_stack_tags_equal", "FluidStack NBT tag comparison", "fluids", "automatic_rename_candidate", "Compare tag payloads independently from fluid identity and amount.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "containsFluid", V_112, "fluid_stack_contains", "Fluid identity and amount containment", "fluids", "automatic_rename_candidate", "Preserve fluid identity plus amount comparison; equality alone ignores amount.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "copy", V_112, "fluid_stack_copy", "FluidStack deep/copy semantics", "fluids", "automatic_rename_candidate", "Preserve fluid identity, amount and NBT tag copy behavior.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "getUnlocalizedName", V_112, "fluid_stack_unlocalized_name", "FluidStack-sensitive unlocalized name", "fluids", "automatic_rename_candidate", "Delegate to the contained fluid's stack-sensitive localization key.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "isFluidEqual", V_112, "fluid_stack_identity_equal", "Fluid registry identity and NBT equality", "fluids", "automatic_rename_candidate", "Overloads accept FluidStack or registered fluid-container ItemStack; amount is deliberately not compared.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "isFluidStackIdentical", V_112, "fluid_stack_full_equal", "Fluid identity, amount and NBT equality", "fluids", "automatic_rename_candidate", "Compare fluid registry identity, millibucket amount and NBT tag together.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "loadFluidStackFromNBT", V_112, "fluid_stack_nbt_load", "FluidStack safe NBT deserialization", "fluids", "automatic_rename_candidate", "Returns null for invalid/unregistered fluid IDs; preserve validation behavior.", "net/minecraftforge/fluids/FluidStack.html"),
+    d!("FluidStack", "writeToNBT", V_112, "fluid_stack_nbt_write", "FluidStack NBT serialization", "fluids", "automatic_rename_candidate", "Write registry fluid identity, amount and optional tag into the provided compound.", "net/minecraftforge/fluids/FluidStack.html"),
+
+    // FluidUtil turns item containers and world fluid blocks into transfer
+    // operations while preserving simulation and inventory stow behavior.
+    d!("FluidUtil", "destroyBlockOnFluidPlacement", V_112, "fluid_destroy_block_on_place", "Fluid placement block replacement", "fluids", "automatic_rename_candidate", "Preserve block destruction side effect at target position before placing fluid.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "getFilledBucket", V_112, "fluid_get_filled_bucket", "Universal bucket item creation", "fluids", "automatic_rename_candidate", "Preserve fluid identity and filled bucket stack result.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "getFluidContained", V_112, "fluid_item_contents", "FluidStack extraction from an ItemStack container", "fluids", "automatic_rename_candidate", "Return null/empty for non-fluid containers while preserving item capability/tag semantics.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "getFluidHandler", V_112, "fluid_handler_lookup", "IFluidHandler capability lookup", "fluids", "automatic_rename_candidate", "Overloads accept ItemStack or World+BlockPos+EnumFacing; preserve nullable face and null when unsupported.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "tryEmptyContainerAndStow", V_112, "fluid_empty_container_and_stow", "Fluid container drain into handler plus inventory stow", "fluids", "adapter_required", "Preserve doDrain overload, inventory insertion/remainder behavior and player context.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "tryFillContainerAndStow", V_112, "fluid_fill_container_and_stow", "Fluid handler fill into item container plus inventory stow", "fluids", "adapter_required", "Preserve doFill overload, replacement container and inventory remainder behavior.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "tryFluidTransfer", V_112, "fluid_transfer_between_handlers", "IFluidHandler-to-IFluidHandler transfer", "fluids", "adapter_required", "Overloads accept FluidStack or maximum amount; preserve simulate/commit behavior and returned transferred stack.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "tryPickUpFluid", V_112, "fluid_pickup_world_block", "World fluid block pickup into item container", "fluids", "adapter_required", "Preserve player, world, position, clicked face, source block simulation and replacement bucket stack.", "net/minecraftforge/fluids/FluidUtil.html"),
+    d!("FluidUtil", "tryPlaceFluid", V_112, "fluid_place_world_block", "Fluid placement from handler or container into world", "fluids", "adapter_required", "Overloads accept IFluidHandler or ItemStack; preserve simulation/commit behavior and world block side effects.", "net/minecraftforge/fluids/FluidUtil.html"),
+
+    // Result and item-container wrappers.
+    d!("FluidActionResult", "getResult", V_112, "fluid_action_result_stack", "FluidUtil item container action result", "fluids", "automatic_rename_candidate", "A successful action may still return an empty stack when the input container was consumed.", "net/minecraftforge/fluids/FluidActionResult.html"),
+    d!("FluidActionResult", "isSuccess", V_112, "fluid_action_success", "FluidUtil item container action success", "fluids", "automatic_rename_candidate", "Do not infer success from result stack non-emptiness; successful consumable actions can return empty.", "net/minecraftforge/fluids/FluidActionResult.html"),
+    d!("IFluidHandlerItem", "getContainer", V_112, "fluid_handler_item_container", "Current ItemStack acted on by item fluid handler", "fluids", "automatic_rename_candidate", "The stack may be replaced by filled/empty container state or consumed entirely.", "net/minecraftforge/fluids/capability/IFluidHandlerItem.html"),
+
+    // IFluidBlock supports world interaction and partial-volume block fluids.
+    d!("IFluidBlock", "canDrain", V_112, "fluid_block_can_drain", "World fluid block drain predicate", "fluids", "automatic_rename_candidate", "Preserve world and block position; pumps may use this before a simulated drain.", "net/minecraftforge/fluids/IFluidBlock.html"),
+    d!("IFluidBlock", "drain", V_112, "fluid_block_drain", "World fluid block drain operation", "fluids", "adapter_required", "Preserve simulation flag and block-managed state changes after committed drain.", "net/minecraftforge/fluids/IFluidBlock.html"),
+    d!("IFluidBlock", "getFilledPercentage", V_112, "fluid_block_filled_percentage", "World fluid block fill fraction", "fluids", "automatic_rename_candidate", "Preserve values from 0-1 and negative values that indicate top-down filling.", "net/minecraftforge/fluids/IFluidBlock.html"),
+    d!("IFluidBlock", "getFluid", V_112, "fluid_block_fluid_identity", "Fluid linked to a world-placeable block", "fluids", "automatic_rename_candidate", "Preserve exact Fluid registry identity.", "net/minecraftforge/fluids/IFluidBlock.html"),
+    d!("IFluidBlock", "place", V_112, "fluid_block_place", "FluidStack placement into world block", "fluids", "adapter_required", "Preserve partial-volume amount and simulation flag; return amount consumed from stack.", "net/minecraftforge/fluids/IFluidBlock.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3708,6 +3769,33 @@ mod tests {
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
+    }
+
+
+    #[test]
+    fn forge_fluid_definition_stack_and_item_container_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("Fluid", "doesVaporize"),
+            ("Fluid", "getColor"),
+            ("Fluid", "setDensity"),
+            ("Fluid", "vaporize"),
+            ("FluidStack", "isFluidStackIdentical"),
+            ("FluidStack", "loadFluidStackFromNBT"),
+            ("FluidUtil", "tryFluidTransfer"),
+            ("FluidUtil", "tryPickUpFluid"),
+            ("FluidActionResult", "isSuccess"),
+            ("IFluidHandlerItem", "getContainer"),
+            ("IFluidBlock", "getFilledPercentage"),
+            ("IFluidBlock", "place"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+        assert!(!has("FluidStack", "getAmount"));
+        assert!(!has("FluidStack", "grow"));
+        assert!(!has("FluidStack", "shrink"));
     }
 
     #[test]
