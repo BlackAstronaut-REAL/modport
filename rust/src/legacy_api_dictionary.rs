@@ -672,51 +672,45 @@ fn documentation_url(version: &str, path: &str) -> Option<String> {
 fn source_owner_doc_path(version: &str, owner: &str) -> Option<&'static str> {
     let modern_fml = version != "1.7.10";
     match owner {
-        "GameRegistry" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/registry/GameRegistry.html"
-        } else {
-            "cpw/mods/fml/common/registry/GameRegistry.html"
-        }),
-        "IWorldGenerator" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/IWorldGenerator.html"
-        } else {
-            "cpw/mods/fml/common/IWorldGenerator.html"
-        }),
-        "IFuelHandler" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/IFuelHandler.html"
-        } else {
-            "cpw/mods/fml/common/IFuelHandler.html"
-        }),
-        "IMessage" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/network/simpleimpl/IMessage.html"
-        } else {
-            "cpw/mods/fml/common/network/simpleimpl/IMessage.html"
-        }),
-        "IMessageHandler" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/network/simpleimpl/IMessageHandler.html"
-        } else {
-            "cpw/mods/fml/common/network/simpleimpl/IMessageHandler.html"
-        }),
-        "SimpleNetworkWrapper" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"
-        } else {
-            "cpw/mods/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"
-        }),
-        "IExtendedEntityProperties" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/IExtendedEntityProperties.html"
-        } else {
-            "cpw/mods/fml/common/IExtendedEntityProperties.html"
-        }),
-        "ITickHandler" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/ITickHandler.html"
-        } else {
-            "cpw/mods/fml/common/ITickHandler.html"
-        }),
-        "IPlayerTracker" => Some(if modern_fml {
-            "net/minecraftforge/fml/common/IPlayerTracker.html"
-        } else {
-            "cpw/mods/fml/common/IPlayerTracker.html"
-        }),
+        "GameRegistry" => Some(if modern_fml { "net/minecraftforge/fml/common/registry/GameRegistry.html" } else { "cpw/mods/fml/common/registry/GameRegistry.html" }),
+        "IWorldGenerator" => Some(if modern_fml { "net/minecraftforge/fml/common/IWorldGenerator.html" } else { "cpw/mods/fml/common/IWorldGenerator.html" }),
+        "IFuelHandler" => Some(if modern_fml { "net/minecraftforge/fml/common/IFuelHandler.html" } else { "cpw/mods/fml/common/IFuelHandler.html" }),
+        "IMessage" => Some(if modern_fml { "net/minecraftforge/fml/common/network/simpleimpl/IMessage.html" } else { "cpw/mods/fml/common/network/simpleimpl/IMessage.html" }),
+        "IMessageHandler" => Some(if modern_fml { "net/minecraftforge/fml/common/network/simpleimpl/IMessageHandler.html" } else { "cpw/mods/fml/common/network/simpleimpl/IMessageHandler.html" }),
+        "SimpleNetworkWrapper" => Some(if modern_fml { "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html" } else { "cpw/mods/fml/common/network/simpleimpl/SimpleNetworkWrapper.html" }),
+        "IExtendedEntityProperties" => Some(if modern_fml { "net/minecraftforge/fml/common/IExtendedEntityProperties.html" } else { "cpw/mods/fml/common/IExtendedEntityProperties.html" }),
+        "ITickHandler" => Some(if modern_fml { "net/minecraftforge/fml/common/ITickHandler.html" } else { "cpw/mods/fml/common/ITickHandler.html" }),
+        "IPlayerTracker" => Some(if modern_fml { "net/minecraftforge/fml/common/IPlayerTracker.html" } else { "cpw/mods/fml/common/IPlayerTracker.html" }),
+        "FMLCommonHandler" => Some(if modern_fml { "net/minecraftforge/fml/common/FMLCommonHandler.html" } else { "cpw/mods/fml/common/FMLCommonHandler.html" }),
+        "Loader" => Some(if modern_fml { "net/minecraftforge/fml/common/Loader.html" } else { "cpw/mods/fml/common/Loader.html" }),
+        "RenderingRegistry" => Some(if modern_fml { "net/minecraftforge/fml/client/registry/RenderingRegistry.html" } else { "cpw/mods/fml/client/registry/RenderingRegistry.html" }),
+        "ClientRegistry" => Some(if modern_fml { "net/minecraftforge/fml/client/registry/ClientRegistry.html" } else { "cpw/mods/fml/client/registry/ClientRegistry.html" }),
+        "IBlockState" => Some("net/minecraft/block/state/IBlockState.html"),
+        "BlockPos" => Some(if version == "1.12.2" { "net/minecraft/util/math/BlockPos.html" } else { "net/minecraft/util/BlockPos.html" }),
+        "AxisAlignedBB" => Some(if version == "1.12.2" { "net/minecraft/util/math/AxisAlignedBB.html" } else { "net/minecraft/util/AxisAlignedBB.html" }),
+        "RayTraceResult" => Some("net/minecraft/util/math/RayTraceResult.html"),
+        "Vec3d" => Some("net/minecraft/util/math/Vec3d.html"),
+        "Vec3" => Some("net/minecraft/util/Vec3.html"),
+        "WorldProvider" => Some("net/minecraft/world/WorldProvider.html"),
+        "Chunk" => Some("net/minecraft/world/chunk/Chunk.html"),
+        "BiomeGenBase" => Some("net/minecraft/world/biome/BiomeGenBase.html"),
+        "EntityLiving" => Some("net/minecraft/entity/EntityLiving.html"),
+        "PlayerCapabilities" => Some("net/minecraft/entity/player/PlayerCapabilities.html"),
+        "NBTTagList" => Some("net/minecraft/nbt/NBTTagList.html"),
+        "NBTBase" => Some("net/minecraft/nbt/NBTBase.html"),
+        "ICapabilityProvider" => Some("net/minecraftforge/common/capabilities/ICapabilityProvider.html"),
+        "CapabilityManager" => Some("net/minecraftforge/common/capabilities/CapabilityManager.html"),
+        "Capability" => Some("net/minecraftforge/common/capabilities/Capability.html"),
+        "Fluid" => Some("net/minecraftforge/fluids/Fluid.html"),
+        "FluidStack" => Some("net/minecraftforge/fluids/FluidStack.html"),
+        "IFluidHandler" => Some("net/minecraftforge/fluids/capability/IFluidHandler.html"),
+        "IEnergyStorage" => Some("net/minecraftforge/energy/IEnergyStorage.html"),
+        "ModelRegistryEvent" => Some("net/minecraftforge/client/event/ModelRegistryEvent.html"),
+        "ModelBakeEvent" => Some("net/minecraftforge/client/event/ModelBakeEvent.html"),
+        "TextureStitchEvent" => Some("net/minecraftforge/client/event/TextureStitchEvent.html"),
+        "MinecraftForge" => Some("net/minecraftforge/common/MinecraftForge.html"),
+        "EventBus" => Some(if modern_fml { "net/minecraftforge/eventbus/api/IEventBus.html" } else { "cpw/mods/fml/common/eventhandler/EventBus.html" }),
+        "DimensionManager" => Some("net/minecraftforge/common/DimensionManager.html"),
         "OreDictionary" => Some("net/minecraftforge/oredict/OreDictionary.html"),
         _ => None,
     }
@@ -736,6 +730,47 @@ fn target_owner_doc_path(owner: &str) -> Option<&'static str> {
         "DataComponentType" => Some("net/minecraft/core/component/DataComponentType.html"),
         "ItemEnchantments" => Some("net/minecraft/world/item/enchantment/ItemEnchantments.html"),
         "Block" => Some("net/minecraft/world/level/block/Block.html"),
+        "BlockHitResult" => Some("net/minecraft/world/phys/BlockHitResult.html"),
+        "EntityHitResult" => Some("net/minecraft/world/phys/EntityHitResult.html"),
+        "AABB" => Some("net/minecraft/world/phys/AABB.html"),
+        "Vec3" => Some("net/minecraft/world/phys/Vec3.html"),
+        "Shapes" => Some("net/minecraft/world/phys/shapes/Shapes.html"),
+        "VoxelShape" => Some("net/minecraft/world/phys/shapes/VoxelShape.html"),
+        "Heightmap" => Some("net/minecraft/world/level/levelgen/Heightmap.html"),
+        "LevelChunk" => Some("net/minecraft/world/level/chunk/LevelChunk.html"),
+        "ChunkPos" => Some("net/minecraft/world/level/ChunkPos.html"),
+        "Biome" => Some("net/minecraft/world/level/biome/Biome.html"),
+        "BiomeManager" => Some("net/minecraft/world/level/biome/BiomeManager.html"),
+        "WorldBorder" => Some("net/minecraft/world/level/border/WorldBorder.html"),
+        "Difficulty" => Some("net/minecraft/world/Difficulty.html"),
+        "GameRules" => Some("net/minecraft/world/level/GameRules.html"),
+        "Abilities" => Some("net/minecraft/world/entity/player/Abilities.html"),
+        "Inventory" => Some("net/minecraft/world/entity/player/Inventory.html"),
+        "FoodData" => Some("net/minecraft/world/food/FoodData.html"),
+        "MobType" => Some("net/minecraft/world/entity/MobType.html"),
+        "AttributeSupplier" => Some("net/minecraft/world/entity/ai/attributes/AttributeSupplier.html"),
+        "AttributeInstance" => Some("net/minecraft/world/entity/ai/attributes/AttributeInstance.html"),
+        "SpawnPlacements" => Some("net/minecraft/world/entity/SpawnPlacements.html"),
+        "MoveControl" => Some("net/minecraft/world/entity/ai/control/MoveControl.html"),
+        "LookControl" => Some("net/minecraft/world/entity/ai/control/LookControl.html"),
+        "Sensing" => Some("net/minecraft/world/entity/ai/Sensing.html"),
+        "DimensionType" => Some("net/minecraft/world/level/dimension/DimensionType.html"),
+        "LevelStem" => Some("net/minecraft/world/level/dimension/LevelStem.html"),
+        "FluidStack" => Some("net/neoforged/neoforge/fluids/FluidStack.html"),
+        "FluidType" => Some("net/neoforged/neoforge/fluids/FluidType.html"),
+        "Fluid" => Some("net/minecraft/world/level/material/Fluid.html"),
+        "IFluidHandler" => Some("net/neoforged/neoforge/fluids/capability/IFluidHandler.html"),
+        "IEnergyStorage" => Some("net/neoforged/neoforge/energy/IEnergyStorage.html"),
+        "Capability" => Some("net/neoforged/neoforge/capabilities/BlockCapability.html"),
+        "ICapabilityProvider" => Some("net/neoforged/neoforge/capabilities/ICapabilityProvider.html"),
+        "ModList" => Some("net/neoforged/fml/ModList.html"),
+        "IEventBus" => Some("net/neoforged/bus/api/IEventBus.html"),
+        "EntityRenderersEvent" => Some("net/neoforged/neoforge/client/event/EntityRenderersEvent.html"),
+        "ModelEvent" => Some("net/neoforged/neoforge/client/event/ModelEvent.html"),
+        "TextureAtlas" => Some("net/minecraft/client/renderer/texture/TextureAtlas.html"),
+        "FMLPaths" => Some("net/neoforged/fml/loading/FMLPaths.html"),
+        "FMLEnvironment" => Some("net/neoforged/fml/loading/FMLEnvironment.html"),
+        "BiomeModifier" => Some("net/neoforged/neoforge/common/world/BiomeModifier.html"),
         "BlockState" => Some("net/minecraft/world/level/block/state/BlockState.html"),
         "BlockBehaviour" => Some("net/minecraft/world/level/block/state/BlockBehaviour.html"),
         "BlockPos" => Some("net/minecraft/core/BlockPos.html"),
@@ -799,12 +834,12 @@ fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
     let source_versions = definition.versions.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>();
     let mut documentation_urls = BTreeSet::new();
     for version in definition.versions {
-        if !definition.docs.is_empty() {
-            if let Some(url) = documentation_url(version, definition.docs) {
+        if let Some(path) = source_owner_doc_path(version, definition.owner) {
+            if let Some(url) = documentation_url(version, path) {
                 documentation_urls.insert(url);
             }
-        } else if let Some(path) = source_owner_doc_path(version, definition.owner) {
-            if let Some(url) = documentation_url(version, path) {
+        } else if !definition.docs.is_empty() {
+            if let Some(url) = documentation_url(version, definition.docs) {
                 documentation_urls.insert(url);
             }
         }
