@@ -1513,6 +1513,7 @@ pub fn export_equipment_to_workspace(
     };
     let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, &import_modid);
     let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
+    let creative_tabs = crate::localization::CreativeTabCatalog::load(source_roots);
 
     let discovered = discover_equipment_sources(source_roots)?;
     let mut tool_materials = compiled_tool_materials(source_roots)?;
@@ -1599,6 +1600,9 @@ pub fn export_equipment_to_workspace(
         if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
             if definition.contains_key("name") {
                 definition.insert("name".to_owned(), json!(display));
+            }
+            if let Some(tab) = creative_tabs.resolve(&source.class_name, &source.source_text) {
+                definition.insert("creativeTabs".to_owned(), json!([tab]));
             }
             let information = localization.item_information(&source.source_text, &registry);
             if !information.is_empty() && definition.contains_key("specialInformation") {
