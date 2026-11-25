@@ -1350,6 +1350,80 @@ const DEFINITIONS: &[Definition] = &[
     d!("ChunkWatchEvent", "getChunk", V_18, "chunk_watch_event_chunk", "Chunk tracking / per-player chunk visibility", "networking", "automatic_rename_candidate", "Preserve chunk coordinates and identity for player watch transitions.", "net/minecraftforge/event/world/ChunkWatchEvent.html"),
     d!("ExplosionEvent", "getWorld", V_18, "explosion_event_world", "Explosion level / world context", "events_combat", "automatic_rename_candidate", "Preserve the world in which the explosion executes, independently from its source entity.", "net/minecraftforge/event/world/ExplosionEvent.html"),
 
+    // Base event inheritance and entity-wide lifecycle interception.
+    d!("EntityEvent", "getEntity", V_112, "event_entity", "Entity / entity event payload", "events_entity", "automatic_rename_candidate", "Resolve the entity that caused this event; preserve exact entity identity and avoid substituting an event-specific actor.", "net/minecraftforge/event/entity/EntityEvent.html"),
+    d!("EntityEvent.CanUpdate", "getCanUpdate", V_112, "entity_update_allowed_read", "Entity tick admission / entity lifecycle", "events_entity", "automatic_rename_candidate", "Preserve the pre-update admission flag used when an entity would otherwise be skipped.", "net/minecraftforge/event/entity/EntityEvent.CanUpdate.html"),
+    d!("EntityEvent.CanUpdate", "setCanUpdate", V_112, "entity_update_allowed_write", "Entity tick admission / entity lifecycle", "events_entity", "adapter_required", "Preserve the ability to force an otherwise non-updating entity to tick; this is not event cancellation.", "net/minecraftforge/event/entity/EntityEvent.CanUpdate.html"),
+    d!("EntityEvent.EnteringChunk", "getNewChunkX", V_112, "entity_new_chunk_x", "Entity chunk transition / chunk tracking", "events_entity", "automatic_rename_candidate", "Preserve destination chunk X independently from block coordinates and old chunk position.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "getNewChunkZ", V_112, "entity_new_chunk_z", "Entity chunk transition / chunk tracking", "events_entity", "automatic_rename_candidate", "Preserve destination chunk Z independently from block coordinates and old chunk position.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "getOldChunkX", V_112, "entity_old_chunk_x", "Entity chunk transition / chunk tracking", "events_entity", "automatic_rename_candidate", "Preserve source chunk X for boundary-crossing and tracking logic.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "getOldChunkZ", V_112, "entity_old_chunk_z", "Entity chunk transition / chunk tracking", "events_entity", "automatic_rename_candidate", "Preserve source chunk Z for boundary-crossing and tracking logic.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "setNewChunkX", V_112, "entity_new_chunk_x_write", "Entity chunk transition / chunk tracking", "events_entity", "adapter_required", "Preserve destination chunk mutation and ensure subsequent chunk membership is consistent.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "setNewChunkZ", V_112, "entity_new_chunk_z_write", "Entity chunk transition / chunk tracking", "events_entity", "adapter_required", "Preserve destination chunk mutation and avoid leaving entity tracking in the old chunk.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "setOldChunkX", V_112, "entity_old_chunk_x_write", "Entity chunk transition / chunk tracking", "events_entity", "adapter_required", "Preserve source chunk mutation if listeners intentionally redirect transition accounting.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityEvent.EnteringChunk", "setOldChunkZ", V_112, "entity_old_chunk_z_write", "Entity chunk transition / chunk tracking", "events_entity", "adapter_required", "Preserve source chunk mutation if listeners intentionally redirect transition accounting.", "net/minecraftforge/event/entity/EntityEvent.EnteringChunk.html"),
+    d!("EntityMountEvent", "getEntityBeingMounted", V_112, "entity_mount_vehicle", "Entity#getVehicle / riding relationship", "events_entity", "automatic_rename_candidate", "This may be null during dismount; preserve nullable vehicle state and mount/dismount direction.", "net/minecraftforge/event/entity/EntityMountEvent.html"),
+    d!("EntityMountEvent", "getEntityMounting", V_112, "entity_mount_passenger", "Entity#getPassengers / riding relationship", "events_entity", "automatic_rename_candidate", "Preserve the passenger entity independently from the vehicle entity.", "net/minecraftforge/event/entity/EntityMountEvent.html"),
+    d!("EntityMountEvent", "getWorldObj", V_112, "entity_mount_world", "Entity level / riding relationship", "events_entity", "automatic_rename_candidate", "Preserve mount event world context and logical side.", "net/minecraftforge/event/entity/EntityMountEvent.html"),
+    d!("EntityMountEvent", "isDismounting", V_112, "entity_dismount_predicate", "Entity#stopRiding / passenger removal", "events_entity", "automatic_rename_candidate", "Preserve dismount intent separately from mount intent; cancellation prevents either transition.", "net/minecraftforge/event/entity/EntityMountEvent.html"),
+    d!("EntityMountEvent", "isMounting", V_112, "entity_mount_predicate", "Entity#startRiding / passenger addition", "events_entity", "automatic_rename_candidate", "Preserve mount intent separately from dismount intent and nullable vehicle state.", "net/minecraftforge/event/entity/EntityMountEvent.html"),
+    d!("EntityTravelToDimensionEvent", "getDimension", V_112, "entity_destination_dimension", "Dimension travel / ResourceKey<Level>", "events_entity", "adapter_required", "Translate the numeric destination into a stable dimension ResourceKey and preserve cancellation before travel.", "net/minecraftforge/event/entity/EntityTravelToDimensionEvent.html"),
+    d!("EntityStruckByLightningEvent", "getLightning", V_112, "entity_lightning_source", "LightningBolt entity impact", "events_entity", "automatic_rename_candidate", "Preserve the exact lightning entity, including channeler/source attribution.", "net/minecraftforge/event/entity/EntityStruckByLightningEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getCategory", V_112, "entity_sound_category", "SoundSource / entity sound context", "audio", "automatic_rename_candidate", "Translate SoundCategory to SoundSource without changing category-specific volume behavior.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getDefaultPitch", V_112, "entity_sound_original_pitch", "SoundInstance pitch", "audio", "automatic_rename_candidate", "Preserve original pitch separately from the listener-modified output pitch.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getDefaultVolume", V_112, "entity_sound_original_volume", "SoundInstance volume", "audio", "automatic_rename_candidate", "Preserve original volume separately from the listener-modified output volume.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getPitch", V_112, "entity_sound_pitch", "SoundInstance pitch", "audio", "automatic_rename_candidate", "Read the effective pitch after any earlier event listener modifications.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getSound", V_112, "entity_sound_event", "SoundEvent / ResourceLocation", "audio", "automatic_rename_candidate", "Preserve sound registry identity and support replacing the sound independently from volume/pitch.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "getVolume", V_112, "entity_sound_volume", "SoundInstance volume", "audio", "automatic_rename_candidate", "Read effective volume after earlier listener modifications.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "setCategory", V_112, "entity_sound_category_write", "SoundSource / entity sound context", "audio", "adapter_required", "Preserve category replacement and its downstream routing/volume behavior.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "setPitch", V_112, "entity_sound_pitch_write", "SoundInstance pitch", "audio", "automatic_rename_candidate", "Preserve pitch mutation and listener ordering.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "setSound", V_112, "entity_sound_event_write", "SoundEvent / ResourceLocation", "audio", "adapter_required", "Replace sound by registry identity while retaining event cancellation and sound source.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("PlaySoundAtEntityEvent", "setVolume", V_112, "entity_sound_volume_write", "SoundInstance volume", "audio", "automatic_rename_candidate", "Preserve volume mutation and sound attenuation behavior.", "net/minecraftforge/event/entity/PlaySoundAtEntityEvent.html"),
+    d!("ProjectileImpactEvent", "getRayTraceResult", V_112, "projectile_impact_hit", "HitResult / projectile collision result", "projectiles", "adapter_required", "Translate block/entity hit results, hit location, side and collision target without losing impact type.", "net/minecraftforge/event/entity/ProjectileImpactEvent.html"),
+
+    // Living entity events and effects, including breeding and effect lifecycle.
+    d!("AnimalTameEvent", "getAnimal", V_112, "animal_tame_target", "TamableAnimal / tame interaction", "events_ai", "automatic_rename_candidate", "Preserve the animal being tamed and cancel taming when the event is denied.", "net/minecraftforge/event/entity/living/AnimalTameEvent.html"),
+    d!("AnimalTameEvent", "getTamer", V_112, "animal_tamer_player", "Player / tame owner assignment", "events_ai", "automatic_rename_candidate", "Preserve the player responsible for the taming attempt.", "net/minecraftforge/event/entity/living/AnimalTameEvent.html"),
+    d!("BabyEntitySpawnEvent", "getCausedByPlayer", V_112, "breeding_player", "Animal breeding cause / offspring initialization", "events_ai", "automatic_rename_candidate", "Preserve nullable player attribution for breeding and player-specific advancements/loot.", "net/minecraftforge/event/entity/living/BabyEntitySpawnEvent.html"),
+    d!("BabyEntitySpawnEvent", "getChild", V_112, "breeding_child_entity", "AgeableMob offspring creation", "events_ai", "automatic_rename_candidate", "Preserve the proposed child entity class and its initialized variant state.", "net/minecraftforge/event/entity/living/BabyEntitySpawnEvent.html"),
+    d!("BabyEntitySpawnEvent", "getParentA", V_112, "breeding_parent_a", "Animal breeding parent relationship", "events_ai", "automatic_rename_candidate", "Preserve initiating parent identity and breeding state.", "net/minecraftforge/event/entity/living/BabyEntitySpawnEvent.html"),
+    d!("BabyEntitySpawnEvent", "getParentB", V_112, "breeding_parent_b", "Animal breeding parent relationship", "events_ai", "automatic_rename_candidate", "Preserve secondary parent identity and breeding state.", "net/minecraftforge/event/entity/living/BabyEntitySpawnEvent.html"),
+    d!("BabyEntitySpawnEvent", "setChild", V_112, "breeding_child_entity_write", "AgeableMob offspring creation", "events_ai", "manual_adapter_required", "Preserve full child replacement, including entity type, synchronized data, variant and spawn initialization.", "net/minecraftforge/event/entity/living/BabyEntitySpawnEvent.html"),
+    d!("LivingDestroyBlockEvent", "getPos", V_112, "mob_block_destroy_position", "Mob griefing / block destruction context", "events_blocks", "automatic_rename_candidate", "Preserve the exact position a dragon, wither or zombie is attempting to destroy.", "net/minecraftforge/event/entity/living/LivingDestroyBlockEvent.html"),
+    d!("LivingDestroyBlockEvent", "getState", V_112, "mob_block_destroy_state", "Mob griefing / BlockState", "events_blocks", "automatic_rename_candidate", "Preserve the target block state and properties for block-destruction abilities.", "net/minecraftforge/event/entity/living/LivingDestroyBlockEvent.html"),
+    d!("PotionEvent", "getPotionEffect", V_112, "potion_event_effect", "MobEffectInstance / effect event payload", "abilities", "automatic_rename_candidate", "Preserve the effect instance being added, checked, removed or expired, including amplifier/duration.", "net/minecraftforge/event/entity/living/PotionEvent.html"),
+    d!("PotionEvent.PotionAddedEvent", "getOldPotionEffect", V_112, "potion_event_old_effect", "MobEffectInstance previous state", "abilities", "automatic_rename_candidate", "Preserve nullable previous effect when a duration/amplifier refresh replaces an existing instance.", "net/minecraftforge/event/entity/living/PotionEvent.PotionAddedEvent.html"),
+    d!("PotionEvent.PotionApplicableEvent", "getPotionEffect", V_112, "potion_event_application_candidate", "MobEffectInstance application context", "abilities", "automatic_rename_candidate", "Preserve effect-specific application checks and tri-state DEFAULT/ALLOW/DENY result.", "net/minecraftforge/event/entity/living/PotionEvent.PotionApplicableEvent.html"),
+
+    // Player events: anvil repairs, inventory lifecycle, advancement and gameplay.
+    d!("AdvancementEvent", "getAdvancement", V_112, "player_advancement", "Advancement / advancement trigger event", "progression", "automatic_rename_candidate", "Preserve the exact advancement ResourceLocation and criterion/progression context.", "net/minecraftforge/event/entity/player/AdvancementEvent.html"),
+    d!("AnvilRepairEvent", "getBreakChance", V_112, "anvil_break_chance", "AnvilMenu anvil durability damage chance", "events_items", "automatic_rename_candidate", "Preserve the probability of an anvil damage stage when a repaired output is taken.", "net/minecraftforge/event/entity/player/AnvilRepairEvent.html"),
+    d!("AnvilRepairEvent", "getLeft", V_112, "anvil_repair_left_stack", "AnvilMenu input slot 0", "events_items", "automatic_rename_candidate", "Preserve the left input stack; these event stacks are read-only snapshots.", "net/minecraftforge/event/entity/player/AnvilRepairEvent.html"),
+    d!("AnvilRepairEvent", "getOutput", V_112, "anvil_repair_output_stack", "AnvilMenu result stack", "events_items", "automatic_rename_candidate", "Preserve the exact repaired output after rename/enchantment/repair computation.", "net/minecraftforge/event/entity/player/AnvilRepairEvent.html"),
+    d!("AnvilRepairEvent", "getRight", V_112, "anvil_repair_right_stack", "AnvilMenu input slot 1", "events_items", "automatic_rename_candidate", "Preserve the right input stack; these event stacks are read-only snapshots.", "net/minecraftforge/event/entity/player/AnvilRepairEvent.html"),
+    d!("PlayerContainerEvent", "getContainer", V_112, "player_container_event_menu", "AbstractContainerMenu / menu lifecycle", "events_player", "automatic_rename_candidate", "Preserve the exact menu instance and its slot/state synchronization.", "net/minecraftforge/event/entity/player/PlayerContainerEvent.html"),
+    d!("PlayerDestroyItemEvent", "getHand", V_112, "player_destroyed_item_hand", "InteractionHand / equipment replacement", "events_player", "automatic_rename_candidate", "Preserve which hand held the destroyed stack; null/legacy callers must remain distinguishable.", "net/minecraftforge/event/entity/player/PlayerDestroyItemEvent.html"),
+    d!("PlayerDestroyItemEvent", "getOriginal", V_112, "player_destroyed_item_stack", "ItemStack destruction / break event", "events_player", "automatic_rename_candidate", "Preserve the original pre-break stack, including tags, enchantments and count.", "net/minecraftforge/event/entity/player/PlayerDestroyItemEvent.html"),
+    d!("PlayerEvent.Visibility", "getVisibilityModifier", V_112, "player_visibility_modifier_read", "Mob#target visibility distance calculation", "events_ai", "automatic_rename_candidate", "Preserve the current multiplicative visibility modifier separately from vanilla sneak/light factors.", "net/minecraftforge/event/entity/player/PlayerEvent.Visibility.html"),
+    d!("PlayerEvent.Visibility", "modifyVisibility", V_112, "player_visibility_modifier_write", "Mob#target visibility distance calculation", "events_ai", "adapter_required", "Apply the modifier multiplicatively and preserve the source cap at standard target distance.", "net/minecraftforge/event/entity/player/PlayerEvent.Visibility.html"),
+    d!("PlayerPickupXpEvent", "getOrb", V_112, "player_xp_orb_pickup", "ExperienceOrb player collision/pickup", "events_player", "automatic_rename_candidate", "Preserve the exact XP orb and its value/position before collection.", "net/minecraftforge/event/entity/player/PlayerPickupXpEvent.html"),
+    d!("PlayerSetSpawnEvent", "getNewSpawn", V_112, "player_new_spawn_position", "ServerPlayer respawn position", "events_player", "automatic_rename_candidate", "Preserve the new spawn location and dimension/forced flag when changing respawn behavior.", "net/minecraftforge/event/entity/player/PlayerSetSpawnEvent.html"),
+    d!("PlayerSetSpawnEvent", "getOldSpawn", V_112, "player_old_spawn_position", "ServerPlayer respawn position", "events_player", "automatic_rename_candidate", "Preserve the prior spawn position when a player changes or clears respawn.", "net/minecraftforge/event/entity/player/PlayerSetSpawnEvent.html"),
+    d!("UseHoeEvent", "getContext", V_112, "hoe_use_context", "UseOnContext / hoe block interaction", "events_item_use", "adapter_required", "Translate the legacy ItemUseContext to UseOnContext with precise level, hand, hit and stack semantics.", "net/minecraftforge/event/entity/player/UseHoeEvent.html"),
+    d!("SleepingLocationCheckEvent", "getSleepingLocation", V_112, "player_sleeping_location_check", "Player sleep / bed position check", "events_player", "automatic_rename_candidate", "Preserve the checked bed position and result-bearing sleep validity decision.", "net/minecraftforge/event/entity/player/SleepingLocationCheckEvent.html"),
+    d!("SleepingTimeCheckEvent", "getResult", V_112, "player_sleep_time_result", "Player sleep eligibility / daytime checks", "events_player", "adapter_required", "Preserve DEFAULT/ALLOW/DENY behavior that determines whether sleep may begin or wake sleeping players.", "net/minecraftforge/event/entity/player/SleepingTimeCheckEvent.html"),
+    d!("SleepingTimeCheckEvent", "setResult", V_112, "player_sleep_time_result_write", "Player sleep eligibility / daytime checks", "events_player", "adapter_required", "Preserve result precedence and separate sleep-time permission from bed-location validation.", "net/minecraftforge/event/entity/player/SleepingTimeCheckEvent.html"),
+
+    // Enchantment table and potion-color callbacks are behavior-bearing events.
+    d!("EnchantmentLevelSetEvent", "getEnchantRow", V_112, "enchanting_table_row", "EnchantmentMenu enchantment option index", "enchantments", "automatic_rename_candidate", "Preserve row index (1-3) independently from computed enchantment level.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getItem", V_112, "enchanting_table_item", "EnchantmentMenu input ItemStack", "enchantments", "automatic_rename_candidate", "Preserve the exact input stack and its existing enchantments/tags.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getLevel", V_112, "enchanting_table_level", "EnchantmentMenu option level", "enchantments", "automatic_rename_candidate", "Read the mutable computed level after earlier listeners.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getOriginalLevel", V_112, "enchanting_table_original_level", "EnchantmentMenu vanilla option level", "enchantments", "automatic_rename_candidate", "Preserve original vanilla computed level separately from listener-mutated level.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getPos", V_112, "enchanting_table_position", "EnchantmentMenu block position", "enchantments", "automatic_rename_candidate", "Preserve the enchantment table block position.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getPower", V_112, "enchanting_table_power", "EnchantmentMenu bookshelf power", "enchantments", "automatic_rename_candidate", "Preserve bookshelf power (0-15) as a distinct input to the vanilla enchanting formula.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "getWorld", V_112, "enchanting_table_world", "EnchantmentMenu level context", "enchantments", "automatic_rename_candidate", "Preserve the level used by the enchanting calculation and listener side effects.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+    d!("EnchantmentLevelSetEvent", "setLevel", V_112, "enchanting_table_level_write", "EnchantmentMenu option level", "enchantments", "adapter_required", "Preserve the modified option level (0-30) and its timing before generated enchantment choices.", "net/minecraftforge/event/enchanting/EnchantmentLevelSetEvent.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -1374,6 +1448,7 @@ fn documentation_url(version: &str, path: &str) -> Option<String> {
 fn source_owner_doc_path(version: &str, owner: &str) -> Option<&'static str> {
     let modern_fml = version != "1.7.10";
     match owner {
+        "EntityEvent" => Some("net/minecraftforge/event/entity/EntityEvent.html"),
         "Event" => Some(if modern_fml { "net/minecraftforge/fml/common/eventhandler/Event.html" } else { "cpw/mods/fml/common/eventhandler/Event.html" }),
         "EventBus" => Some(if modern_fml { "net/minecraftforge/fml/common/eventhandler/EventBus.html" } else { "cpw/mods/fml/common/eventhandler/EventBus.html" }),
         "GameRegistry" => Some(if modern_fml { "net/minecraftforge/fml/common/registry/GameRegistry.html" } else { "cpw/mods/fml/common/registry/GameRegistry.html" }),
@@ -1760,7 +1835,9 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         // Forge event inheritance is important for usage matching: source
         // receivers are often typed as a concrete nested event while a method
         // such as getPlayer/getWorld is declared on one of its event bases.
-        "LivingAttackEvent" | "LivingDeathEvent" | "LivingDropsEvent"
+        "LivingEvent.LivingJumpEvent" | "LivingEvent.LivingUpdateEvent"
+        | "AnimalTameEvent" | "LivingDestroyBlockEvent" | "LivingKnockBackEvent"
+        | "LivingAttackEvent" | "LivingDeathEvent" | "LivingDropsEvent"
         | "LivingExperienceDropEvent" | "LivingHurtEvent" | "LivingDamageEvent"
         | "LivingFallEvent" | "LivingHealEvent" | "LivingPackSizeEvent"
         | "LivingSetAttackTargetEvent" | "LivingSpawnEvent" | "LivingEntityUseItemEvent"
@@ -1804,6 +1881,37 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         }
         "ExplosionEvent" | "ExplosionEvent.Start" | "ExplosionEvent.Detonate" => {
             candidates.insert("ExplosionEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "EntityEvent" | "EntityEvent.CanUpdate" | "EntityEvent.EnteringChunk"
+        | "EntityEvent.EntityConstructing" | "EntityMountEvent"
+        | "EntityMobGriefingEvent" | "EntityStruckByLightningEvent"
+        | "EntityTravelToDimensionEvent" | "PlaySoundAtEntityEvent"
+        | "ProjectileImpactEvent" | "ProjectileImpactEvent.Arrow"
+        | "ProjectileImpactEvent.Fireball" | "ProjectileImpactEvent.Throwable" => {
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "BabyEntitySpawnEvent" | "EnchantmentLevelSetEvent" => {
+            candidates.insert("Event".to_owned());
+        }
+        "PotionEvent" | "PotionEvent.PotionAddedEvent"
+        | "PotionEvent.PotionApplicableEvent" | "PotionEvent.PotionExpiryEvent"
+        | "PotionEvent.PotionRemoveEvent" | "LivingEvent.LivingJumpEvent"
+        | "LivingEvent.LivingUpdateEvent" | "AnimalTameEvent"
+        | "LivingDestroyBlockEvent" => {
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "PlayerContainerEvent" | "PlayerContainerEvent.Open"
+        | "PlayerContainerEvent.Close" | "PlayerDestroyItemEvent"
+        | "AdvancementEvent" | "AnvilRepairEvent" | "PlayerPickupXpEvent"
+        | "PlayerSetSpawnEvent" | "PlayerEvent.Visibility"
+        | "SleepingLocationCheckEvent" | "SleepingTimeCheckEvent" | "UseHoeEvent" => {
+            candidates.insert("PlayerEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
         "WorldEvent" | "WorldEvent.Load" | "WorldEvent.Save" | "WorldEvent.Unload"
@@ -2314,6 +2422,33 @@ mod tests {
         assert!(has("BlockEvent", "getWorld"));
         assert!(has("ChunkEvent", "getChunk"));
         assert!(has("WorldEvent", "getWorld"));
+    }
+
+
+    #[test]
+    fn entity_lifecycle_and_ability_events_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("EntityEvent", "getEntity"),
+            ("EntityEvent.CanUpdate", "setCanUpdate"),
+            ("EntityEvent.EnteringChunk", "getNewChunkX"),
+            ("EntityMountEvent", "getEntityBeingMounted"),
+            ("EntityTravelToDimensionEvent", "getDimension"),
+            ("PlaySoundAtEntityEvent", "setSound"),
+            ("ProjectileImpactEvent", "getRayTraceResult"),
+            ("AnimalTameEvent", "getTamer"),
+            ("BabyEntitySpawnEvent", "setChild"),
+            ("LivingDestroyBlockEvent", "getState"),
+            ("PotionEvent.PotionApplicableEvent", "getPotionEffect"),
+            ("PlayerDestroyItemEvent", "getOriginal"),
+            ("PlayerContainerEvent", "getContainer"),
+            ("PlayerEvent.Visibility", "modifyVisibility"),
+            ("EnchantmentLevelSetEvent", "setLevel"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
     }
 
     #[test]
