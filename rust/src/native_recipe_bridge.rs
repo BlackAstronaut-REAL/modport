@@ -324,7 +324,7 @@ mod tests {
         ).unwrap();
         assert_eq!(report.generated.len(), 1);
         let output: Value = serde_json::from_slice(
-            &fs::read(temp.path().join("resources/data/converted/recipes/ruby_dust_from_redstone.json")).unwrap()
+            &fs::read(temp.path().join("resources/data/converted/recipes/ruby_sword_from_dust.json")).unwrap()
         ).unwrap();
         assert_eq!(output["type"], "minecraft:crafting_shapeless");
         assert_eq!(output["ingredients"][0]["item"], "converted:ruby_dust");
