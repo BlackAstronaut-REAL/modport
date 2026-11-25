@@ -853,6 +853,18 @@ fn java_field_name(value: &str, prefix: &str) -> String {
     format!("{prefix}_{name}")
 }
 
+fn recover_constant_getter(source_text: &str, method_name: &str) -> Option<f64> {
+    let declaration = Regex::new(&format!(
+        r"(?i)\\b{}\\s*\\(\\s*\\)\\s*\\{{",
+        regex::escape(method_name)
+    )).ok()?;
+    let body_start = declaration.find(source_text)?.end();
+    let body_end = source_text[body_start..].find('}')? + body_start;
+    let body = &source_text[body_start..body_end];
+    let returned = Regex::new(r"(?is)\\breturn\\s+(-?\\d+(?:\\.\\d+)?)[fFdD]?\\s*;").ok()?;
+    returned.captures(body)?.get(1)?.as_str().parse::<f64>().ok()
+}
+
 fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
     let identity = format!("{} {}", source.class_name, source.superclass).to_ascii_lowercase();
     if !identity.contains("itemfood") && !identity.contains("fooditem")
@@ -879,8 +891,12 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         .filter(|value| value.is_finite())
         .collect();
 
-    let nutrition = values.first().copied().unwrap_or(4.0).round().clamp(0.0, 40.0) as u32;
-    let saturation = values.get(1).copied().unwrap_or(0.6).clamp(0.0, 20.0) as f32;
+    let nutrition = recover_constant_getter(&source.source_text, "getHealAmount")
+        .or_else(|| values.first().copied())
+        .unwrap_or(4.0).round().clamp(0.0, 40.0) as u32;
+    let saturation = recover_constant_getter(&source.source_text, "getSaturationModifier")
+        .or_else(|| values.get(1).copied())
+        .unwrap_or(0.6).clamp(0.0, 20.0) as f32;
     let lower = source.source_text.to_ascii_lowercase();
     Some(FoodRecord {
         nutrition,
@@ -918,7 +934,10 @@ fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties 
         .and_then(|capture| capture.get(1))
         .and_then(|value| value.as_str().parse::<u32>().ok())
         .filter(|value| *value > 0)
-        .map(|value| value.min(100_000));
+        .map(|value| value.min(100_000))
+        .or_else(|| recover_constant_getter(text, "getMaxDamage")
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .map(|value| value.round().clamp(1.0, 100_000.0) as u32));
 
     let rarity = Regex::new(
         r"(?i)(?:setRarity|\.rarity)\s*\(\s*(?:(?:EnumRarity|Rarity)\s*\.\s*)?([A-Z_]+)"
@@ -1003,7 +1022,11 @@ fn collect_items(
             continue;
         }
         let stack_size = stack_regex.captures(&source.source_text).and_then(|capture| capture.get(1))
-            .and_then(|value| value.as_str().parse::<u32>().ok()).unwrap_or(64).clamp(1, 64);
+            .and_then(|value| value.as_str().parse::<u32>().ok())
+            .or_else(|| recover_constant_getter(&source.source_text, "getItemStackLimit")
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .map(|value| value.round().clamp(1.0, 64.0) as u32))
+            .unwrap_or(64).clamp(1, 64);
         let mut record_warnings = Vec::new();
         if source.element_type == "tool" || source.tool_type.is_some() {
             record_warnings.push("Tool/weapon registry recovered, but its legacy combat stats, mining rules, durability and use behavior are not yet transferred.".to_owned());
@@ -3623,4 +3646,32 @@ mod tests {
         ).is_err());
         assert!(!output.exists());
     }
+    #[test]
+    fn recovers_compiled_item_getter_constants_into_native_properties() {
+        let food_source = EquipmentSource {
+            class_name: "CompiledFoodItem".to_owned(),
+            superclass: "ItemFood".to_owned(),
+            registry_name: "compiled_food".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: "CompiledFoodItem.class".to_owned(),
+            source_text: "public double getHealAmount() { return 12.0; }\\npublic double getSaturationModifier() { return 0.8; }".to_owned(),
+        };
+        let food = recover_food_properties(&food_source).unwrap();
+        assert_eq!(food.nutrition, 12);
+        assert!((food.saturation - 0.8).abs() < 0.001);
+
+        let item_source = EquipmentSource {
+            class_name: "CompiledDurableItem".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "compiled_durable".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: "CompiledDurableItem.class".to_owned(),
+            source_text: "public double getMaxDamage() { return 321.0; }\\npublic double getItemStackLimit() { return 16.0; }".to_owned(),
+        };
+        assert_eq!(recover_item_properties(&item_source).durability, Some(321));
+        assert_eq!(recover_constant_getter(&item_source.source_text, "getItemStackLimit"), Some(16.0));
+    }
+
 }
