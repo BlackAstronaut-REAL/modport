@@ -932,7 +932,7 @@ pub fn sprite_preview_scene(
     }
 
     ViewerScene {
-        name: name.to_owned(),
+        name: format!("sprite-preview:{name}"),
         texture_size: [width, height],
         texture: texture_path.to_string_lossy().to_string(),
         texture_variants: vec![texture_path.to_string_lossy().to_string()],
