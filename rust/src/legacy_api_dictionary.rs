@@ -1842,7 +1842,9 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "LivingFallEvent" | "LivingHealEvent" | "LivingPackSizeEvent"
         | "LivingSetAttackTargetEvent" | "LivingSpawnEvent" | "LivingEntityUseItemEvent"
         | "LivingJumpEvent" | "LivingUpdateEvent" | "EnderTeleportEvent"
-        | "ZombieEvent" | "BabyEntitySpawnEvent" | "AnimalTameEvent" => {
+        | "ZombieEvent" | "PotionEvent" | "PotionEvent.PotionAddedEvent"
+        | "PotionEvent.PotionApplicableEvent" | "PotionEvent.PotionExpiryEvent"
+        | "PotionEvent.PotionRemoveEvent" => {
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
@@ -1871,12 +1873,19 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("BlockEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
-        "ChunkDataEvent" | "ChunkDataEvent.Load" | "ChunkDataEvent.Save"
-        | "ChunkWatchEvent" | "ChunkWatchEvent.Watch" | "ChunkWatchEvent.UnWatch"
-        | "ChunkEvent" | "ChunkEvent.Load" | "ChunkEvent.Unload" => {
+        "ChunkDataEvent" | "ChunkDataEvent.Load" | "ChunkDataEvent.Save" => {
             candidates.insert("ChunkDataEvent".to_owned());
             candidates.insert("ChunkEvent".to_owned());
             candidates.insert("WorldEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ChunkEvent" | "ChunkEvent.Load" | "ChunkEvent.Unload" => {
+            candidates.insert("ChunkEvent".to_owned());
+            candidates.insert("WorldEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "ChunkWatchEvent" | "ChunkWatchEvent.Watch" | "ChunkWatchEvent.UnWatch" => {
+            candidates.insert("ChunkWatchEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
         "ExplosionEvent" | "ExplosionEvent.Start" | "ExplosionEvent.Detonate" => {
@@ -1884,8 +1893,8 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("Event".to_owned());
         }
         "EntityEvent" | "EntityEvent.CanUpdate" | "EntityEvent.EnteringChunk"
-        | "EntityEvent.EntityConstructing" | "EntityMountEvent"
-        | "EntityMobGriefingEvent" | "EntityStruckByLightningEvent"
+        | "EntityEvent.EntityConstructing" | "EntityJoinWorldEvent"
+        | "EntityMountEvent" | "EntityMobGriefingEvent" | "EntityStruckByLightningEvent"
         | "EntityTravelToDimensionEvent" | "PlaySoundAtEntityEvent"
         | "ProjectileImpactEvent" | "ProjectileImpactEvent.Arrow"
         | "ProjectileImpactEvent.Fireball" | "ProjectileImpactEvent.Throwable" => {
@@ -1895,20 +1904,10 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         "BabyEntitySpawnEvent" | "EnchantmentLevelSetEvent" => {
             candidates.insert("Event".to_owned());
         }
-        "PotionEvent" | "PotionEvent.PotionAddedEvent"
-        | "PotionEvent.PotionApplicableEvent" | "PotionEvent.PotionExpiryEvent"
-        | "PotionEvent.PotionRemoveEvent" | "LivingEvent.LivingJumpEvent"
-        | "LivingEvent.LivingUpdateEvent" | "AnimalTameEvent"
-        | "LivingDestroyBlockEvent" => {
-            candidates.insert("LivingEvent".to_owned());
-            candidates.insert("EntityEvent".to_owned());
-            candidates.insert("Event".to_owned());
-        }
         "PlayerContainerEvent" | "PlayerContainerEvent.Open"
-        | "PlayerContainerEvent.Close" | "PlayerDestroyItemEvent"
-        | "AdvancementEvent" | "AnvilRepairEvent" | "PlayerPickupXpEvent"
-        | "PlayerSetSpawnEvent" | "PlayerEvent.Visibility"
-        | "SleepingLocationCheckEvent" | "SleepingTimeCheckEvent" | "UseHoeEvent" => {
+        | "PlayerContainerEvent.Close" | "AdvancementEvent" | "AnvilRepairEvent"
+        | "PlayerEvent.Visibility" | "SleepingLocationCheckEvent"
+        | "SleepingTimeCheckEvent" | "UseHoeEvent" => {
             candidates.insert("PlayerEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
