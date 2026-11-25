@@ -3782,6 +3782,72 @@ const DEFINITIONS: &[Definition] = &[
     d!("NetHandlerPlayServer", "processUseEntity", V_ALL, "network_player_use_entity_packet", "Server interact/attack entity packet", "networking", "Preserve ATTACK/INTERACT/INTERACT_AT action distinction, hit vector, reach and target validation.", "net/minecraft/network/NetHandlerPlayServer.html"),
     d!("NetHandlerPlayServer", "processVehicleMove", V_112, "network_player_vehicle_move_packet", "Server vehicle movement packet validation", "networking", "Preserve vehicle identity, XYZ/yaw/pitch and server correction/anti-cheat checks.", "net/minecraft/network/NetHandlerPlayServer.html"),
 
+    // Server/client chunk provider implementations.
+    d!("ChunkProviderServer", "canSave", V_112, "server_chunk_provider_can_save", "Server chunk provider save permission", "world_chunks", "Preserve server save state and pending unload queue conditions.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "chunkExists", V_ALL, "server_chunk_provider_chunk_exists", "Server chunk existence lookup", "world_chunks", "Preserve loaded/generating state and avoid forcing generation for an existence query.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "getLoadedChunkCount", V_112, "server_chunk_provider_loaded_count", "Loaded server chunk count", "world_chunks", "Preserve current loaded-map size separate from forced chunk count.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "getLoadedChunkIterator", V_112, "server_chunk_provider_loaded_iterator", "Loaded server chunk iterator", "world_chunks", "Preserve live iterator and chunk unload queue mutation behavior.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "makeString", V_ALL, "server_chunk_provider_diagnostic", "Server chunk provider diagnostic string", "world_debug", "Preserve loaded chunk count and generator/provider diagnostics for source logging.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "provideChunk", V_ALL, "server_chunk_provider_provide", "Server chunk load/generation", "world_chunks", "Preserve force load, chunk generation, Forge chunk events and ticket persistence.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "queueUnload", V_112, "server_chunk_provider_queue_unload", "Chunk unload queue insertion", "world_chunks", "Preserve chunk coordinate and deferral until safe provider tick.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "saveChunks", V_ALL, "server_chunk_provider_save", "Server chunk save pass", "world_persistence", "Preserve all/dirty-only flag and progress listener ordering.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "tick", V_ALL, "server_chunk_provider_tick", "Chunk provider unload/generation tick", "world_ticks", "Preserve unload queue processing, forced chunks and return value indicating pending work.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderServer", "unloadQueuedChunks", V_ALL, "server_chunk_provider_unload", "Queued chunk unload processing", "world_chunks", "Preserve unload order, tile entity callbacks and Forge ChunkEvent.Unload timing.", "net/minecraft/world/gen/ChunkProviderServer.html"),
+    d!("ChunkProviderClient", "chunkExists", V_112, "client_chunk_provider_exists", "Client loaded chunk presence lookup", "world_chunks", "Preserve no-load query behavior for client chunks.", "net/minecraft/client/multiplayer/ChunkProviderClient.html"),
+    d!("ChunkProviderClient", "getLoadedChunkCount", V_112, "client_chunk_provider_loaded_count", "Client loaded chunk count", "world_chunks", "Preserve currently loaded client chunk count.", "net/minecraft/client/multiplayer/ChunkProviderClient.html"),
+    d!("ChunkProviderClient", "getLoadedChunks", V_112, "client_chunk_provider_loaded_chunks", "Client loaded chunk collection", "world_chunks", "Preserve live client chunk map view and mutation behavior.", "net/minecraft/client/multiplayer/ChunkProviderClient.html"),
+    d!("ChunkProviderClient", "provideChunk", V_112, "client_chunk_provider_provide", "Client chunk lookup or empty chunk creation", "world_chunks", "Preserve missing chunk fallback and do not trigger server-style generation.", "net/minecraft/client/multiplayer/ChunkProviderClient.html"),
+
+    // ChunkCache cached IBlockAccess used for fast collision and ray queries.
+    d!("ChunkCache", "getBlockState", V_ALL, "chunk_cache_block_state", "Cached block state lookup", "world_chunks", "Preserve cache bounds, backing chunk availability and air fallback outside cached region.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "getBiome", V_ALL, "chunk_cache_biome", "Cached biome lookup", "world_chunks", "Preserve biome cache and provider fallback for positions outside loaded sections.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "getLightFor", V_112, "chunk_cache_light_for", "Cached typed light lookup", "world_lighting", "Preserve EnumSkyBlock and cached chunk/section light value.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "getLightSubtracted", V_ALL, "chunk_cache_light_subtracted", "Cached combined light with subtraction", "world_lighting", "Preserve sky-light subtraction and block light merge.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "getTileEntity", V_ALL, "chunk_cache_tile_entity", "Cached tile entity lookup", "world_chunks", "Preserve EnumCreateEntityType behavior; cache must not create missing tile entities during read-only collision operations.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "isAirBlock", V_ALL, "chunk_cache_is_air", "Cached air block predicate", "world_chunks", "Preserve state material/air logic within cached bounds.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "isBlockLoaded", V_112, "chunk_cache_block_loaded", "Cached region block availability predicate", "world_chunks", "Preserve allowEmpty/load semantics and cache boundary checks.", "net/minecraft/world/ChunkCache.html"),
+    d!("ChunkCache", "isSideSolid", V_112, "chunk_cache_side_solid", "Cached block face solidity", "world_chunks", "Preserve face-specific state/world logic for plant support and collision.", "net/minecraft/world/ChunkCache.html"),
+
+    // WorldBorder geometry, transition and listener controls.
+    d!("WorldBorder", "addListener", V_112, "world_border_listener_add", "World border state listener registration", "world_dimensions", "Preserve listener identity and callback order for center/size/warning changes.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "contains", V_112, "world_border_contains", "World border point/BlockPos/AABB containment", "world_dimensions", "Preserve overload shape and boundary inclusion for points, block positions and entity boxes.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getClosestDistance", V_112, "world_border_closest_distance", "Closest distance from point to border", "world_dimensions", "Preserve minimum X/Z edge distance and negative/outside values.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getCenterX", V_112, "world_border_center_x", "World border center X", "world_dimensions", "Preserve double precision center coordinate.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getCenterZ", V_112, "world_border_center_z", "World border center Z", "world_dimensions", "Preserve double precision center coordinate.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getDiameter", V_112, "world_border_diameter", "Current world border diameter", "world_dimensions", "Preserve current interpolated diameter during transition.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getStatus", V_112, "world_border_status", "World border transition status", "world_dimensions", "Preserve GROWING/SHRINKING/STATIONARY status.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getTargetSize", V_112, "world_border_target_diameter", "World border target diameter", "world_dimensions", "Preserve target size independently from current interpolated size.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getTimeUntilTarget", V_112, "world_border_transition_time", "Remaining world border interpolation time", "world_dimensions", "Preserve remaining milliseconds/ticks and transition clock.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getWarningDistance", V_112, "world_border_warning_distance", "World border warning distance", "world_dimensions", "Preserve warning distance in blocks.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "getWarningTime", V_112, "world_border_warning_time", "World border warning time", "world_dimensions", "Preserve warning lead time in seconds.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "removeListener", V_112, "world_border_listener_remove", "World border state listener unregistration", "world_dimensions", "Remove only the same listener instance and preserve other viewer callbacks.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setCenter", V_112, "world_border_center_write", "World border center mutation", "world_dimensions", "Preserve double precision center coordinates and listener notification.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setDamageAmount", V_112, "world_border_damage_amount_write", "World border outside damage per block", "world_dimensions", "Preserve damage-per-block scalar used for entities beyond the border.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setDamageBuffer", V_112, "world_border_damage_buffer_write", "World border safe damage buffer", "world_dimensions", "Preserve buffer distance before border damage applies.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setSize", V_112, "world_border_size_write", "World border immediate diameter change", "world_dimensions", "Preserve immediate size update and listener packet synchronization.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setTransition", V_112, "world_border_transition_write", "World border timed size transition", "world_dimensions", "Overloads accept target size or old+new size+duration; preserve interpolation start/time and growth/shrink status.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setWarningDistance", V_112, "world_border_warning_distance_write", "World border warning distance mutation", "world_dimensions", "Preserve client warning rendering and packet update.", "net/minecraft/world/border/WorldBorder.html"),
+    d!("WorldBorder", "setWarningTime", V_112, "world_border_warning_time_write", "World border warning time mutation", "world_dimensions", "Preserve seconds and warning overlay timing.", "net/minecraft/world/border/WorldBorder.html"),
+
+    // Server world game rules and per-world difficulty scaling.
+    d!("GameRules", "addGameRule", V_112, "game_rules_register", "Custom GameRules key/type registration", "world_rules", "Preserve key uniqueness, ValueType parser, default value and notification behavior.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "getBoolean", V_ALL, "game_rule_boolean_read", "Typed boolean gamerule lookup", "world_rules", "Preserve missing-key behavior and type validation.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "getInt", V_ALL, "game_rule_integer_read", "Typed integer gamerule lookup", "world_rules", "Preserve parsing and default/failure behavior for non-integer rule values.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "getRules", V_112, "game_rules_map_read", "All game rule values map", "world_rules", "Preserve map identity/snapshot semantics and custom rule entries.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "getString", V_112, "game_rule_string_read", "Game rule raw string lookup", "world_rules", "Preserve exact string representation independent from typed Boolean/Integer conversion.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "hasRule", V_ALL, "game_rule_exists", "Game rule key existence predicate", "world_rules", "Preserve exact key matching and custom rule registration state.", "net/minecraft/world/GameRules.html"),
+    d!("GameRules", "setOrCreateGameRule", V_ALL, "game_rule_value_write", "Set existing or create game rule value", "world_rules", "Preserve value parsing, rule type validation and server-to-client rule update packet.", "net/minecraft/world/GameRules.html"),
+    d!("DifficultyInstance", "getAdditionalDifficulty", V_112, "difficulty_additional_value", "Local difficulty scalar", "world_difficulty", "Preserve local difficulty interpolation from world time, inhabited time and moon phase.", "net/minecraft/world/DifficultyInstance.html"),
+    d!("DifficultyInstance", "getClampedAdditionalDifficulty", V_112, "difficulty_clamped_additional_value", "Clamped local difficulty scalar", "world_difficulty", "Preserve 0-1 clamp used by mob spawn equipment and difficulty-scaled abilities.", "net/minecraft/world/DifficultyInstance.html"),
+
+    // Profiler calls are observable timing scopes and must remain balanced.
+    d!("Profiler", "clearProfiling", V_112, "profiler_clear", "Profiler sample history reset", "performance", "Preserve profiler state/section cleanup and not only reset aggregate timings.", "net/minecraft/profiler/Profiler.html"),
+    d!("Profiler", "endSection", V_ALL, "profiler_end_section", "Profiler timing scope end", "performance", "Preserve stack-balanced section nesting; every startSection must have the corresponding endSection.", "net/minecraft/profiler/Profiler.html"),
+    d!("Profiler", "endStartSection", V_112, "profiler_end_start_section", "Profiler section transition", "performance", "Preserve end/start ordering and nested timing stack.", "net/minecraft/profiler/Profiler.html"),
+    d!("Profiler", "getProfilingData", V_112, "profiler_section_data", "Profiler section timing tree", "performance", "Preserve recursive section percentages, sort order and snapshot semantics.", "net/minecraft/profiler/Profiler.html"),
+    d!("Profiler", "getNameOfLastSection", V_112, "profiler_current_section", "Current profiler section name", "performance", "Preserve current nesting path for diagnostic/debug output.", "net/minecraft/profiler/Profiler.html"),
+    d!("Profiler", "startSection", V_ALL, "profiler_start_section", "Profiler timing scope start", "performance", "Preserve nested section stack and exact ordering; do not remove instrumentation if source observes profiling data.", "net/minecraft/profiler/Profiler.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5719,6 +5785,25 @@ mod tests {
             ("NetHandlerPlayServer", "processPlayerAbilities"),
             ("NetHandlerPlayServer", "processPlayerDigging"),
             ("NetHandlerPlayServer", "processPlayerTryUseItemOnBlock"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn chunk_provider_border_gamerule_and_difficulty_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("ChunkProviderServer", "provideChunk"), ("ChunkProviderServer", "queueUnload"),
+            ("ChunkProviderServer", "unloadQueuedChunks"),
+            ("ChunkProviderClient", "getLoadedChunks"),
+            ("ChunkCache", "getBlockState"), ("ChunkCache", "getTileEntity"),
+            ("WorldBorder", "setTransition"), ("WorldBorder", "contains"),
+            ("WorldBorder", "getClosestDistance"), ("WorldBorder", "setWarningDistance"),
+            ("GameRules", "addGameRule"), ("GameRules", "setOrCreateGameRule"),
+            ("GameRules", "getBoolean"), ("DifficultyInstance", "getAdditionalDifficulty"),
+            ("Profiler", "startSection"), ("Profiler", "endStartSection"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
