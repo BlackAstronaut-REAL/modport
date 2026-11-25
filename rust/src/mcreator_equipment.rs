@@ -2298,6 +2298,26 @@ mod equipment_discovery_tests {
         assert!(references.iter().any(|value| {
             texture_stem_from_reference(value).as_deref() == Some("black_hole")
         }));
+
+        // No model JSON, source Java, or animation metadata exists here: the
+        // compiled constructor's setTextureName constant alone must select it.
+        let temp = tempdir().unwrap();
+        let texture = temp.path().join("assets/demo/textures/items/black_hole.png");
+        fs::create_dir_all(texture.parent().unwrap()).unwrap();
+        fs::write(&texture, b"legacy-item-icon").unwrap();
+        let canonical_texture = fs::canonicalize(&texture).unwrap();
+        let index = EquipmentTextureIndex::new(&[temp.path().to_path_buf()]);
+        let source = EquipmentSource {
+            class_name: "ItemBlackHole".to_owned(),
+            superclass: "Item".to_owned(),
+            registry_name: "black_hole".to_owned(),
+            element_type: "item".to_owned(),
+            tool_type: None,
+            source_path: "ItemBlackHole.class".to_owned(),
+            source_text: stubs,
+        };
+        let candidates = texture_candidates(&index, &source);
+        assert_eq!(candidates.first(), Some(&canonical_texture));
     }
 
     #[test]
