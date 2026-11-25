@@ -716,20 +716,20 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
     }
 
     let class_pattern = Regex::new(&format!(
-        r"(?s)\\b{}\\s*\\([^)]*\\)\\s*\\{{(.*?)\\}}",
+        r"(?s)\b{}\s*\([^)]*\)\s*\{{(.*?)\}}",
         regex::escape(&source.class_name)
     )).expect("static constructor-body regex");
     let constructor_body = class_pattern.captures(&source.source_text)
         .and_then(|capture| capture.get(1))
         .map(|capture| capture.as_str())
         .unwrap_or(&source.source_text);
-    let super_call = Regex::new(r"(?s)\\bsuper\\s*\\(([^)]*)\\)")
+    let super_call = Regex::new(r"(?s)\bsuper\s*\(([^)]*)\))
         .expect("static food superclass constructor regex");
     let args = super_call.captures(constructor_body)
         .and_then(|capture| capture.get(1))
         .map(|capture| capture.as_str())
         .unwrap_or("");
-    let numeric = Regex::new(r"-?\\d+(?:\\.\\d+)?")
+    let numeric = Regex::new(r"-?\d+(?:\.\d+)?")
         .expect("static food numeric argument regex");
     let values: Vec<f64> = numeric.find_iter(args)
         .filter_map(|value| value.as_str().parse::<f64>().ok())
@@ -2057,7 +2057,7 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 "#);
     if items.iter().any(|item| item.food.is_some()) {
-        body.push_str("import net.minecraft.world.food.FoodProperties;\\n");
+        body.push_str("import net.minecraft.world.food.FoodProperties;\n");
     }
     if items.iter().any(|item| item.rarity.is_some()) {
         body.push_str("import net.minecraft.world.item.Rarity;\\n");
