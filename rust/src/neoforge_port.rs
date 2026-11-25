@@ -1031,6 +1031,7 @@ fn write_native_registries(
     package: &str,
     mod_id: &str,
     items: &[ItemRecord],
+    tools: &[ToolRecord],
     blocks: &[BlockRecord],
     armors: &[ArmorSetRecord],
     entities: &[EntityMetadata],
@@ -1040,12 +1041,17 @@ fn write_native_registries(
     fs::create_dir_all(&registry_root)?;
 
     fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks))?;
-    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, blocks, armors))?;
+    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, tools, blocks, armors))?;
 
     let mut generated = vec![
         format!("src/main/java/{}/registry/ModBlocks.java", package.replace('.', "/")),
         format!("src/main/java/{}/registry/ModItems.java", package.replace('.', "/")),
     ];
+
+    if tools.iter().any(|tool| matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe")) {
+        fs::write(registry_root.join("ModToolTiers.java"), generate_tool_tiers_java(package, tools))?;
+        generated.push(format!("src/main/java/{}/registry/ModToolTiers.java", package.replace('.', "/")));
+    }
 
     if !armors.is_empty() {
         fs::write(registry_root.join("ModArmorMaterials.java"), generate_armor_materials_java(package, armors))?;
@@ -1087,6 +1093,98 @@ fn write_native_registries(
     generated.sort();
     generated.dedup();
     Ok(generated)
+}
+
+fn generate_tool_tiers_java(package: &str, tools: &[ToolRecord]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.item.Tier;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.common.SimpleTier;
+
+public final class ModToolTiers {{
+"#);
+    let mut seen = BTreeSet::new();
+    for tool in tools {
+        if !matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe") {
+            continue;
+        }
+        if !seen.insert(tool.tier_field.clone()) { continue; }
+        let block_tag = format!("INCORRECT_FOR_{}_TOOL", tool.tag);
+        body.push_str(&format!(
+            r#"    public static final Tier {field} = new SimpleTier(
+        BlockTags.{block_tag},
+        {uses},
+        {efficiency}F,
+        {damage_bonus}F,
+        {enchantability},
+        () -> Ingredient.of(Items.IRON_INGOT)
+    );
+"#,
+            field = tool.tier_field,
+            uses = tool.uses,
+            efficiency = tool.efficiency,
+            damage_bonus = tool.damage_bonus,
+            enchantability = tool.enchantability
+        ));
+    }
+    body.push_str(r#"
+    private ModToolTiers() {}
+}
+"#);
+    body
+}
+
+fn generated_tool_item_type(tool: &ToolRecord) -> &'static str {
+    match tool.kind.as_str() {
+        "Sword" => "SwordItem",
+        "Axe" => "AxeItem",
+        "Pickaxe" => "PickaxeItem",
+        "Shovel" => "ShovelItem",
+        "Hoe" => "HoeItem",
+        "Bow" if tool.class_name.to_ascii_lowercase().contains("crossbow") => "CrossbowItem",
+        "Bow" => "BowItem",
+        "Fishing Rod" => "FishingRodItem",
+        "Shears" => "ShearsItem",
+        _ => "Item",
+    }
+}
+
+fn generate_tool_registration(tool: &ToolRecord) -> String {
+    let field = java_field_name(&tool.id, "ITEM");
+    let item_type = generated_tool_item_type(tool);
+    match tool.kind.as_str() {
+        "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe" => {
+            let attribute_constructor = match tool.kind.as_str() {
+                "Sword" => "SwordItem.createAttributes",
+                "Axe" => "AxeItem.createAttributes",
+                "Pickaxe" => "PickaxeItem.createAttributes",
+                "Shovel" => "ShovelItem.createAttributes",
+                _ => "HoeItem.createAttributes",
+            };
+            format!(
+                "    public static final DeferredItem<{item_type}> {field} = ITEMS.register(\"{id}\", () -> new {item_type}(ModToolTiers.{tier}, new Item.Properties().attributes({attribute_constructor}(ModToolTiers.{tier}, {damage}F, {speed}F))));\n",
+                id = tool.id,
+                tier = tool.tier_field,
+                damage = tool.attribute_damage,
+                speed = tool.attribute_speed
+            )
+        }
+        "Bow" => format!(
+            "    public static final DeferredItem<{item_type}> {field} = ITEMS.register(\"{id}\", () -> new {item_type}(new Item.Properties().stacksTo(1).durability({durability})));\n",
+            id = tool.id, durability = tool.durability
+        ),
+        "Fishing Rod" | "Shears" => format!(
+            "    public static final DeferredItem<{item_type}> {field} = ITEMS.register(\"{id}\", () -> new {item_type}(new Item.Properties().stacksTo(1).durability({durability})));\n",
+            id = tool.id, durability = tool.durability
+        ),
+        _ => format!(
+            "    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem(\"{id}\", new Item.Properties().stacksTo(1));\n",
+            id = tool.id
+        ),
+    }
 }
 
 fn generate_armor_materials_java(package: &str, armors: &[ArmorSetRecord]) -> String {
@@ -1507,6 +1605,7 @@ fn generate_items_java(
     package: &str,
     _mod_id: &str,
     items: &[ItemRecord],
+    tools: &[ToolRecord],
     blocks: &[BlockRecord],
     armors: &[ArmorSetRecord],
 ) -> String {
@@ -1523,6 +1622,29 @@ import net.neoforged.neoforge.registries.DeferredRegister;
         body.push_str("import net.minecraft.world.item.ArmorItem;\n");
         body.push_str(&format!("import {package}.registry.ModArmorMaterials;\n"));
     }
+    let tiered_tools = tools.iter().any(|tool| matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe"));
+    if tiered_tools {
+        body.push_str("import net.minecraft.world.item.SwordItem;\n");
+        body.push_str("import net.minecraft.world.item.AxeItem;\n");
+        body.push_str("import net.minecraft.world.item.PickaxeItem;\n");
+        body.push_str("import net.minecraft.world.item.ShovelItem;\n");
+        body.push_str("import net.minecraft.world.item.HoeItem;\n");
+    }
+    if tools.iter().any(|tool| tool.kind == "Bow") {
+        body.push_str("import net.minecraft.world.item.BowItem;\n");
+        if tools.iter().any(|tool| tool.kind == "Bow" && tool.class_name.to_ascii_lowercase().contains("crossbow")) {
+            body.push_str("import net.minecraft.world.item.CrossbowItem;\n");
+        }
+    }
+    if tools.iter().any(|tool| tool.kind == "Fishing Rod") {
+        body.push_str("import net.minecraft.world.item.FishingRodItem;\n");
+    }
+    if tools.iter().any(|tool| tool.kind == "Shears") {
+        body.push_str("import net.minecraft.world.item.ShearsItem;\n");
+    }
+    if tiered_tools {
+        body.push_str(&format!("import {package}.registry.ModToolTiers;\n"));
+    }
     body.push_str(r#"
 public final class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(NeoForgeMod.MOD_ID);
@@ -1535,6 +1657,9 @@ public final class ModItems {
             id = item.id,
             stack_size = item.stack_size
         ));
+    }
+    for tool in tools {
+        body.push_str(&generate_tool_registration(tool));
     }
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK_ITEM");
@@ -1576,6 +1701,7 @@ fn write_native_resources(
     resources_root: &Path,
     mod_id: &str,
     items: &[ItemRecord],
+    tools: &[ToolRecord],
     blocks: &[BlockRecord],
     armors: &[ArmorSetRecord],
 ) -> Result<Vec<String>> {
@@ -1596,6 +1722,21 @@ fn write_native_resources(
         let model_path = namespace_root.join(format!("models/item/{}.json", item.id));
         if !model_path.exists() {
             let texture = find_texture_reference(&textures_root, mod_id, &item.id, &item.class_name)
+                .unwrap_or_else(|| "minecraft:item/barrier".to_owned());
+            write_json_file(&model_path, &json!({
+                "parent": "minecraft:item/generated",
+                "textures": {"layer0": texture}
+            }))?;
+            written.push(relative_to(resources_root, &model_path));
+        }
+    }
+
+    for tool in tools {
+        let key = format!("item.{mod_id}.{}", tool.id);
+        localization.entry(key).or_insert_with(|| json!(display_name_from_id(&tool.id)));
+        let model_path = namespace_root.join(format!("models/item/{}.json", tool.id));
+        if !model_path.exists() {
+            let texture = find_texture_reference(&textures_root, mod_id, &tool.id, &tool.class_name)
                 .unwrap_or_else(|| "minecraft:item/barrier".to_owned());
             write_json_file(&model_path, &json!({
                 "parent": "minecraft:item/generated",
