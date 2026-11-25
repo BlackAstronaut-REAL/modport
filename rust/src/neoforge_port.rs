@@ -695,7 +695,12 @@ fn collect_items(
         if source.element_type == "tool" || source.tool_type.is_some() {
             record_warnings.push("Tool/weapon registry recovered, but its legacy combat stats, mining rules, durability and use behavior are not yet transferred.".to_owned());
         }
-        record_warnings.push("Custom item class methods are not copied; this entry is emitted as a basic native Item.".to_owned());
+        let lore = collect_source_lore(&source.source_text, language_lore, &source.registry_name);
+        if lore.is_empty() {
+            record_warnings.push("Non-tooltip custom item methods are not copied; this entry is emitted as a basic native Item.".to_owned());
+        } else {
+            record_warnings.push("Legacy formatted tooltip lore was reconstructed; other custom item methods remain unported.".to_owned());
+        }
         items.push(ItemRecord {
             id: normalized_id(&source.registry_name),
             class_name: source.class_name.clone(),
@@ -703,7 +708,7 @@ fn collect_items(
             source_text: source.source_text.clone(),
             stack_size,
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
-            lore: collect_source_lore(&source.source_text, language_lore, &source.registry_name),
+            lore,
             warnings: record_warnings,
         });
     }
@@ -838,14 +843,19 @@ fn collect_native_armors(
                 ));
                 continue;
             }
+            let mut piece_lore = equipment_lore.get(&compact(class)).cloned()
+                .unwrap_or_else(|| extract_legacy_lore(&source.source_text));
+            for line in language_lore.for_registry(&raw_id) {
+                if !piece_lore.contains(&line) {
+                    piece_lore.push(line);
+                }
+            }
             pieces.push(ArmorPieceRecord {
                 id: raw_id,
                 class_name: class.clone(),
                 part: part.clone(),
                 durability: ArmorItemTypeDurability::for_part(part, durability_multiplier),
-                lore: equipment_lore.get(&compact(class)).cloned().unwrap_or_else(|| {
-                    collect_source_lore(&source.source_text, language_lore, &raw_id)
-                }),
+                lore: piece_lore,
             });
         }
 
