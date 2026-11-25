@@ -357,6 +357,14 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
         );
         let face_visibility = face_visibility(element);
         let face_uv_rotations = face_uv_rotations(element);
+        // Flat billboard elements are resource-model planes, not thin cuboids.
+        let crossed_plane = (to[2] - from[2]).abs() <= 0.5
+            && (to[0] - from[0]).abs() >= 4.0
+            && (to[1] - from[1]).abs() >= 4.0
+            && (face_visibility[4] || face_visibility[5])
+            && face_visibility.iter().enumerate().all(|(face, visible)| {
+                !*visible || face == 4 || face == 5
+            });
 
         nodes.push(ViewerNode {
             name: element.get("name").and_then(Value::as_str)
@@ -372,7 +380,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
                 face_texture_indices: Some(face_texture_indices),
                 face_visibility: Some(face_visibility),
                 face_uv_rotations: Some(face_uv_rotations),
-                crossed_plane: false,
+                crossed_plane,
                 mirror: false,
                 name: format!("element_{element_index}"),
             }],
