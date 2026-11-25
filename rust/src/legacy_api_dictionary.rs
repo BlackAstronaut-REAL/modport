@@ -3412,6 +3412,87 @@ const DEFINITIONS: &[Definition] = &[
     d!("ISteerable", "travel", V_112, "steerable_mount_travel", "Steerable mount player-controlled travel", "entities_movement", "Preserve controlling passenger input, boost state, friction and normal mob movement fallback.", "net/minecraft/entity/ISteerable.html"),
 
 
+    // Legacy AI goal helper classes whose virtual hooks are inherited from
+    // EntityAIBase. These owner-specific aliases aid decompiled override discovery.
+    d!("EntityAITarget", "isSuitableTarget", V_112, "ai_target_suitability", "Target predicate with visibility/reachability rules", "entities_ai", "Preserve target class, checkSight, nearby-only flags and entity-specific target eligibility.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "getTargetDistance", V_112, "ai_target_search_distance", "AI target search radius", "entities_ai", "Preserve follow-range attribute and task-specific range modifier.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAIAttackMelee", "getAttackReachSqr", V_112, "ai_melee_attack_reach", "Melee AI squared attack reach", "entities_ai", "Preserve attacker/target bounding-box dimensions and squared distance semantics.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "checkAndPerformAttack", V_112, "ai_melee_attack_execute", "Melee AI attack execution", "entities_combat", "Preserve attack cooldown, reach test, swing animation and attackEntityAsMob call order.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "resetTask", V_ALL, "ai_melee_attack_reset", "Melee AI task reset", "entities_ai", "Preserve path clear and target state cleanup when the task ends.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "shouldContinueExecuting", V_ALL, "ai_melee_attack_continue", "Melee AI task continuation", "entities_ai", "Preserve target alive/range/path timeout checks.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "shouldExecute", V_ALL, "ai_melee_attack_start_predicate", "Melee AI start eligibility", "entities_ai", "Preserve attack target and navigator path checks before the task starts.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "startExecuting", V_ALL, "ai_melee_attack_start", "Melee AI task activation", "entities_ai", "Preserve path creation, attack delay initialization and task start state.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackMelee", "updateTask", V_ALL, "ai_melee_attack_tick", "Melee AI active tick", "entities_ai", "Preserve look control, path recalculation, attack cooldown and target reach ordering.", "net/minecraft/entity/ai/EntityAIAttackMelee.html"),
+    d!("EntityAIAttackRanged", "attackEntityWithRangedAttack", V_ALL, "ai_ranged_attack_execute", "Ranged attack task projectile callback", "entities_combat", "Preserve target and pull/charge progress; entity implementation creates projectile and applies enchantments.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "resetTask", V_ALL, "ai_ranged_attack_reset", "Ranged AI task reset", "entities_ai", "Preserve strafing/shooting state cleanup and target tracking.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "shouldContinueExecuting", V_ALL, "ai_ranged_attack_continue", "Ranged AI continuation predicate", "entities_ai", "Preserve path and target validity plus attack time window.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "shouldExecute", V_ALL, "ai_ranged_attack_start_predicate", "Ranged AI start eligibility", "entities_ai", "Preserve target acquisition and line-of-sight rules.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "startExecuting", V_ALL, "ai_ranged_attack_start", "Ranged AI task activation", "entities_ai", "Preserve initial attack cooldown and strafing counters.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "updateTask", V_ALL, "ai_ranged_attack_tick", "Ranged AI active tick", "entities_ai", "Preserve look control, visibility timer, distance-based strafing and attack charge accumulation.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "setAttackCooldown", V_112, "ai_ranged_attack_cooldown_write", "Ranged attack cooldown interval", "entities_ai", "Preserve min/max attack interval and randomized cooldown behavior.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "setMaxAttackTime", V_112, "ai_ranged_attack_max_time_write", "Ranged attack maximum interval", "entities_ai", "Preserve attack interval range and charge cycle timing.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIAttackRanged", "setMaxAttackDistance", V_112, "ai_ranged_attack_distance_write", "Ranged attack max distance", "entities_ai", "Preserve squared distance calculation based on target bounding dimensions.", "net/minecraft/entity/ai/EntityAIAttackRanged.html"),
+    d!("EntityAIWander", "getPosition", V_112, "ai_wander_target_position", "Random wander destination selection", "entities_ai", "Preserve nullable target and random position candidate; random consumption impacts deterministic behavior.", "net/minecraft/entity/ai/EntityAIWander.html"),
+    d!("EntityAIWander", "shouldExecute", V_ALL, "ai_wander_start_predicate", "Wander task start eligibility", "entities_ai", "Preserve chance/random tick gate and navigator idle state.", "net/minecraft/entity/ai/EntityAIWander.html"),
+    d!("EntityAIWander", "startExecuting", V_ALL, "ai_wander_start", "Wander task activation", "entities_ai", "Preserve navigator target assignment and movement speed.", "net/minecraft/entity/ai/EntityAIWander.html"),
+    d!("EntityAIWander", "updateTask", V_ALL, "ai_wander_tick", "Wander task active tick", "entities_ai", "Preserve movement continuation and destination recalculation.", "net/minecraft/entity/ai/EntityAIWander.html"),
+    d!("EntityAIFollowOwner", "shouldExecute", V_112, "ai_follow_owner_start_predicate", "Tameable owner-follow eligibility", "entities_ai", "Preserve owner lookup, teleport distance and sitting/ground constraints.", "net/minecraft/entity/ai/EntityAIFollowOwner.html"),
+    d!("EntityAIFollowOwner", "startExecuting", V_112, "ai_follow_owner_start", "Owner-follow task activation", "entities_ai", "Preserve path creation and owner tracking state.", "net/minecraft/entity/ai/EntityAIFollowOwner.html"),
+    d!("EntityAIFollowOwner", "resetTask", V_112, "ai_follow_owner_reset", "Owner-follow task reset", "entities_ai", "Preserve path cleanup and water/teleport state reset.", "net/minecraft/entity/ai/EntityAIFollowOwner.html"),
+    d!("EntityAIFollowOwner", "updateTask", V_112, "ai_follow_owner_tick", "Owner-follow task update", "entities_ai", "Preserve distance thresholds, path updates and teleport fallback.", "net/minecraft/entity/ai/EntityAIFollowOwner.html"),
+    d!("EntityAIMoveToBlock", "shouldExecute", V_112, "ai_move_to_block_start_predicate", "Find target block for mob task", "entities_ai", "Preserve scan radius, vertical search, block predicate and random scan order.", "net/minecraft/entity/ai/EntityAIMoveToBlock.html"),
+    d!("EntityAIMoveToBlock", "startExecuting", V_112, "ai_move_to_block_start", "Move-to-block task activation", "entities_ai", "Preserve target BlockPos, movement timeout and navigation speed.", "net/minecraft/entity/ai/EntityAIMoveToBlock.html"),
+    d!("EntityAIMoveToBlock", "resetTask", V_112, "ai_move_to_block_reset", "Move-to-block task reset", "entities_ai", "Preserve target and timeout cleanup when destination becomes invalid.", "net/minecraft/entity/ai/EntityAIMoveToBlock.html"),
+    d!("EntityAIMoveToBlock", "updateTask", V_112, "ai_move_to_block_tick", "Move-to-block task active update", "entities_ai", "Preserve navigation, reach radius and destination-specific interaction timing.", "net/minecraft/entity/ai/EntityAIMoveToBlock.html"),
+    d!("EntityAIMoveToBlock", "getTargetPosition", V_112, "ai_move_to_block_target", "Move-to-block destination", "entities_ai", "Preserve exact BlockPos selected by scan and target block identity.", "net/minecraft/entity/ai/EntityAIMoveToBlock.html"),
+    d!("EntityAIMate", "shouldExecute", V_ALL, "ai_mate_start_predicate", "Animal breeding eligibility", "entities_ai", "Preserve love state, mate search radius, compatible species and cooldown.", "net/minecraft/entity/ai/EntityAIMate.html"),
+    d!("EntityAIMate", "startExecuting", V_ALL, "ai_mate_start", "Animal mating task activation", "entities_ai", "Preserve initial love timer and path target assignment.", "net/minecraft/entity/ai/EntityAIMate.html"),
+    d!("EntityAIMate", "resetTask", V_ALL, "ai_mate_reset", "Animal mating task cleanup", "entities_ai", "Preserve mating timer and failed path state reset.", "net/minecraft/entity/ai/EntityAIMate.html"),
+    d!("EntityAIMate", "updateTask", V_ALL, "ai_mate_tick", "Animal mating task active update", "entities_ai", "Preserve approach distance, love timer countdown, child creation and parent cooldown.", "net/minecraft/entity/ai/EntityAIMate.html"),
+    d!("EntityAIMate", "spawnBaby", V_112, "ai_mate_spawn_child", "Animal offspring creation and spawn", "entities_ai", "Preserve child variant, parent breeding state, XP orb spawn and BabyEntitySpawnEvent timing.", "net/minecraft/entity/ai/EntityAIMate.html"),
+    d!("EntityAIPanic", "shouldExecute", V_ALL, "ai_panic_start_predicate", "Mob panic/flee eligibility", "entities_ai", "Preserve hurt/attacker/fire state and random safe destination selection.", "net/minecraft/entity/ai/EntityAIPanic.html"),
+    d!("EntityAIPanic", "startExecuting", V_ALL, "ai_panic_start", "Mob panic movement start", "entities_ai", "Preserve navigator destination and panic speed multiplier.", "net/minecraft/entity/ai/EntityAIPanic.html"),
+    d!("EntityAIPanic", "resetTask", V_ALL, "ai_panic_reset", "Mob panic task reset", "entities_ai", "Preserve navigation cleanup when flee task ends.", "net/minecraft/entity/ai/EntityAIPanic.html"),
+    d!("EntityAIPanic", "updateTask", V_ALL, "ai_panic_tick", "Mob panic task active tick", "entities_ai", "Preserve destination/escape updates and speed behavior.", "net/minecraft/entity/ai/EntityAIPanic.html"),
+    d!("EntityAIOpenDoor", "shouldExecute", V_ALL, "ai_open_door_start_predicate", "Mob door-opening path task eligibility", "entities_ai", "Preserve navigator path node and door block state checks.", "net/minecraft/entity/ai/EntityAIOpenDoor.html"),
+    d!("EntityAIOpenDoor", "startExecuting", V_ALL, "ai_open_door_start", "Mob open-door task activation", "entities_ai", "Preserve path door interaction and door open state change.", "net/minecraft/entity/ai/EntityAIOpenDoor.html"),
+    d!("EntityAIOpenDoor", "resetTask", V_ALL, "ai_open_door_reset", "Mob open-door task cleanup", "entities_ai", "Preserve door close policy and task state cleanup.", "net/minecraft/entity/ai/EntityAIOpenDoor.html"),
+    d!("EntityAIOpenDoor", "updateTask", V_ALL, "ai_open_door_tick", "Mob door traversal update", "entities_ai", "Preserve door opening/closing state relative to entity position and path node.", "net/minecraft/entity/ai/EntityAIOpenDoor.html"),
+    d!("EntityAIBreakDoor", "shouldExecute", V_112, "ai_break_door_start_predicate", "Mob door-breaking task eligibility", "entities_ai", "Preserve difficulty, mobGriefing and door block checks.", "net/minecraft/entity/ai/EntityAIBreakDoor.html"),
+    d!("EntityAIBreakDoor", "startExecuting", V_112, "ai_break_door_start", "Mob door-breaking start", "entities_ai", "Preserve door position, break progress counter and block event broadcast.", "net/minecraft/entity/ai/EntityAIBreakDoor.html"),
+    d!("EntityAIBreakDoor", "resetTask", V_112, "ai_break_door_reset", "Mob door-breaking task reset", "entities_ai", "Preserve door crack animation reset and progress cleanup.", "net/minecraft/entity/ai/EntityAIBreakDoor.html"),
+    d!("EntityAIBreakDoor", "updateTask", V_112, "ai_break_door_tick", "Mob door-breaking progress", "entities_ai", "Preserve difficulty-scaled break duration, progress stage and final door destruction.", "net/minecraft/entity/ai/EntityAIBreakDoor.html"),
+    d!("EntityAINearestAttackableTarget", "shouldExecute", V_ALL, "ai_nearest_target_start", "Nearest attackable target selection", "entities_ai", "Preserve target class, target chance, sight checks, nearby checks and sorting by distance.", "net/minecraft/entity/ai/EntityAINearestAttackableTarget.html"),
+    d!("EntityAINearestAttackableTarget", "startExecuting", V_ALL, "ai_nearest_target_start_callback", "Nearest target task activation", "entities_ai", "Preserve target assignment and initial unseen-target timer.", "net/minecraft/entity/ai/EntityAINearestAttackableTarget.html"),
+    d!("EntityAINearestAttackableTarget", "resetTask", V_ALL, "ai_nearest_target_reset", "Nearest target task reset", "entities_ai", "Preserve target clearing and visibility timer reset.", "net/minecraft/entity/ai/EntityAINearestAttackableTarget.html"),
+    d!("EntityAINearestAttackableTarget", "getTargetDistance", V_112, "ai_nearest_target_distance", "Nearest target search range", "entities_ai", "Preserve target selector follow-range override and task-specific max distance.", "net/minecraft/entity/ai/EntityAINearestAttackableTarget.html"),
+    d!("EntityAIHurtByTarget", "shouldExecute", V_ALL, "ai_hurt_by_target_predicate", "Revenge target acquisition predicate", "entities_ai", "Preserve revenge timer, last attacked timestamp, ally alert and friendly-fire exclusions.", "net/minecraft/entity/ai/EntityAIHurtByTarget.html"),
+    d!("EntityAIHurtByTarget", "startExecuting", V_ALL, "ai_hurt_by_target_start", "Revenge target task activation", "entities_ai", "Preserve target selection and alert-nearby-allies side effects.", "net/minecraft/entity/ai/EntityAIHurtByTarget.html"),
+    d!("EntityAIHurtByTarget", "resetTask", V_ALL, "ai_hurt_by_target_reset", "Revenge target task reset", "entities_ai", "Preserve revenge target cleanup and target task timer state.", "net/minecraft/entity/ai/EntityAIHurtByTarget.html"),
+
+    // Common animal/creature hierarchy hooks used by modded mobs.
+    d!("EntityAgeable", "createChild", V_ALL, "animal_create_child", "Ageable entity offspring factory", "entities_breeding", "Preserve mate entity class, inherited variant/genetics and group data in custom child creation.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAgeable", "getGrowingAge", V_112, "animal_age_ticks", "Ageable entity age in ticks", "entities_breeding", "Negative age means baby and positive age is breeding cooldown; preserve exact tick count.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAgeable", "setGrowingAge", V_ALL, "animal_age_ticks_write", "Ageable entity age mutation", "entities_breeding", "Preserve negative baby growth ticks, zero adult state and positive cooldown semantics.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAnimal", "canMateWith", V_ALL, "animal_mate_compatibility", "Animal species/variant breeding compatibility", "entities_breeding", "Preserve entity-specific species, age and love state rules.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityAnimal", "getLoveCause", V_112, "animal_love_cause", "Player responsible for breeding/love mode", "entities_breeding", "Preserve nullable UUID-resolved player attribution for breeding events/advancements.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityAnimal", "isBreedingItem", V_ALL, "animal_breeding_item_predicate", "Animal food/breeding item check", "entities_breeding", "Preserve stack-sensitive food item predicate for each species.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityAnimal", "isInLove", V_ALL, "animal_in_love_predicate", "Animal breeding love state", "entities_breeding", "Preserve love timer and child/breeding cooldown state.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityAnimal", "resetInLove", V_112, "animal_love_state_reset", "Animal love/breeding timer reset", "entities_breeding", "Preserve love timer and player love cause reset after mating.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityAnimal", "setInLove", V_ALL, "animal_enter_love_state", "Animal enter breeding love state", "entities_breeding", "Preserve player cause, love timer and server-side state sync.", "net/minecraft/entity/EntityAnimal.html"),
+    d!("EntityCreature", "detachHome", V_ALL, "creature_home_detach", "Mob home/restriction removal", "entities_ai", "Preserve removal of home restriction and navigator path recalculation.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "getBlockPathWeight", V_ALL, "creature_block_path_weight", "Mob path node preference weight", "entities_ai", "Preserve BlockPos-based terrain preference used by wander/pathfinding.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "getHomePosition", V_ALL, "creature_home_position", "Mob home restriction BlockPos", "entities_ai", "Preserve home center and dimension/local world context.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "hasHome", V_ALL, "creature_has_home", "Mob home restriction predicate", "entities_ai", "Preserve explicit home set state independently from zero/default position.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "isWithinHomeDistanceCurrentPosition", V_ALL, "creature_within_home_current", "Mob current home restriction predicate", "entities_ai", "Preserve squared distance and home radius check.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "isWithinHomeDistanceFromPosition", V_ALL, "creature_within_home_position", "Mob candidate position home restriction predicate", "entities_ai", "Preserve candidate BlockPos and home radius check.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityCreature", "setHomePosAndDistance", V_ALL, "creature_home_position_write", "Mob home restriction position/radius", "entities_ai", "Preserve home center and radius in blocks; zero radius still has a home location.", "net/minecraft/entity/EntityCreature.html"),
+    d!("EntityMob", "getBlockPathWeight", V_ALL, "mob_block_path_weight", "Hostile mob path node preference", "entities_ai", "Preserve world-light/darkness and block-specific spawn/path selection.", "net/minecraft/entity/EntityMob.html"),
+    d!("EntityMob", "getCanSpawnHere", V_ALL, "mob_spawn_predicate", "Hostile mob natural spawn eligibility", "worldgen", "Preserve light level, collision, difficulty and spawn restriction checks.", "net/minecraft/entity/EntityMob.html"),
+    d!("EntityMob", "getCreatureAttribute", V_ALL, "mob_creature_attribute", "Mob creature attribute classification", "combat", "Preserve UNDEFINED/UNDEAD/ARTHROPOD/etc for enchantment damage multipliers.", "net/minecraft/entity/EntityMob.html"),
+    d!("EntityMob", "isValidLightLevel", V_ALL, "mob_spawn_light_predicate", "Hostile mob spawn light check", "worldgen", "Preserve skylight/block light random checks and dimension night rules.", "net/minecraft/entity/EntityMob.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -4062,6 +4143,12 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("Event".to_owned());
         }
         _ => {}
+    }
+    if short.starts_with("EntityAI") {
+        candidates.insert("EntityAIBase".to_owned());
+    }
+    if short.starts_with("PathNavigate") {
+        candidates.insert("PathNavigate".to_owned());
     }
     candidates
 }
@@ -5194,6 +5281,40 @@ mod tests {
             ("IEntityOwnable", "getOwnerId"), ("IEntityMultiPart", "attackEntityFrom"),
             ("IJumpingMount", "handleStopJump"), ("ISteerable", "getSteeringSpeed"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn concrete_ai_goal_and_animal_hierarchy_methods_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("EntityAIAttackMelee", "checkAndPerformAttack"),
+            ("EntityAIAttackRanged", "attackEntityWithRangedAttack"),
+            ("EntityAIMoveToBlock", "getTargetPosition"),
+            ("EntityAIMate", "spawnBaby"),
+            ("EntityAIBreakDoor", "updateTask"),
+            ("EntityAINearestAttackableTarget", "getTargetDistance"),
+            ("EntityAgeable", "createChild"),
+            ("EntityAnimal", "canMateWith"),
+            ("EntityAnimal", "isBreedingItem"),
+            ("EntityCreature", "setHomePosAndDistance"),
+            ("EntityMob", "isValidLightLevel"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+        let source = r#"
+            class CustomWanderGoal extends EntityAIWander {
+                public boolean shouldExecute() { return true; }
+            }
+            class CustomGroundNavigation extends PathNavigateGround {
+                public boolean noPath() { return true; }
+            }
+        "#;
+        let found = map_legacy_api_methods(source, Some("1.12.2"));
+        assert!(found.iter().any(|e| e.source_owner == "EntityAIBase" && e.source_method == "shouldExecute"));
+        assert!(found.iter().any(|e| e.source_owner == "PathNavigate" && e.source_method == "noPath"));
     }
 
     #[test]
