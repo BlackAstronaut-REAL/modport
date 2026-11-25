@@ -6,6 +6,16 @@ behavioral reference. The Rust application does not spawn Python, import Python
 modules, or require a Python installation. The Windows release workflow compiles
 the engine into the native executable.
 
+## Native NeoForge project generation
+
+Modport can create a clean NeoForge 1.21.1 output project using the NeoGradle userdev plugin and Java 21. The scaffold includes an @Mod entrypoint, empty deferred registries for blocks, items, entities, and block entities, NeoForge metadata, and a machine-readable port status file.
+
+```powershell
+cargo run --manifest-path rust/Cargo.toml -- create-neoforge-project output/converted --mod-id converted_mod --mod-name "Converted Mod" --package com.example.converted
+```
+
+The generated workspace is explicitly marked scaffold-only until source-driven adapters populate it. It does not claim to have reconstructed legacy behavior. Use an installed Gradle with `gradle build`, or generate a wrapper with `gradle wrapper`.
+
 ## NeoForge 1.21.1 documentation index
 
 The complete 1.21.1 NeoForge versioned documentation snapshot is bundled under `docs/neoforge/1.21.1` (63 Markdown pages and 15 category metadata files). Its source commit and per-page provenance are recorded in `manifest.json`; the original Markdown hierarchy and MIT license are retained.

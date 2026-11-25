@@ -20,6 +20,7 @@ use mojmodelbridge::mcreator_projectile::export_projectiles_to_workspace;
 use mojmodelbridge::mcreator_pipeline::export_all_to_workspace;
 use mojmodelbridge::gradle_bridge::compile_workspace;
 use mojmodelbridge::neoforge_docs::{default_docs_root, NeoForgeDocsIndex};
+use mojmodelbridge::neoforge_project::{create_neoforge_project, DEFAULT_NEOFORGE_VERSION};
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -71,6 +72,20 @@ enum Command {
         docs_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+    },
+    /// Create a native NeoForge 1.21.1 Gradle/Java project scaffold.
+    CreateNeoForgeProject {
+        output: PathBuf,
+        #[arg(long)]
+        mod_id: String,
+        #[arg(long)]
+        mod_name: String,
+        #[arg(long)]
+        package: String,
+        #[arg(long, default_value = DEFAULT_NEOFORGE_VERSION)]
+        neo_version: String,
+        #[arg(long)]
+        overwrite: bool,
     },
     /// Convert a decompiled legacy or modern Java model into a Blockbench project.
     ConvertModel {
@@ -734,6 +749,19 @@ fn main() -> Result<()> {
                     }
                     println!("   {}", result.source_url);
                 }
+            }
+        }
+        Command::CreateNeoForgeProject { output, mod_id, mod_name, package, neo_version, overwrite } => {
+            let report = create_neoforge_project(
+                &output, &mod_id, &mod_name, &package, &neo_version, overwrite
+            )?;
+            println!(
+                "Created NeoForge {} scaffold for '{}' at {} ({} files).",
+                report.minecraft_version, report.mod_id, report.output_root.display(),
+                report.generated_files.len()
+            );
+            for warning in report.warnings {
+                eprintln!("[NOTE] {warning}");
             }
         }
         Command::Extract { archive, destination } => {

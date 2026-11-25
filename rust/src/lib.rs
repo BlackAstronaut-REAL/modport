@@ -15,6 +15,7 @@ pub mod compiled_registry;
 pub mod discovery;
 pub mod metadata;
 pub mod neoforge_docs;
+pub mod neoforge_project;
 pub mod localization;
 pub mod mcreator_model;
 pub mod mcreator_entity;
