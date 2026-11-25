@@ -547,16 +547,36 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
         parsed_class_paths.insert(path, parsed_class);
     }
 
+    // The class-local initializer and registration passes are independent once
+    // the complete parsed-class map is available. Use sorted keys with Rayon,
+    // then merge in that same order for deterministic duplicate resolution.
+    let mut parsed_entries: Vec<_> = parsed.iter().collect();
+    parsed_entries.sort_by(|a, b| a.0.cmp(b.0));
+
+    let field_results: Vec<BTreeMap<String, String>> = parsed_entries.par_iter()
+        .map(|(_, class)| {
+            let class = class.as_ref();
+            static_field_assignments(class, &parsed)
+        })
+        .collect();
     let mut fields = BTreeMap::<String, String>::new();
-    for class in parsed.values() {
-        for (field, class_name) in static_field_assignments(class, &parsed) {
-            fields.insert(field, class_name);
-        }
+    for assignments in field_results {
+        fields.extend(assignments);
     }
     index.field_classes = fields.clone();
 
-    for class in parsed.values() {
-        scan_registrations(class, &fields, &parsed, &mut index.registries);
+    let registration_results: Vec<BTreeMap<String, BTreeSet<String>>> = parsed_entries.par_iter()
+        .map(|(_, class)| {
+            let class = class.as_ref();
+            let mut registrations = BTreeMap::new();
+            scan_registrations(class, &fields, &parsed, &mut registrations);
+            registrations
+        })
+        .collect();
+    for registrations in registration_results {
+        for (class_name, registry_names) in registrations {
+            index.registries.entry(class_name).or_default().extend(registry_names);
+        }
     }
     index.parsed_classes = parsed.clone();
     index.parsed_class_paths = parsed_class_paths;
