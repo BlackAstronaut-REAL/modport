@@ -3118,6 +3118,29 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn detects_versioned_api_overrides_and_typed_calls_for_port_report() {
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("ExampleItem.java"),
+            r#"
+                class ExampleItem extends Item {
+                    public ItemStack onItemRightClick(World world, EntityPlayer player, EnumHand hand) {
+                        ItemStack stack = player.getHeldItem();
+                        stack.getItem();
+                        GameRegistry.registerItem(this, "example_item");
+                        return stack;
+                    }
+                }
+            "#,
+        ).unwrap();
+
+        let found = detect_legacy_api_methods(&[temp.path().to_path_buf()]);
+        assert!(found.iter().any(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick"));
+        assert!(found.iter().any(|entry| entry.source_owner == "ItemStack" && entry.source_method == "getItem"));
+        assert!(found.iter().any(|entry| entry.source_owner == "GameRegistry" && entry.source_method == "registerItem"));
+    }
+
+    #[test]
     fn java_registry_field_names_keep_registry_word_boundaries() {
         assert_eq!(java_field_name("ruby_beast", "ENTITY"), "ENTITY_RUBY_BEAST");
         assert_eq!(java_field_name("iron-ore", "BLOCK"), "BLOCK_IRON_ORE");
