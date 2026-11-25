@@ -2221,6 +2221,7 @@ mod tests {
         assert!(lore.iter().any(|line| line == "Durability: 1800"));
 
         let material = ToolMaterialStats {
+            harvest_level: Some(3),
             uses: Some(2400),
             efficiency: Some(9.0),
             damage: Some(5.0),
