@@ -14,7 +14,7 @@ impl ProjectSources {
     pub fn paths(&self) -> Vec<PathBuf> {
         [&self.compiled, &self.decompiled, &self.source]
             .into_iter()
-            .map(str::trim)
+            .map(|value| value.trim())
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
             .collect()
