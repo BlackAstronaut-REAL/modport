@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 use walkdir::WalkDir;
 
 use crate::bytecode::classfile::ConstantValue;
@@ -151,14 +152,14 @@ fn split_camel_case(value: &str, separator: char) -> String {
 fn class_display_name(class_name: &str) -> String {
     let name = class_name.strip_prefix("Entity").or_else(|| class_name.strip_prefix("Mob")).unwrap_or(class_name);
     let spaced = split_camel_case(name, ' ');
-    let cleaned = Regex::new(r"[_$]+").unwrap().replace_all(&spaced, " ");
+    let cleaned = cached_regex(r"[_$]+").expect("class display regex").replace_all(&spaced, " ");
     cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn registry_slug(value: &str) -> String {
     let name = value.strip_prefix("Entity").or_else(|| value.strip_prefix("Mob")).unwrap_or(value);
     let camel = split_camel_case(name, '_');
-    let normalized = Regex::new(r"[^A-Za-z0-9]+").unwrap().replace_all(&camel, "_");
+    let normalized = cached_regex(r"[^A-Za-z0-9]+").expect("registry slug regex").replace_all(&camel, "_");
     let value = normalized.trim_matches('_').to_ascii_lowercase();
     if value.is_empty() { "converted_entity".to_owned() } else { value }
 }
@@ -189,6 +190,21 @@ fn read_java(path: &Path) -> Result<String> {
     let text = String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_owned();
     Ok(strip_java_comments(&text))
 }
+
+fn cached_regex(pattern: &str) -> Result<Regex> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Regex>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(regex) = guard.get(pattern) {
+            return Ok(regex.clone());
+        }
+    }
+    let compiled = Regex::new(pattern)?;
+    let mut guard = cache.lock()
+        .map_err(|_| anyhow::anyhow!("shared regex cache lock was poisoned"))?;
+    Ok(guard.entry(pattern.to_owned()).or_insert(compiled).clone())
+}
+
 
 fn cached_regex(pattern: &str) -> Result<Regex> {
     static CACHE: OnceLock<Mutex<HashMap<String, Regex>>> = OnceLock::new();
@@ -312,7 +328,8 @@ fn renderer_sources(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>) -> O
 }
 
 fn referenced_model(text: &str) -> Option<(String, Vec<Value>)> {
-    let pattern = Regex::new(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$.]*(?:Model[A-Za-z0-9_$]*)|Model[A-Za-z0-9_$]+)\s*\(").unwrap();
+    let pattern = cached_regex(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$.]*(?:Model[A-Za-z0-9_$]*)|Model[A-Za-z0-9_$]+)\s*\(")
+        .expect("referenced model regex");
     for found in pattern.find_iter(text) {
         let captures = pattern.captures(&text[found.start()..found.end()])?;
         let class_name = simple_name(&captures[1]).to_owned();
@@ -327,7 +344,8 @@ fn referenced_model(text: &str) -> Option<(String, Vec<Value>)> {
 }
 
 fn png_refs(text: &str) -> Vec<String> {
-    let regex = Regex::new(r"(?i)[A-Za-z0-9_./\\-]{1,240}\.png").unwrap();
+    let regex = cached_regex(r"(?i)[A-Za-z0-9_./\\-]{1,240}\.png")
+        .expect("PNG texture reference regex");
     let mut refs: Vec<String> = regex.find_iter(text)
         .map(|found| found.as_str().replace('\\', "/"))
         .collect();
@@ -338,21 +356,21 @@ fn png_refs(text: &str) -> Vec<String> {
 
 fn texture_references_in_region(source: &str) -> Vec<String> {
     let mut references = png_refs(source);
-    let two_args = Regex::new(
+    let two_args = cached_regex(
         r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:fromNamespaceAndPath|tryParse))\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"#
-    ).unwrap();
+    ).expect("two-argument resource location regex");
     for capture in two_args.captures_iter(source) {
         references.push(format!("{}:{}", &capture[1], &capture[2]));
     }
-    let one_arg = Regex::new(
+    let one_arg = cached_regex(
         r#"(?is)(?:new\s+ResourceLocation|ResourceLocation\s*\.\s*(?:parse|withDefaultNamespace))\s*\(\s*"([^"]+)"#
-    ).unwrap();
+    ).expect("one-argument resource location regex");
     for capture in one_arg.captures_iter(source) {
         references.push(capture[1].replace('\\', "/"));
     }
-    let texture_constants = Regex::new(
+    let texture_constants = cached_regex(
         r#"(?i)["']((?:[A-Za-z0-9_.-]+:)?(?:textures/)?(?:entity|entities|mob|mobs|models)/[A-Za-z0-9_./-]{1,200})["']"#
-    ).unwrap();
+    ).expect("texture resource literal regex");
     for capture in texture_constants.captures_iter(source) {
         references.push(capture[1].replace('\\', "/"));
     }
@@ -371,9 +389,9 @@ fn source_texture_references(source: &str) -> Vec<String> {
     let mut references = Vec::new();
     // A mob's own texture accessor is more authoritative than unrelated
     // renderer textures such as overlays, eyes, or auxiliary layers.
-    let texture_method = Regex::new(
+    let texture_method = cached_regex(
         r"(?s)\b(?:getEntityTexture|getEntityTextureLocation|getTextureLocation|getTextureResource|getTexture)\s*\([^)]*\)\s*\{"
-    ).unwrap();
+    ).expect("entity texture accessor regex");
     for method in texture_method.find_iter(source) {
         let Some(open) = source[method.start()..method.end()].rfind('{')
             .map(|offset| method.start() + offset) else { continue; };
@@ -602,7 +620,8 @@ fn parse_entity_source_metadata_from_text(text: &str, path: &Path, registry: Opt
     ) {
         metadata.xp = value.round() as i32;
     }
-    let ai = Regex::new(r"new\s+(EntityAI[A-Za-z0-9_$]+|[A-Za-z0-9_$]*Goal)\s*\(").unwrap();
+    let ai = cached_regex(r"new\s+(EntityAI[A-Za-z0-9_$]+|[A-Za-z0-9_$]*Goal)\s*\(")
+        .expect("entity AI constructor regex");
     metadata.ai_classes = ai.captures_iter(&text).map(|v| v[1].to_owned()).collect::<HashSet<_>>().into_iter().collect();
     metadata.ai_classes.sort();
     Ok(metadata)
@@ -777,7 +796,11 @@ fn compiled_registration_from_call(
 }
 
 fn class_texture_references(class: &ClassFile) -> Vec<String> {
-    let pattern = Regex::new(r"(?i)[A-Za-z0-9_./\\-]{1,240}\.png").unwrap();
+    let pattern = cached_regex(r"(?i)[A-Za-z0-9_./\\-]{1,240}\.png")
+        .expect("class PNG texture reference regex");
+    let resource_path = cached_regex(
+        r"(?i)(?:textures/)?(?:entity|entities|mob|mobs|models)/[A-Za-z0-9_./-]{1,200}"
+    ).expect("class texture resource regex");
     let mut references = HashSet::new();
     for entry in &class.constant_pool {
         let text = match entry.as_ref() {
@@ -788,9 +811,6 @@ fn class_texture_references(class: &ClassFile) -> Vec<String> {
             for found in pattern.find_iter(text) {
                 references.insert(found.as_str().replace('\\', "/"));
             }
-            let resource_path = Regex::new(
-                r"(?i)(?:textures/)?(?:entity|entities|mob|mobs|models)/[A-Za-z0-9_./-]{1,200}"
-            ).unwrap();
             for found in resource_path.find_iter(text) {
                 references.insert(found.as_str().replace('\\', "/"));
             }
@@ -800,6 +820,7 @@ fn class_texture_references(class: &ClassFile) -> Vec<String> {
     output.sort_by_key(|value| value.to_ascii_lowercase());
     output
 }
+
 
 fn parse_compiled_registration_class(path: &Path) -> Result<Vec<RendererRegistration>> {
     let bytes = fs::read(path).with_context(|| format!("Reading compiled registry {}", path.display()))?;
