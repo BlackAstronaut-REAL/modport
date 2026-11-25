@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use mojmodelbridge::metadata::infer_mod_metadata;
 use mojmodelbridge::mod_graph::{scan_mod_graph, EntityMetadata};
-use mojmodelbridge::mcreator_armor::discover_armor_sources;
+use mojmodelbridge::mcreator_armor::{compiled_armor_stats, discover_armor_sources};
 use mojmodelbridge::mcreator_block::{discover_block_sources, is_plant_source};
 use mojmodelbridge::mcreator_equipment::{discover_equipment_sources, source_tool_materials, ToolMaterialStats};
 use mojmodelbridge::source::java::{extract_balanced, split_top_level};
@@ -100,6 +100,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     let tool_materials = source_tool_materials(&source_roots, &source_modid);
     let blocks = discover_block_sources(&source_roots)?;
     let armor_sets = discover_armor_sources(&source_roots)?;
+    let compiled_armor = compiled_armor_stats(&source_roots)?;
     let languages = load_language_data(&all_files, &source_modid);
     let mut entries = Vec::<BrowserEntry>::new();
     let mut seen = HashSet::<String>::new();
@@ -235,7 +236,15 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 .unwrap_or_else(|| serde_json::json!({}));
             let component_lore = extract_component_lore(&mut components);
             append_unique(&mut lore, &component_lore);
-            let armor_properties = armor_source_properties(&all_files, &set.prefix);
+            let source_armor_properties = armor_source_properties(&all_files, &set.prefix);
+            let armor_properties = if source_armor_properties.as_object().is_some_and(|properties| !properties.is_empty()) {
+                source_armor_properties
+            } else {
+                compiled_armor.get(&compact(&set.prefix))
+                    .map(serde_json::to_value)
+                    .and_then(Result::ok)
+                    .unwrap_or_else(|| serde_json::json!({}))
+            };
             if let Some(object) = components.as_object_mut() {
                 if armor_properties.as_object().is_some_and(|properties| !properties.is_empty()) {
                     object.insert("source_properties".to_owned(), armor_properties);
