@@ -423,9 +423,10 @@ mod tests {
     #[test]
     fn stage_serialization_keeps_skipped_and_exported_counts() {
         let value = json!({"exported":3,"skipped":2});
-        let result = stage("blocks", count_field(&value,"exported"), count_field(&value,"skipped"), value);
+        let result = stage("blocks", count_field(&value,"exported"), count_field(&value,"skipped"), 17, value);
         assert_eq!(result.name, "blocks");
         assert_eq!(result.exported, 3);
         assert_eq!(result.skipped, 2);
+        assert_eq!(result.duration_ms, 17);
     }
 }
