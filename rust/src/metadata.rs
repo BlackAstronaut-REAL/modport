@@ -78,6 +78,8 @@ fn from_json_metadata(path: &Path, fabric: bool) -> Option<ModMetadata> {
         version: first(object.get("version")),
         minecraft_version: first(object.get("mcversion").or_else(|| object.get("minecraftVersion")).or_else(|| object.get("minecraft_version"))),
         forge_version: first(object.get("forgeVersion").or_else(|| object.get("forge_version"))),
+        neoforge_version: first(object.get("neoforgeVersion").or_else(|| object.get("neoforge_version"))),
+        loader_family: first(object.get("loader").or_else(|| object.get("loaderFamily").or_else(|| object.get("loader_family")))),
         authors: authors(object.get("authors").or_else(|| object.get("authorList")).or_else(|| object.get("author")).or_else(|| object.get("contributors"))),
         description: first(object.get("description")),
         website: first(object.get("url").or_else(|| object.get("website")).or_else(|| contact.and_then(|c| c.get("homepage")))),
