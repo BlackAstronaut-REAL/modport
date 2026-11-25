@@ -934,6 +934,17 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "EntityFishHook" => {
             candidates.insert("Entity".to_owned());
         }
+        "EntityZombie" | "EntitySkeleton" | "EntityCreeper" | "EntitySpider"
+        | "EntityBlaze" | "EntityGhast" | "EntityDragon" | "EntitySlime"
+        | "EntityMagmaCube" | "EntityEnderman" | "EntityWitch" | "EntityPigZombie"
+        | "EntityGuardian" | "EntityElderGuardian" | "EntityShulker" | "EntitySilverfish"
+        | "EntityCaveSpider" | "EntityIronGolem" | "EntitySnowman" | "EntityWolf"
+        | "EntityOcelot" | "EntityHorse" | "EntityPig" | "EntityCow" | "EntitySheep"
+        | "EntityChicken" | "EntityRabbit" | "EntitySquid" | "EntityBat" => {
+            candidates.insert("Entity".to_owned());
+            candidates.insert("EntityLivingBase".to_owned());
+            candidates.insert("EntityLiving".to_owned());
+        }
         "ISidedInventory" => {
             candidates.insert("IInventory".to_owned());
         }
@@ -944,7 +955,11 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "BlockCactus" | "BlockReed" | "BlockSnow" | "BlockIce" | "BlockGlass"
         | "BlockPane" | "BlockCarpet" | "BlockBed" | "BlockPortal" | "BlockEndPortal"
         | "BlockBeacon" | "BlockAnvil" | "BlockDragonEgg" | "BlockLeaves"
-        | "BlockLog" | "BlockSapling" | "BlockRedstoneWire" | "BlockRedstoneDiode" => {
+        | "BlockLog" | "BlockSapling" | "BlockRedstoneWire" | "BlockRedstoneDiode"
+        | "BlockFenceGate" | "BlockColored" | "BlockBreakable" | "BlockSlime"
+        | "BlockBookshelf" | "BlockTNT" | "BlockWeb" | "BlockSponge" | "BlockDirt"
+        | "BlockGrass" | "BlockSand" | "BlockGravel" | "BlockStone" | "BlockOre"
+        | "BlockRedstoneLight" | "BlockCommandBlock" | "BlockStructure" => {
             candidates.insert("Block".to_owned());
         }
         "WorldServer" | "WorldClient" => {
@@ -959,6 +974,102 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
     candidates
 }
 
+#[derive(Debug)]
+struct ClassScope {
+    start: usize,
+    end: usize,
+    owners: BTreeSet<String>,
+    receivers: BTreeMap<String, BTreeSet<String>>,
+}
+
+fn class_declaration_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"(?m)\b(?:class|interface|enum|record)\s+[A-Za-z_$][A-Za-z0-9_$]*(?:\s*<[^{}]*>)?[^{};]*\{"
+    ).expect("static Java class declaration regex"))
+}
+
+/// Find the matching class brace while ignoring braces inside comments and
+/// Java string/character/text-block literals.
+fn matching_class_brace(source: &str, open: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    if bytes.get(open) != Some(&b'{') { return None; }
+    let mut depth = 1usize;
+    let mut index = open + 1;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'/' if bytes.get(index + 1) == Some(&b'/') => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'\n' { index += 1; }
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/') {
+                    index += 1;
+                }
+                index = (index + 2).min(bytes.len());
+            }
+            b'"' if bytes.get(index + 1) == Some(&b'"') && bytes.get(index + 2) == Some(&b'"') => {
+                index += 3;
+                while index + 2 < bytes.len()
+                    && !(bytes[index] == b'"' && bytes[index + 1] == b'"' && bytes[index + 2] == b'"')
+                {
+                    if bytes[index] == b'\\' { index = (index + 2).min(bytes.len()); }
+                    else { index += 1; }
+                }
+                index = (index + 3).min(bytes.len());
+            }
+            b'"' | b'\'' => {
+                let quote = bytes[index];
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == b'\\' { index = (index + 2).min(bytes.len()); }
+                    else if bytes[index] == quote { index += 1; break; }
+                    else { index += 1; }
+                }
+            }
+            b'{' => { depth += 1; index += 1; }
+            b'}' => {
+                depth -= 1;
+                if depth == 0 { return Some(index); }
+                index += 1;
+            }
+            _ => index += 1,
+        }
+    }
+    None
+}
+
+fn class_scopes(source: &str) -> Vec<ClassScope> {
+    let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
+    let mut scopes = Vec::new();
+    for declaration in class_declaration_regex().find_iter(source) {
+        let Some(open) = declaration.end().checked_sub(1) else { continue; };
+        let Some(close) = matching_class_brace(source, open) else { continue; };
+        let header = &source[declaration.start()..open];
+        let body = &source[open + 1..close];
+        let owners: BTreeSet<String> = declared_owner_candidates(header).into_iter()
+            .filter(|owner| known_owners.contains(owner.as_str()))
+            .collect();
+        let mut receivers = BTreeMap::<String, BTreeSet<String>>::new();
+        for capture in typed_variable_regex().captures_iter(body) {
+            let (Some(owner), Some(variable)) = (capture.name("owner"), capture.name("variable")) else { continue; };
+            let candidates = owner_candidates(owner.as_str());
+            if candidates.iter().any(|candidate| known_owners.contains(candidate.as_str())) {
+                receivers.entry(variable.as_str().to_owned()).or_default().extend(candidates);
+            }
+        }
+        scopes.push(ClassScope { start: open + 1, end: close, owners, receivers });
+    }
+    scopes
+}
+
+fn innermost_class_scope(scopes: &[ClassScope], position: usize) -> Option<&ClassScope> {
+    scopes.iter()
+        .filter(|scope| scope.start <= position && position < scope.end)
+        .min_by_key(|scope| scope.end.saturating_sub(scope.start))
+}
+
 /// Identify API calls using the declared receiver type or a static API owner.
 /// This supplements method-override detection so ItemStack/NBT/World/registry
 /// calls inside ordinary methods can be normalized too.
@@ -968,28 +1079,25 @@ pub fn map_legacy_api_usages(source: &str, version: Option<&str>) -> Vec<LegacyA
     };
 
     let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
-    let mut receivers = BTreeMap::<String, BTreeSet<String>>::new();
-    for capture in typed_variable_regex().captures_iter(source) {
-        let (Some(owner), Some(variable)) = (capture.name("owner"), capture.name("variable")) else { continue; };
-        let candidates = owner_candidates(owner.as_str());
-        if candidates.iter().any(|candidate| known_owners.contains(candidate.as_str())) {
-            receivers.entry(variable.as_str().to_owned()).or_default().extend(candidates);
-        }
-    }
-
-    let implicit_owners = declared_owner_candidates(source);
-
+    let scopes = class_scopes(source);
     let mut matched = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
+
     for capture in invocation_regex().captures_iter(source) {
-        let (Some(receiver), Some(method)) = (capture.name("receiver"), capture.name("name")) else { continue; };
+        let (Some(receiver), Some(method), Some(whole)) = (
+            capture.name("receiver"),
+            capture.name("name"),
+            capture.get(0),
+        ) else { continue; };
         let receiver = receiver.as_str();
         let method = method.as_str();
+        let scope = innermost_class_scope(&scopes, whole.start());
+
         let owners = if known_owners.contains(receiver) {
             owner_candidates(receiver)
         } else if receiver == "this" || receiver == "super" {
-            implicit_owners.clone()
+            scope.map(|scope| scope.owners.clone()).unwrap_or_default()
         } else {
-            receivers.get(receiver).cloned().unwrap_or_default()
+            scope.and_then(|scope| scope.receivers.get(receiver).cloned()).unwrap_or_default()
         };
         if owners.is_empty() { continue; }
 
@@ -1032,21 +1140,22 @@ pub fn map_legacy_api_methods(source: &str, version: Option<&str>) -> Vec<Legacy
     let Some(version) = version.map(canonical_version).transpose_option() else {
         return Vec::new();
     };
-    let declared: BTreeSet<String> = declaration_regex()
-        .captures_iter(source)
-        .filter_map(|capture| capture.name("name").map(|value| value.as_str().to_owned()))
-        .collect();
-    let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
-    let owners: BTreeSet<String> = declared_owner_candidates(source)
-        .into_iter()
-        .filter(|owner| known_owners.contains(owner.as_str()))
-        .collect();
 
-    DEFINITIONS.iter()
-        .filter(|entry| declared.contains(entry.method) && owners.contains(entry.owner))
-        .filter(|entry| version.map(|v| entry.versions.contains(&v)).unwrap_or(true))
-        .map(to_mapping)
-        .collect()
+    let scopes = class_scopes(source);
+    let mut matched = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
+    for capture in declaration_regex().captures_iter(source) {
+        let (Some(name), Some(whole)) = (capture.name("name"), capture.get(0)) else { continue; };
+        let Some(scope) = innermost_class_scope(&scopes, whole.start()) else { continue; };
+        for definition in DEFINITIONS.iter().filter(|entry| {
+            entry.method == name.as_str()
+                && scope.owners.contains(entry.owner)
+                && version.map(|v| entry.versions.contains(&v)).unwrap_or(true)
+        }) {
+            matched.entry((definition.owner.to_owned(), definition.method.to_owned()))
+                .or_insert_with(|| to_mapping(definition));
+        }
+    }
+    matched.into_values().collect()
 }
 
 // Helper keeps an invalid explicit version distinct from the "unknown" case.
@@ -1126,6 +1235,24 @@ mod tests {
         assert!(detected.iter().any(|entry| entry.source_owner == "Block" && entry.source_method == "updateTick"));
         assert!(detected.iter().any(|entry| entry.source_owner == "Entity" && entry.source_method == "writeEntityToNBT"));
         assert!(!detected.iter().any(|entry| entry.source_method == "spawnEntityInWorld"));
+    }
+
+    #[test]
+    fn matches_methods_only_against_their_own_class_hierarchy() {
+        let source = r#"
+            class ItemOverride extends Item {
+                public boolean hitEntity(ItemStack stack, EntityLivingBase target, EntityLivingBase attacker) { return true; }
+            }
+            class UnrelatedHelper {
+                public boolean hitEntity(ItemStack stack, EntityLivingBase target, EntityLivingBase attacker) { return false; }
+            }
+            class BlockOverride extends Block {
+                public void onBlockActivated(World world, BlockPos pos) { }
+            }
+        "#;
+        let found = map_legacy_api_methods(source, Some("1.12.2"));
+        assert!(found.iter().any(|entry| entry.source_owner == "Item" && entry.source_method == "hitEntity"));
+        assert!(found.iter().any(|entry| entry.source_owner == "Block" && entry.source_method == "onBlockActivated"));
     }
 
     #[test]
