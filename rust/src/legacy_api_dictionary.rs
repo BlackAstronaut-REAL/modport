@@ -9,6 +9,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
+use crate::target_api_dictionary::{find_target_api_methods, target_api_dictionary, TargetApiMethod};
 
 const V_ALL: &[&str] = &["1.7.10", "1.8.9", "1.12.2"];
 const V_18: &[&str] = &["1.8.9", "1.12.2"];
@@ -28,6 +29,8 @@ pub struct LegacyApiMethodMapping {
     pub notes: String,
     pub documentation_urls: Vec<String>,
     pub target_documentation_urls: Vec<String>,
+    /// Resolved target method contracts, including exact signature and semantics.
+    pub target_api_methods: Vec<TargetApiMethod>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -927,6 +930,29 @@ fn target_documentation_urls(target: &str) -> Vec<String> {
     urls.into_iter().collect()
 }
 
+fn resolve_target_contracts(definition: &Definition) -> Vec<TargetApiMethod> {
+    let mut resolved = BTreeMap::<(String, String, String), TargetApiMethod>::new();
+    let known = target_api_dictionary();
+    let source_alias = format!("{}#{}", definition.owner, definition.method);
+
+    for part in definition.target.split(" / ").flat_map(|value| value.split(';')) {
+        let part = part.trim();
+        let signature = part.split(" -> ").next().unwrap_or(part).trim();
+        let Some((owner, method_signature)) = signature.split_once('#') else { continue; };
+        let method = method_signature.split('(').next().unwrap_or(method_signature).trim();
+        if method.is_empty() { continue; }
+        for entry in find_target_api_methods(owner.trim(), method) {
+            resolved.entry((entry.owner.clone(), entry.method.clone(), entry.signature.clone())).or_insert(entry);
+        }
+    }
+
+    for entry in known.into_iter().filter(|entry| entry.legacy_aliases.iter().any(|alias| alias == &source_alias)) {
+        resolved.entry((entry.owner.clone(), entry.method.clone(), entry.signature.clone())).or_insert(entry);
+    }
+
+    resolved.into_values().collect()
+}
+
 fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
     let source_versions = definition.versions.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>();
     let mut documentation_urls = BTreeSet::new();
@@ -952,6 +978,7 @@ fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
         notes: definition.notes.to_owned(),
         documentation_urls: documentation_urls.into_iter().collect(),
         target_documentation_urls: target_documentation_urls(definition.target),
+        target_api_methods: resolve_target_contracts(definition),
     }
 }
 
@@ -1387,6 +1414,22 @@ mod tests {
         let found = map_legacy_api_methods(source, Some("1.12.2"));
         assert!(found.iter().any(|entry| entry.source_owner == "ISidedInventory"
             && entry.source_method == "canInsertItem"));
+    }
+
+    #[test]
+    fn legacy_mappings_resolve_target_signatures_and_semantics() {
+        let mapping = legacy_api_dictionary().into_iter()
+            .find(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick")
+            .unwrap();
+        assert!(mapping.target_api_methods.iter().any(|target|
+            target.owner == "Item"
+                && target.method == "use"
+                && target.signature.contains("InteractionHand")
+                && target.semantic_contract.contains("resulting stack")
+        ));
+        assert!(mapping.target_api_methods.iter().all(|target|
+            target.documentation_url.contains("/neoforge/1.21.1/")
+        ));
     }
 
     #[test]
