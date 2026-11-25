@@ -34,6 +34,8 @@ pub struct BrowserEntry {
     pub model_source: Option<PathBuf>,
     /// Java Edition item/block resource model JSON with explicit cuboid elements.
     pub resource_model_source: Option<PathBuf>,
+    /// Remaining blockstate multipart model sources, composed with the primary model.
+    pub additional_resource_model_sources: Vec<PathBuf>,
     /// Additional source textures referenced by a linked resource model.
     pub texture_paths: Vec<PathBuf>,
     /// In-game block render archetype inferred from blockstate/model JSON.
@@ -141,6 +143,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path: icon_path.clone(),
             model_source,
             resource_model_source: None,
+            additional_resource_model_sources: Vec::new(),
             texture_paths: icon_path.into_iter().collect(),
             render_shape: None,
             lore: mob_lore,
@@ -203,6 +206,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path,
             model_source,
             resource_model_source,
+            additional_resource_model_sources: Vec::new(),
             texture_paths,
             render_shape: None,
             lore,
@@ -268,6 +272,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 render_shape: None,
                 lore,
                 components_json,
+                metadata_json: "{}".to_owned(),
             });
         }
     }
@@ -276,12 +281,14 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
     // declarations. Their block model JSON is linked for 3D preview when present.
     for source in &blocks {
         let registry = normalize_registry(&source.registry_name);
-        let (resource_model_source, blockstate_shape) = find_block_model_json(&all_files, &registry);
+        let (resource_model_sources, blockstate_shape) = find_block_model_sources(&all_files, &registry);
+        let resource_model_source = resource_model_sources.first().cloned();
+        let additional_resource_model_sources = resource_model_sources.iter().skip(1).cloned().collect::<Vec<_>>();
         let texture_refs = block_texture_refs(&source.source_text);
         let (legacy_model_source, legacy_model_textures) =
             find_linked_legacy_block_model(&all_files, &source.source_text);
         let mut texture_paths = legacy_model_textures;
-        if let Some(path) = resource_model_source.as_ref() {
+        for path in &resource_model_sources {
             append_paths(&mut texture_paths, &resource_model_texture_paths(&all_files, path));
         }
         let icon_path = find_texture_reference(&all_files, &texture_refs)
@@ -310,6 +317,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path,
             model_source: legacy_model_source,
             resource_model_source,
+            additional_resource_model_sources: Vec::new(),
             texture_paths,
             render_shape: Some(render_shape),
             lore,
@@ -382,6 +390,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path: None,
             model_source: Some(path.clone()),
             resource_model_source: None,
+            additional_resource_model_sources: Vec::new(),
             texture_paths: Vec::new(),
             render_shape: None,
             lore: Vec::new(),
@@ -1217,59 +1226,62 @@ fn collect_blockstate_models(value: &Value, references: &mut Vec<String>) {
     if let Some(reference) = value.get("model").and_then(Value::as_str) {
         references.push(reference.to_owned());
     } else if let Some(array) = value.as_array() {
-        for choice in array {
-            collect_blockstate_models(choice, references);
+        // Variant/apply arrays are weighted alternatives, not geometry layers.
+        // Pick one stable representative instead of rendering every alternative.
+        if let Some(reference) = array.iter()
+            .find_map(|choice| choice.get("model").and_then(Value::as_str))
+        {
+            references.push(reference.to_owned());
         }
     }
 }
 
-fn resolve_blockstate_model(files: &[PathBuf], state_path: &Path) -> Option<PathBuf> {
-    let payload = fs::read(state_path).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())?;
+fn resolve_blockstate_models(files: &[PathBuf], state_path: &Path) -> Vec<PathBuf> {
+    let Some(payload) = fs::read(state_path).ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok()) else {
+        return Vec::new();
+    };
     let mut references = Vec::<String>::new();
     if let Some(variants) = payload.get("variants").and_then(Value::as_object) {
-        // Prefer the no-state/default variant. Other keyed variants are
-        // fallback previews because the browser currently opens one static pose.
-        if let Some(default_variant) = variants.get("") {
-            collect_blockstate_models(default_variant, &mut references);
-        }
-        for (key, variant) in variants {
-            if key.is_empty() { continue; }
+        // Preview one stable state: the empty/default key, or the first sorted
+        // variant when there is no default state.
+        let selected = variants.get("")
+            .or_else(|| variants.iter().next().map(|(_, value)| value));
+        if let Some(variant) = selected {
             collect_blockstate_models(variant, &mut references);
         }
     }
+
+    // Multipart apply entries are additive geometry (post + connected sides).
+    // All conditions are included to produce a useful complete static preview.
     if let Some(parts) = payload.get("multipart").and_then(Value::as_array) {
         for part in parts {
             let apply = part.get("apply").unwrap_or(part);
-            if let Some(reference) = apply.get("model").and_then(Value::as_str) {
-                references.push(reference.to_owned());
-            } else if let Some(array) = apply.as_array() {
-                for choice in array {
-                    if let Some(reference) = choice.get("model").and_then(Value::as_str) {
-                        references.push(reference.to_owned());
-                    }
-                }
-            }
+            collect_blockstate_models(apply, &mut references);
         }
     }
+
     let mut seen_references = HashSet::new();
     references.retain(|reference| seen_references.insert(reference.clone()));
     let namespace = asset_namespace(state_path);
+    let mut models = Vec::<PathBuf>::new();
     for reference in references {
         let (model_namespace, model) = reference.split_once(':')
             .map(|(namespace, model)| (namespace, model))
             .unwrap_or((namespace.as_str(), reference.as_str()));
         let model = model.trim_start_matches('/').trim_start_matches("block/").trim_end_matches(".json");
+        if model.contains("..") { continue; }
         let suffix = format!("/assets/{model_namespace}/models/block/{model}.json").to_ascii_lowercase();
         if let Some(found) = files.iter().find(|path| {
             path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().ends_with(&suffix)
         }) {
-            return Some(found.clone());
+            if !models.contains(found) { models.push(found.clone()); }
         }
     }
-    None
+    models
 }
 
-fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>, Option<String>) {
+fn find_block_model_sources(files: &[PathBuf], registry: &str) -> (Vec<PathBuf>, Option<String>) {
     let wanted = compact(registry);
     let mut state_files = files.iter().filter(|path| {
         path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
@@ -1279,9 +1291,10 @@ fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>,
     }).cloned().collect::<Vec<_>>();
     state_files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     for state_path in state_files {
-        if let Some(model_path) = resolve_blockstate_model(files, &state_path) {
-            let shape = block_render_shape_from_model(&model_path, files);
-            return (Some(model_path), Some(shape));
+        let models = resolve_blockstate_models(files, &state_path);
+        if let Some(first) = models.first() {
+            let shape = block_render_shape_from_model(first, files);
+            return (models, Some(shape));
         }
     }
 
@@ -1294,7 +1307,12 @@ fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>,
     candidates.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     let model = candidates.into_iter().next();
     let shape = model.as_deref().map(|path| block_render_shape_from_model(path, files));
-    (model, shape)
+    (model.into_iter().collect(), shape)
+}
+
+fn find_block_model_json(files: &[PathBuf], registry: &str) -> (Option<PathBuf>, Option<String>) {
+    let (models, shape) = find_block_model_sources(files, registry);
+    (models.into_iter().next(), shape)
 }
 
 fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
@@ -2267,6 +2285,33 @@ mod tests {
         ] {
             assert_eq!(block_shape_for_parent(parent, "oak_fence"), Some("fence"));
         }
+    }
+
+    #[test]
+    fn blockstate_multipart_keeps_additive_models_but_not_weighted_alternatives() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let state = root.join("assets/demo/blockstates/connected_fence.json");
+        let post = root.join("assets/demo/models/block/fence_post.json");
+        let side = root.join("assets/demo/models/block/fence_side.json");
+        let weighted = root.join("assets/demo/models/block/fence_side_alt.json");
+        fs::create_dir_all(state.parent().unwrap()).unwrap();
+        fs::create_dir_all(post.parent().unwrap()).unwrap();
+        fs::write(&state, r#"{
+            "multipart": [
+                {"apply":{"model":"demo:block/fence_post"}},
+                {"when":{"east":"true"},"apply":[
+                    {"model":"demo:block/fence_side"},
+                    {"model":"demo:block/fence_side_alt"}
+                ]}
+            ]
+        }"#).unwrap();
+        for model in [&post, &side, &weighted] {
+            fs::write(model, r#"{"parent":"minecraft:block/cube_all"}"#).unwrap();
+        }
+        let files = vec![state.clone(), post.clone(), side.clone(), weighted];
+        assert_eq!(resolve_blockstate_models(&files, &state), vec![post, side]);
+        assert_eq!(find_block_model_sources(&files, "connected_fence").0.len(), 2);
     }
 
     #[test]
