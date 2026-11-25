@@ -12,9 +12,13 @@ use walkdir::WalkDir;
 fn texture_frame_dimensions(path: &Path) -> Option<(u32, u32)> {
     let (image_width, image_height) = image::image_dimensions(path).ok()?;
     let sidecar = PathBuf::from(format!("{}.mcmeta", path.display()));
-    let metadata = fs::read(sidecar).ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-    let animation = metadata.as_ref()?.get("animation")?.as_object()?;
+    let Some(metadata) = fs::read(sidecar).ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok()) else {
+            return Some((image_width, image_height));
+        };
+    let Some(animation) = metadata.get("animation").and_then(Value::as_object) else {
+        return Some((image_width, image_height));
+    };
     let width = animation.get("width").and_then(Value::as_u64)
         .map(|value| value as u32).unwrap_or(image_width);
     let height = animation.get("height").and_then(Value::as_u64)
@@ -1355,6 +1359,14 @@ mod tests {
         let (scene, found_textures) = load_item_model(&child, &[root.to_path_buf()]).unwrap();
         assert_eq!(scene.nodes.len(), 1);
         assert_eq!(found_textures, vec![texture_path]);
+    }
+
+    #[test]
+    fn static_texture_uv_dimensions_keep_the_full_image_size() {
+        let temp = tempfile::tempdir().unwrap();
+        let texture = temp.path().join("static.png");
+        RgbaImage::new(64, 32).save(&texture).unwrap();
+        assert_eq!(texture_frame_dimensions(&texture), Some((64, 32)));
     }
 
     #[test]
