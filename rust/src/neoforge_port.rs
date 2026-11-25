@@ -3047,6 +3047,9 @@ mod tests {
             make_block("ruby_stairs", "RubyStairs", "stairs"),
         ];
         let generated = write_native_resources(&resources, "shapes", &[], &[], &blocks, &[]).unwrap();
+        let block_java = generate_blocks_java("com.example.shapes", "shapes", &blocks, &[]);
+        assert!(block_java.contains("new SlabBlock("));
+        assert!(block_java.contains("new StairBlock(Blocks.STONE_STAIRS.defaultBlockState(),"));
 
         let slab_states: Value = serde_json::from_slice(
             &fs::read(resources.join("assets/shapes/blockstates/ruby_slab.json")).unwrap()
