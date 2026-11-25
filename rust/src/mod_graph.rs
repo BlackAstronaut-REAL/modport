@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::sync::{Mutex, OnceLock};
 use walkdir::WalkDir;
 
 use crate::bytecode::classfile::ConstantValue;
@@ -205,20 +204,6 @@ fn cached_regex(pattern: &str) -> Result<Regex> {
     Ok(guard.entry(pattern.to_owned()).or_insert(compiled).clone())
 }
 
-
-fn cached_regex(pattern: &str) -> Result<Regex> {
-    static CACHE: OnceLock<Mutex<HashMap<String, Regex>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(guard) = cache.lock() {
-        if let Some(regex) = guard.get(pattern) {
-            return Ok(regex.clone());
-        }
-    }
-    let compiled = Regex::new(pattern)?;
-    let mut guard = cache.lock()
-        .map_err(|_| anyhow::anyhow!("shared regex cache lock was poisoned"))?;
-    Ok(guard.entry(pattern.to_owned()).or_insert(compiled).clone())
-}
 
 
 fn list_source_files(roots: &[PathBuf], extension: &str) -> Vec<PathBuf> {
