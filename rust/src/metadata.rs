@@ -14,6 +14,10 @@ pub struct ModMetadata {
     pub minecraft_version: String,
     /// Forge loader version/range when it can be recovered from metadata.
     pub forge_version: String,
+    /// NeoForge loader version/range when the mod declares the NeoForge dependency.
+    pub neoforge_version: String,
+    /// Loader family inferred from the metadata file and dependency declarations.
+    pub loader_family: String,
     pub authors: Vec<String>,
     pub description: String,
     pub website: String,
@@ -131,10 +135,16 @@ fn from_mods_toml(path: &Path) -> Option<ModMetadata> {
     let author_text = toml_string(&text, "authors");
     let minecraft_range = dependency_version_range(&text, "minecraft");
     let forge_range = dependency_version_range(&text, "forge");
+    let neoforge_range = dependency_version_range(&text, "neoforge");
+    let is_neoforge_file = path.file_name().and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("neoforge.mods.toml"));
     Some(ModMetadata {
         modid, name: toml_string(&text, "displayName"), version: toml_string(&text, "version"),
         minecraft_version: version_from_range(&minecraft_range),
         forge_version: version_from_range(&forge_range),
+        neoforge_version: version_from_range(&neoforge_range),
+        loader_family: if is_neoforge_file || !neoforge_range.is_empty() { "NeoForge".to_owned() }
+            else if !forge_range.is_empty() { "Forge".to_owned() } else { String::new() },
         authors: authors(Some(&Value::String(author_text))),
         description: toml_string(&text, "description"), website: toml_string(&text, "displayURL"),
         license: toml_string(&text, "license"), source: path.to_string_lossy().to_string(),
@@ -177,6 +187,8 @@ fn merge(mut primary: ModMetadata, fallback: Option<ModMetadata>) -> ModMetadata
     if primary.version.is_empty() { primary.version = fallback.version; }
     if primary.minecraft_version.is_empty() { primary.minecraft_version = fallback.minecraft_version; }
     if primary.forge_version.is_empty() { primary.forge_version = fallback.forge_version; }
+    if primary.neoforge_version.is_empty() { primary.neoforge_version = fallback.neoforge_version; }
+    if primary.loader_family.is_empty() { primary.loader_family = fallback.loader_family; }
     if primary.authors.is_empty() { primary.authors = fallback.authors; }
     if primary.description.is_empty() { primary.description = fallback.description; }
     if primary.website.is_empty() { primary.website = fallback.website; }
@@ -267,6 +279,32 @@ side="BOTH"
         let metadata = from_mods_toml(&path).unwrap();
         assert_eq!(metadata.minecraft_version, "1.12.2");
         assert_eq!(metadata.forge_version, "14.23.5");
+    }
+
+    #[test]
+    fn neoforge_mods_toml_recovers_minecraft_and_loader_versions() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("neoforge.mods.toml");
+        fs::write(&path, r#"
+modLoader="javafml"
+loaderVersion="[4,)"
+[[mods]]
+modId="sample"
+version="1.0"
+displayName="Sample"
+[[dependencies.sample]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.100,)"
+[[dependencies.sample]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+"#).unwrap();
+        let metadata = from_mods_toml(&path).unwrap();
+        assert_eq!(metadata.minecraft_version, "1.21.1");
+        assert_eq!(metadata.neoforge_version, "21.1.100");
+        assert_eq!(metadata.loader_family, "NeoForge");
     }
 
     #[test]
