@@ -1,6 +1,8 @@
 use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, ConstantValue, Instruction, JvmType, MemberInfo};
+use rayon::prelude::*;
 use regex::Regex;
 use serde_json::{json, Map, Value};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct ToolMaterialStats {
@@ -449,6 +451,7 @@ pub fn build_item_element(
 pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
     let parent = superclass.to_ascii_lowercase();
     let simple = simple_class.to_ascii_lowercase();
+    let item_style_class = simple.starts_with("item");
     let mappings = [
         ("itemaxe", "Axe"), ("itemsword", "Sword"), ("itempickaxe", "Pickaxe"),
         ("itemspade", "Shovel"), ("itemshovel", "Shovel"), ("itemhoe", "Hoe"),
@@ -460,12 +463,20 @@ pub fn classify_tool(superclass: &str, simple_class: &str) -> Option<String> {
     if let Some((_, kind)) = mappings.iter().find(|(token, _)| parent.contains(token)) {
         return Some((*kind).to_owned());
     }
-    if !parent.is_empty() && parent != "item" && parent != "java.lang.object" && !parent.contains("item") {
+    // Older mods often insert a custom ItemBase/WeaponBase between their concrete
+    // class and Minecraft's Item. Keep the item-style class-name fallback even
+    // when that intermediate parent is not present in the supplied roots.
+    if !parent.is_empty() && parent != "item" && parent != "java.lang.object"
+        && !parent.contains("item") && !item_style_class
+    {
         return None;
     }
     for (suffix, kind) in [
-        ("pickaxe", "Pickaxe"), ("fishingrod", "Fishing Rod"), ("shears", "Shears"),
-        ("shovel", "Shovel"), ("spade", "Shovel"), ("sword", "Sword"),
+        ("fishingrod", "Fishing Rod"), ("crossbow", "Bow"), ("pickaxe", "Pickaxe"),
+        ("shears", "Shears"), ("shovel", "Shovel"), ("spade", "Shovel"),
+        ("sword", "Sword"), ("dagger", "Sword"), ("katana", "Sword"),
+        ("blade", "Sword"), ("spear", "Sword"), ("staff", "Sword"),
+        ("hammer", "Sword"), ("scythe", "Sword"), ("weapon", "Sword"),
         ("axe", "Axe"), ("hoe", "Hoe"), ("bow", "Bow"),
     ] {
         if simple.ends_with(suffix) {
@@ -851,7 +862,42 @@ fn inherited_tool_type(class: &str, superclass: &str, parents: &BTreeMap<String,
     classify_tool(superclass, class)
 }
 
-fn equipment_kind(class: &str, superclass: &str, parents: &BTreeMap<String, String>) -> Option<(String, Option<String>)> {
+fn custom_weapon_tool_type(class: &str, source_text: &str) -> Option<String> {
+    let normalized_name = normalize_texture_stem(class);
+    let text = source_text.to_ascii_lowercase();
+    if normalized_name == "bow" || normalized_name.ends_with("_bow")
+        || normalized_name.ends_with("_crossbow")
+        || text.contains("useanim.bow") || text.contains("useanim.crossbow")
+    {
+        return Some("Bow".to_owned());
+    }
+    let damage_signal = [
+        "getdamagevsentity", "func_150931_i", "weapondamage",
+        "damagevsentity", "attackdamage", "getattackdamage",
+    ].iter().any(|token| text.contains(token));
+    let combat_signal = [
+        "hitentity", "onleftclickentity", "onentityswing", "attackentityfrom",
+        "getdamagevsentity", "func_150931_i",
+    ].iter().any(|token| text.contains(token));
+    if damage_signal && combat_signal {
+        return Some("Sword".to_owned());
+    }
+    None
+}
+
+fn equipment_kind(
+    class: &str,
+    superclass: &str,
+    parents: &BTreeMap<String, String>,
+    source_text: &str,
+) -> Option<(String, Option<String>)> {
+    let simple = class.to_ascii_lowercase();
+    let parent = simple_java_name(superclass).to_ascii_lowercase();
+    if (parent.is_empty() || parent == "object" || parent == "java.lang.object")
+        && (simple.ends_with("init") || simple.ends_with("registry") || simple.ends_with("registrar"))
+    {
+        return None;
+    }
     if superclass.to_ascii_lowercase().contains("itemarmor")
         || class.to_ascii_lowercase().ends_with("armor")
     {
@@ -860,7 +906,11 @@ fn equipment_kind(class: &str, superclass: &str, parents: &BTreeMap<String, Stri
     if let Some(tool) = inherited_tool_type(class, superclass, parents) {
         return Some(("tool".to_owned(), Some(tool)));
     }
-    if superclass_is_item(superclass, parents, 0) {
+    let item_like = superclass_is_item(superclass, parents, 0) || simple.starts_with("item");
+    if item_like {
+        if let Some(tool) = custom_weapon_tool_type(class, source_text) {
+            return Some(("tool".to_owned(), Some(tool)));
+        }
         return Some(("item".to_owned(), None));
     }
     None
@@ -1104,12 +1154,12 @@ pub fn source_tool_materials(
 ) -> BTreeMap<String, ToolMaterialStats> {
     use crate::source::java::split_top_level;
 
-    let mut texts = Vec::<String>::new();
-    for path in java_files(source_roots) {
-        if let Ok(bytes) = fs::read(&path) {
-            texts.push(crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes)));
-        }
-    }
+    let files = java_files(source_roots);
+    let texts: Vec<String> = files.par_iter()
+        .filter_map(|path| fs::read(path).ok().map(|bytes| {
+            crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes))
+        }))
+        .collect();
     let combined = texts.join("\n");
     let stat_call = Regex::new(
         r"(?s)\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:this\s*\.\s*)?(?:get|load)_[A-Za-z0-9_]*stats\s*\((.*?)\)\s*;"
@@ -1217,10 +1267,18 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
     let mut class_parents = BTreeMap::<String, String>::new();
     let mut abstract_classes = HashSet::<String>::new();
 
-    for path in &files {
-        let Ok(bytes) = fs::read(path) else { continue };
-        let text = strip_java_comments(&String::from_utf8_lossy(&bytes));
-        for (class, parent, is_abstract) in source_class_headers(&text) {
+    let parsed_sources: Vec<(std::path::PathBuf, String, Vec<(String, String, bool)>)> = files.par_iter()
+        .filter_map(|path| {
+            let bytes = fs::read(path).ok()?;
+            let text = strip_java_comments(&String::from_utf8_lossy(&bytes));
+            let headers = source_class_headers(&text);
+            Some((path.clone(), text, headers))
+        })
+        .collect();
+    // Rayon preserves indexed-iterator order for collect(), so merge ordering and
+    // duplicate-class precedence remain the same as the original sorted file list.
+    for (path, text, headers) in parsed_sources {
+        for (class, parent, is_abstract) in headers {
             class_paths.entry(class.clone()).or_insert_with(|| path.clone());
             class_texts.entry(class.clone()).or_insert_with(|| text.clone());
             class_parents.insert(class.clone(), parent);
@@ -1255,7 +1313,7 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
             .filter(|text| !text.trim().is_empty())
             .unwrap_or_else(|| compiled_equipment_getter_stubs(source_path));
         let Some(superclass) = class_parents.get(&class) else { continue };
-        let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents) else { continue };
+        let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents, &source_text) else { continue };
 
         for registry in registries {
             if !seen.insert((class.clone(), registry.clone())) {
@@ -1308,6 +1366,25 @@ fn unique_equipment_element_name(class_name: &str, registry: &str) -> String {
     name
 }
 
+fn normalize_texture_stem(value: &str) -> String {
+    let mut output = String::new();
+    let mut previous = '\0';
+    for ch in value.chars() {
+        if ch.is_ascii_uppercase() {
+            if previous.is_ascii_lowercase() || previous.is_ascii_digit() {
+                output.push('_');
+            }
+            output.push(ch.to_ascii_lowercase());
+        } else if ch.is_ascii_alphanumeric() {
+            output.push(ch.to_ascii_lowercase());
+        } else if !output.is_empty() && !output.ends_with('_') {
+            output.push('_');
+        }
+        previous = ch;
+    }
+    output.trim_matches('_').to_owned()
+}
+
 fn texture_stem_from_reference(reference: &str) -> Option<String> {
     let mut value = reference.trim().replace('\\', "/");
     if value.is_empty() {
@@ -1322,31 +1399,155 @@ fn texture_stem_from_reference(reference: &str) -> Option<String> {
 }
 
 fn declared_equipment_texture_refs(source_text: &str) -> Vec<String> {
+    // Old renderer/item sources frequently keep the icon path only as a string
+    // constant (or in a ResourceLocation), not as an explicit setTextureName call.
     let patterns = [
+        r#"(?i)"([^"\n]+\.png)""#,
         r#"\b(?:setTextureName|func_111206_d|registerIcon|func_94245_a)\s*\(\s*"([^"]+)""#,
-        r#"new\s+ResourceLocation\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)""#,
+        r#"new\s+ResourceLocation\s*\(\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?"#,
     ];
-    let mut refs: Vec<String> = Vec::new();
+    let mut refs = Vec::<String>::new();
     for (index, pattern) in patterns.iter().enumerate() {
         let Ok(regex) = Regex::new(pattern) else { continue };
         for capture in regex.captures_iter(source_text) {
-            let raw = if index == 1 {
-                capture.get(2).map(|value| value.as_str())
+            let raw = if index == 2 {
+                capture.get(2).or_else(|| capture.get(1)).map(|value| value.as_str())
             } else {
                 capture.get(1).map(|value| value.as_str())
             };
-            if let Some(raw) = raw {
-                if !refs.iter().any(|value| value.eq_ignore_ascii_case(raw)) {
-                    refs.push(raw.to_owned());
-                }
+            let Some(raw) = raw else { continue };
+            if !refs.iter().any(|value| value.eq_ignore_ascii_case(raw)) {
+                refs.push(raw.to_owned());
             }
         }
     }
     refs
 }
 
-fn texture_candidates(source_roots: &[PathBuf], source: &EquipmentSource) -> Vec<PathBuf> {
+#[derive(Debug, Clone)]
+struct EquipmentTextureFile {
+    path: PathBuf,
+    normalized_stem: String,
+    compact_stem: String,
+    lower_path: String,
+    root_priority: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct EquipmentTextureIndex {
+    files: Vec<EquipmentTextureFile>,
+    item_model_refs: HashMap<String, Vec<String>>,
+}
+
+impl EquipmentTextureIndex {
+    fn new(source_roots: &[PathBuf]) -> Self {
+        let mut index = Self::default();
+        let mut seen = HashSet::<String>::new();
+
+        for (root_priority, root) in source_roots.iter().enumerate() {
+            if !root.is_dir() {
+                continue;
+            }
+            for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let path = entry.path();
+                let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("");
+                if extension.eq_ignore_ascii_case("png") {
+                    let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+                    let key = canonical.to_string_lossy().to_ascii_lowercase();
+                    if seen.insert(key.clone()) {
+                        let normalized_stem = normalize_texture_stem(
+                            path.file_stem().and_then(|value| value.to_str()).unwrap_or("")
+                        );
+                        let compact_stem = compact_name(&normalized_stem);
+                        index.files.push(EquipmentTextureFile {
+                            path: canonical,
+                            normalized_stem,
+                            compact_stem,
+                            lower_path: key,
+                            root_priority,
+                        });
+                    }
+                } else if extension.eq_ignore_ascii_case("json")
+                    && path.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/models/item/")
+                {
+                    let Ok(bytes) = fs::read(path) else { continue };
+                    let Ok(payload) = serde_json::from_slice::<Value>(&bytes) else { continue };
+                    let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else { continue };
+                    let key = compact_name(stem);
+                    if key.is_empty() {
+                        continue;
+                    }
+                    let Some(textures) = payload.get("textures").and_then(Value::as_object) else { continue };
+                    let reference = textures.get("layer0").and_then(Value::as_str)
+                        .or_else(|| textures.values().find_map(Value::as_str));
+                    if let Some(reference) = reference.filter(|value| !value.trim().is_empty()) {
+                        let refs = index.item_model_refs.entry(key).or_default();
+                        if !refs.iter().any(|value| value.eq_ignore_ascii_case(reference)) {
+                            refs.push(reference.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        index.files.sort_by(|a, b| {
+            a.root_priority.cmp(&b.root_priority)
+                .then_with(|| a.lower_path.cmp(&b.lower_path))
+        });
+        index
+    }
+
+    fn candidates(&self, stems: &[String]) -> Vec<PathBuf> {
+        let normalized_targets: BTreeSet<String> = stems.iter()
+            .map(|stem| normalize_texture_stem(stem))
+            .filter(|stem| !stem.is_empty())
+            .collect();
+        let compact_targets: BTreeSet<String> = normalized_targets.iter()
+            .map(|stem| compact_name(stem))
+            .filter(|stem| !stem.is_empty())
+            .collect();
+        if normalized_targets.is_empty() {
+            return Vec::new();
+        }
+
+        let mut scored = Vec::<(i32, usize, String, PathBuf)>::new();
+        for file in &self.files {
+            let exact = normalized_targets.contains(&file.normalized_stem);
+            let compact = !exact && compact_targets.contains(&file.compact_stem);
+            let mut score = if exact { 1200 } else if compact { 1100 } else { 0 };
+            if score == 0 {
+                for target in &compact_targets {
+                    let shortest = file.compact_stem.len().min(target.len());
+                    let longest = file.compact_stem.len().max(target.len());
+                    if shortest >= 6 && longest > 0 && shortest as f64 / longest as f64 >= 0.82
+                        && (file.compact_stem.starts_with(target) || target.starts_with(&file.compact_stem))
+                    {
+                        score = score.max(500 - longest.saturating_sub(shortest) as i32 * 20);
+                    }
+                }
+            }
+            if score == 0 {
+                continue;
+            }
+            if file.lower_path.contains("/textures/item/") || file.lower_path.contains("/textures/items/") {
+                score += 60;
+            }
+            scored.push((score, file.root_priority, file.lower_path.clone(), file.path.clone()));
+        }
+        scored.sort_by(|a, b| b.0.cmp(&a.0)
+            .then_with(|| a.1.cmp(&b.1))
+            .then_with(|| a.2.cmp(&b.2)));
+        scored.into_iter().map(|(_, _, _, path)| path).collect()
+    }
+}
+
+fn texture_candidates(index: &EquipmentTextureIndex, source: &EquipmentSource) -> Vec<PathBuf> {
     let mut stems = Vec::<String>::new();
+    if let Some(model_refs) = index.item_model_refs.get(&compact_name(&source.registry_name)) {
+        stems.extend(model_refs.iter().filter_map(|reference| texture_stem_from_reference(reference)));
+    }
     for reference in declared_equipment_texture_refs(&source.source_text) {
         if let Some(stem) = texture_stem_from_reference(&reference) {
             stems.push(stem);
@@ -1357,34 +1558,7 @@ fn texture_candidates(source_roots: &[PathBuf], source: &EquipmentSource) -> Vec
     if let Some(stripped) = source.class_name.strip_prefix("Item") {
         stems.push(stripped.to_owned());
     }
-    let stems: BTreeSet<String> = stems.into_iter().map(|value| value.to_ascii_lowercase()).collect();
-    let mut candidates = Vec::<PathBuf>::new();
-
-    for root in source_roots {
-        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
-            if !entry.file_type().is_file()
-                || !entry.path().extension().and_then(|value| value.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-            {
-                continue;
-            }
-            let Some(stem) = entry.path().file_stem().and_then(|value| value.to_str()) else { continue };
-            if stems.contains(&stem.to_ascii_lowercase()) {
-                candidates.push(entry.into_path());
-            }
-        }
-    }
-
-    candidates.sort_by_key(|path| {
-        let text = path.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
-        let preferred = if text.contains("/textures/item/") || text.contains("/textures/items/") { 0 } else { 1 };
-        (preferred, text.len(), text)
-    });
-    let mut seen = BTreeSet::new();
-    candidates.retain(|path| {
-        let key = fs::canonicalize(path).unwrap_or_else(|_| path.clone()).to_string_lossy().to_ascii_lowercase();
-        seen.insert(key)
-    });
-    candidates
+    index.candidates(&stems)
 }
 
 fn placeholder_item_png() -> Vec<u8> {
@@ -1516,6 +1690,9 @@ pub fn export_equipment_to_workspace(
     let creative_tabs = crate::localization::CreativeTabCatalog::load(source_roots);
 
     let discovered = discover_equipment_sources(source_roots)?;
+    // Reuse one icon/model-resource index for the whole equipment batch. The
+    // previous per-item WalkDir made texture matching scale as item_count × files.
+    let texture_index = EquipmentTextureIndex::new(source_roots);
     let mut tool_materials = compiled_tool_materials(source_roots)?;
     // Decompiled source takes precedence over bytecode-derived material values.
     tool_materials.extend(source_tool_materials(source_roots, &import_modid));
@@ -1557,7 +1734,7 @@ pub fn export_equipment_to_workspace(
             template
         };
 
-        let candidates = texture_candidates(source_roots, source);
+        let candidates = texture_candidates(&texture_index, source);
         let texture_source = candidates.first().cloned();
         let mut texture_name = registry.clone();
         let target_texture = if let Some(path) = texture_source.as_ref() {
@@ -1741,6 +1918,66 @@ mod equipment_discovery_tests {
         assert_eq!(updated["mod_elements"][0]["registry_name"],"example");
         assert_eq!(updated["mod_elements"][0]["metadata"]["files"][0],"src/main/resources/assets/converted/textures/item/example.png");
         assert_eq!(updated["language_map"]["en_us"]["item.converted.example.name"],"Example");
+    }
+
+    #[test]
+    fn discovers_custom_item_base_weapons_and_keeps_them_as_tools() {
+        let parents = BTreeMap::from([
+            ("WeaponBase".to_owned(), "Object".to_owned()),
+        ]);
+        assert_eq!(
+            equipment_kind("ItemLostInfinitySword", "WeaponBase", &parents, ""),
+            Some(("tool".to_owned(), Some("Sword".to_owned())))
+        );
+        assert_eq!(
+            equipment_kind(
+                "ItemBigBertha",
+                "Item",
+                &BTreeMap::new(),
+                "float weaponDamage = 20.0F; public void hitEntity() {}"
+            ),
+            Some(("tool".to_owned(), Some("Sword".to_owned())))
+        );
+        assert_eq!(
+            equipment_kind("ItemRegistry", "Object", &BTreeMap::new(), ""),
+            None
+        );
+    }
+
+    #[test]
+    fn resolves_standalone_item_icon_from_models_item_layer0() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(source.join("assets/demo/models/item")).unwrap();
+        fs::create_dir_all(source.join("assets/demo/textures/items")).unwrap();
+        fs::create_dir_all(&workspace).unwrap();
+        fs::write(source.join("assets/demo/textures/items/plain_icon.png"), b"standalone-icon").unwrap();
+        fs::write(source.join("assets/demo/models/item/plain_icon.json"), serde_json::to_vec(&json!({
+            "parent":"minecraft:item/generated",
+            "textures":{"layer0":"demo:item/plain_icon"}
+        })).unwrap()).unwrap();
+        fs::write(source.join("ModItems.java"), r#"
+            public class ModItems {
+                public static final Item PLAIN = new PlainItem();
+                public static void register() {
+                    GameRegistry.registerItem(PLAIN, "plain_icon");
+                }
+            }
+            public class PlainItem extends Item { }
+        "#).unwrap();
+        let descriptor = workspace.join("test.mcreator");
+        fs::write(&descriptor, serde_json::to_vec(&json!({
+            "mcreatorVersion":202600,
+            "workspaceSettings":{"modid":"converted","modElementsPackage":"demo.converted","currentGenerator":"neoforge-1.21.1"},
+            "mod_elements":[]
+        })).unwrap()).unwrap();
+
+        let report = export_equipment_to_workspace(&[source], &workspace, "demo", 89).unwrap();
+        assert_eq!(report.exported, 1);
+        assert_eq!(report.records[0].texture, "plain_icon");
+        assert!(workspace.join("src/main/resources/assets/converted/textures/item/plain_icon.png").is_file());
+        assert!(!report.warnings.iter().any(|warning| warning.contains("No source icon texture found")));
     }
 
     #[test]
