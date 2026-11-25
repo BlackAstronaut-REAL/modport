@@ -865,6 +865,7 @@ fn write_native_registries(
     mod_id: &str,
     items: &[ItemRecord],
     blocks: &[BlockRecord],
+    armors: &[ArmorSetRecord],
     entities: &[EntityMetadata],
 ) -> Result<Vec<String>> {
     let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
@@ -872,12 +873,17 @@ fn write_native_registries(
     fs::create_dir_all(&registry_root)?;
 
     fs::write(registry_root.join("ModBlocks.java"), generate_blocks_java(package, mod_id, blocks))?;
-    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, blocks))?;
+    fs::write(registry_root.join("ModItems.java"), generate_items_java(package, mod_id, items, blocks, armors))?;
 
     let mut generated = vec![
         format!("src/main/java/{}/registry/ModBlocks.java", package.replace('.', "/")),
         format!("src/main/java/{}/registry/ModItems.java", package.replace('.', "/")),
     ];
+
+    if !armors.is_empty() {
+        fs::write(registry_root.join("ModArmorMaterials.java"), generate_armor_materials_java(package, armors))?;
+        generated.push(format!("src/main/java/{}/registry/ModArmorMaterials.java", package.replace('.', "/")));
+    }
 
     if !entities.is_empty() {
         let entity_root = java_base.join("entity");
@@ -887,14 +893,12 @@ fn write_native_registries(
 
         fs::write(registry_root.join("ModEntities.java"), generate_entities_java(package, mod_id, entities))?;
         fs::write(entity_root.join("ModEntityAttributes.java"), generate_entity_attributes_java(package, entities))?;
-        fs::write(java_base.join("NeoForgeMod.java"), generate_mod_entrypoint(package, mod_id))?;
         fs::write(client_root.join("ModEntityRenderers.java"), generate_entity_renderers_java(
             package, mod_id, resources_root, entities
         ))?;
 
         generated.push(format!("src/main/java/{}/registry/ModEntities.java", package.replace('.', "/")));
         generated.push(format!("src/main/java/{}/entity/ModEntityAttributes.java", package.replace('.', "/")));
-        generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
         generated.push(format!("src/main/java/{}/client/ModEntityRenderers.java", package.replace('.', "/")));
 
         for entity in entities {
@@ -904,8 +908,91 @@ fn write_native_registries(
         }
     }
 
+    // The scaffold entry point is replaced only when an extra registry must be
+    // attached; its base implementation already handles blocks/items/entities.
+    if !armors.is_empty() || !entities.is_empty() {
+        fs::write(java_base.join("NeoForgeMod.java"), generate_mod_entrypoint(
+            package, mod_id, !armors.is_empty(), !entities.is_empty()
+        ))?;
+        generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
+    }
+
     generated.sort();
+    generated.dedup();
     Ok(generated)
+}
+
+fn generate_armor_materials_java(package: &str, armors: &[ArmorSetRecord]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import java.util.Map;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.ArmorMaterial;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModArmorMaterials {{
+    public static final DeferredRegister<ArmorMaterial> ARMOR_MATERIALS =
+        DeferredRegister.create(Registries.ARMOR_MATERIAL, NeoForgeMod.MOD_ID);
+"#);
+    for armor in armors {
+        let field = java_field_name(&armor.material_id, "ARMOR_MATERIAL");
+        let helmet = armor.defense.get("helmet").copied().unwrap_or(2);
+        let chest = armor.defense.get("body").copied().unwrap_or(5);
+        let leggings = armor.defense.get("leggings").copied().unwrap_or(6);
+        let boots = armor.defense.get("boots").copied().unwrap_or(2);
+        body.push_str(&format!(
+            r#"    public static final DeferredHolder<ArmorMaterial, ArmorMaterial> {field} =
+        ARMOR_MATERIALS.register("{id}", () -> new ArmorMaterial(
+            Map.of(
+                ArmorItem.Type.BOOTS, {boots},
+                ArmorItem.Type.LEGGINGS, {leggings},
+                ArmorItem.Type.CHESTPLATE, {chest},
+                ArmorItem.Type.HELMET, {helmet}
+            ),
+            {enchantability},
+            SoundEvents.ARMOR_EQUIP_GENERIC,
+            () -> Ingredient.of(Items.IRON_INGOT),
+            java.util.List.of(new ArmorMaterial.Layer(ResourceLocation.fromNamespaceAndPath(
+                NeoForgeMod.MOD_ID, "{texture_asset}"
+            ))),
+            {toughness}F,
+            {knockback}F
+        ));
+"#,
+            id = armor.material_id,
+            enchantability = armor.enchantability,
+            texture_asset = armor.texture_asset,
+            toughness = armor.toughness,
+            knockback = armor.knockback_resistance
+        ));
+    }
+    body.push_str(r#"
+    private ModArmorMaterials() {}
+
+    public static void register(IEventBus modEventBus) {
+        ARMOR_MATERIALS.register(modEventBus);
+    }
+}
+"#);
+    body
+}
+
+fn armor_item_type(part: &str) -> &'static str {
+    match part {
+        "helmet" => "HELMET",
+        "body" => "CHESTPLATE",
+        "leggings" => "LEGGINGS",
+        "boots" => "BOOTS",
+        _ => "HELMET",
+    }
 }
 
 fn collect_native_entities(source: &BTreeMap<String, EntityMetadata>) -> Vec<EntityMetadata> {
@@ -1173,33 +1260,43 @@ fn find_entity_texture(resources_root: &Path, mod_id: &str, entity: &EntityMetad
     Some(path.strip_prefix(&namespace_root).ok()?.to_string_lossy().replace('\\', "/"))
 }
 
-fn generate_mod_entrypoint(package: &str, mod_id: &str) -> String {
-    format!(r#"package {package};
+fn generate_mod_entrypoint(package: &str, mod_id: &str, has_armors: bool, has_entities: bool) -> String {
+    let mut body = format!(r#"package {package};
 
 import {package}.registry.ModBlockEntities;
 import {package}.registry.ModBlocks;
 import {package}.registry.ModEntities;
 import {package}.registry.ModItems;
-import {package}.entity.ModEntityAttributes;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
-
+"#);
+    if has_armors {
+        body.push_str(&format!("import {package}.registry.ModArmorMaterials;\n"));
+    }
+    if has_entities {
+        body.push_str(&format!("import {package}.entity.ModEntityAttributes;\n"));
+    }
+    body.push_str(&format!(r#"
 @Mod("{mod_id}")
 public final class NeoForgeMod {{
     public static final String MOD_ID = "{mod_id}";
 
     public NeoForgeMod(IEventBus modEventBus) {{
         ModBlocks.register(modEventBus);
-        ModItems.register(modEventBus);
+"#));
+    if has_armors {
+        body.push_str("        ModArmorMaterials.register(modEventBus);\n");
+    }
+    body.push_str(r#"        ModItems.register(modEventBus);
         ModEntities.register(modEventBus);
         ModBlockEntities.register(modEventBus);
-        modEventBus.addListener(ModEntityAttributes::createAttributes);
-    }}
-}}
-"#)
+"#);
+    if has_entities {
+        body.push_str("        modEventBus.addListener(ModEntityAttributes::createAttributes);\n");
+    }
+    body.push_str("    }\n}\n");
+    body
 }
-
-
 fn generate_blocks_java(package: &str, _mod_id: &str, blocks: &[BlockRecord]) -> String {
     let mut body = format!(r#"package {package}.registry;
 
@@ -1239,7 +1336,13 @@ public final class ModBlocks {{
 "#);
     body
 }
-fn generate_items_java(package: &str, _mod_id: &str, items: &[ItemRecord], blocks: &[BlockRecord]) -> String {
+fn generate_items_java(
+    package: &str,
+    _mod_id: &str,
+    items: &[ItemRecord],
+    blocks: &[BlockRecord],
+    armors: &[ArmorSetRecord],
+) -> String {
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
@@ -1248,8 +1351,13 @@ import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-
-public final class ModItems {{
+"#);
+    if !armors.is_empty() {
+        body.push_str("import net.minecraft.world.item.ArmorItem;\n");
+        body.push_str(&format!("import {package}.registry.ModArmorMaterials;\n"));
+    }
+    body.push_str(r#"
+public final class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(NeoForgeMod.MOD_ID);
 "#);
     for item in items {
@@ -1270,6 +1378,23 @@ public final class ModItems {{
             id = block.id
         ));
     }
+    for armor in armors {
+        let material_field = java_field_name(&armor.material_id, "ARMOR_MATERIAL");
+        for piece in &armor.pieces {
+            let field = java_field_name(&piece.id, "ARMOR");
+            let item_type = armor_item_type(&piece.part);
+            body.push_str(&format!(
+                r#"    public static final DeferredItem<ArmorItem> {field} = ITEMS.register("{id}", () -> new ArmorItem(
+        ModArmorMaterials.{material_field},
+        ArmorItem.Type.{item_type},
+        new Item.Properties().durability({durability})
+    ));
+"#,
+                id = piece.id,
+                durability = piece.durability
+            ));
+        }
+    }
     body.push_str(r#"
     private ModItems() {}
 
@@ -1285,6 +1410,7 @@ fn write_native_resources(
     mod_id: &str,
     items: &[ItemRecord],
     blocks: &[BlockRecord],
+    armors: &[ArmorSetRecord],
 ) -> Result<Vec<String>> {
     let namespace_root = resources_root.join("assets").join(mod_id);
     let textures_root = namespace_root.join("textures");
@@ -1340,13 +1466,35 @@ fn write_native_resources(
         }
     }
 
+    for armor in armors {
+        for piece in &armor.pieces {
+            let key = format!("item.{mod_id}.{}", piece.id);
+            localization.entry(key).or_insert_with(|| json!(display_name_from_id(&piece.id)));
+            let model_path = namespace_root.join(format!("models/item/{}.json", piece.id));
+            if !model_path.exists() {
+                let texture = find_texture_reference(&textures_root, mod_id, &piece.id, &piece.class_name)
+                    .unwrap_or_else(|| "minecraft:item/barrier".to_owned());
+                write_json_file(&model_path, &json!({
+                    "parent": "minecraft:item/generated",
+                    "textures": {"layer0": texture}
+                }))?;
+                written.push(relative_to(resources_root, &model_path));
+            }
+        }
+        for layer in [1, 2] {
+            let path = namespace_root.join(format!("textures/models/armor/{}_layer_{layer}.png", armor.texture_asset));
+            if path.is_file() {
+                written.push(relative_to(resources_root, &path));
+            }
+        }
+    }
+
     write_json_file(&lang, &Value::Object(localization))?;
     written.push(relative_to(resources_root, &lang));
     written.sort();
     written.dedup();
     Ok(written)
 }
-
 fn find_texture_reference(textures_root: &Path, mod_id: &str, registry_id: &str, class_name: &str) -> Option<String> {
     if !textures_root.is_dir() { return None; }
     let wanted = BTreeSet::from([compact(registry_id), compact(class_name)]);
