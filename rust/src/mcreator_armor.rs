@@ -1165,7 +1165,7 @@ mod tests {
         assert_eq!(ruby["enchant_respiration"], 1.0);
         assert_eq!(ruby["enchant_protection"], 3.0);
         assert_eq!(ruby["enchant_feather_falling"], 8.0);
-        assert!(!ruby.contains_key("enchant_aqua_affinity") == false);
+        assert!(ruby.contains_key("enchant_aqua_affinity"));
     }
 
     #[test]
