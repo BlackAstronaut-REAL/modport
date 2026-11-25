@@ -27,6 +27,7 @@ pub struct LegacyApiMethodMapping {
     pub conversion_status: String,
     pub notes: String,
     pub documentation_urls: Vec<String>,
+    pub target_documentation_urls: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -462,11 +463,146 @@ fn documentation_url(version: &str, path: &str) -> Option<String> {
     Some(format!("{base}{path}"))
 }
 
+fn source_owner_doc_path(version: &str, owner: &str) -> Option<&'static str> {
+    let modern_fml = version != "1.7.10";
+    match owner {
+        "GameRegistry" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/registry/GameRegistry.html"
+        } else {
+            "cpw/mods/fml/common/registry/GameRegistry.html"
+        }),
+        "IWorldGenerator" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/IWorldGenerator.html"
+        } else {
+            "cpw/mods/fml/common/IWorldGenerator.html"
+        }),
+        "IFuelHandler" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/IFuelHandler.html"
+        } else {
+            "cpw/mods/fml/common/IFuelHandler.html"
+        }),
+        "IMessage" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/network/simpleimpl/IMessage.html"
+        } else {
+            "cpw/mods/fml/common/network/simpleimpl/IMessage.html"
+        }),
+        "IMessageHandler" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/network/simpleimpl/IMessageHandler.html"
+        } else {
+            "cpw/mods/fml/common/network/simpleimpl/IMessageHandler.html"
+        }),
+        "SimpleNetworkWrapper" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"
+        } else {
+            "cpw/mods/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"
+        }),
+        "IExtendedEntityProperties" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/IExtendedEntityProperties.html"
+        } else {
+            "cpw/mods/fml/common/IExtendedEntityProperties.html"
+        }),
+        "ITickHandler" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/ITickHandler.html"
+        } else {
+            "cpw/mods/fml/common/ITickHandler.html"
+        }),
+        "IPlayerTracker" => Some(if modern_fml {
+            "net/minecraftforge/fml/common/IPlayerTracker.html"
+        } else {
+            "cpw/mods/fml/common/IPlayerTracker.html"
+        }),
+        "OreDictionary" => Some("net/minecraftforge/oredict/OreDictionary.html"),
+        _ => None,
+    }
+}
+
+fn target_owner_doc_path(owner: &str) -> Option<&'static str> {
+    let owner = owner.trim().split('<').next().unwrap_or(owner).trim();
+    let owner = owner.strip_suffix(".Builder").unwrap_or(owner);
+    let owner = owner.strip_suffix(".Properties").unwrap_or(owner);
+    match owner {
+        "Item" => Some("net/minecraft/world/item/Item.html"),
+        "IItemExtension" => Some("net/neoforged/neoforge/common/extensions/IItemExtension.html"),
+        "ItemStack" => Some("net/minecraft/world/item/ItemStack.html"),
+        "ItemAttributeModifiers" => Some("net/minecraft/world/item/ItemAttributeModifiers.html"),
+        "FoodProperties" => Some("net/minecraft/world/food/FoodProperties.html"),
+        "DataComponents" => Some("net/minecraft/core/component/DataComponents.html"),
+        "DataComponentType" => Some("net/minecraft/core/component/DataComponentType.html"),
+        "ItemEnchantments" => Some("net/minecraft/world/item/enchantment/ItemEnchantments.html"),
+        "Block" => Some("net/minecraft/world/level/block/Block.html"),
+        "BlockState" => Some("net/minecraft/world/level/block/state/BlockState.html"),
+        "BlockBehaviour" => Some("net/minecraft/world/level/block/state/BlockBehaviour.html"),
+        "BlockPos" => Some("net/minecraft/core/BlockPos.html"),
+        "Level" => Some("net/minecraft/world/level/Level.html"),
+        "LevelReader" => Some("net/minecraft/world/level/LevelReader.html"),
+        "LevelAccessor" => Some("net/minecraft/world/level/LevelAccessor.html"),
+        "Entity" => Some("net/minecraft/world/entity/Entity.html"),
+        "LivingEntity" => Some("net/minecraft/world/entity/LivingEntity.html"),
+        "Mob" => Some("net/minecraft/world/entity/Mob.html"),
+        "Player" => Some("net/minecraft/world/entity/player/Player.html"),
+        "ServerPlayer" => Some("net/minecraft/server/level/ServerPlayer.html"),
+        "DamageSource" => Some("net/minecraft/world/damagesource/DamageSource.html"),
+        "BlockEntity" => Some("net/minecraft/world/level/block/entity/BlockEntity.html"),
+        "CompoundTag" => Some("net/minecraft/nbt/CompoundTag.html"),
+        "Tag" => Some("net/minecraft/nbt/Tag.html"),
+        "UseOnContext" => Some("net/minecraft/world/item/context/UseOnContext.html"),
+        "InteractionResult" => Some("net/minecraft/world/InteractionResult.html"),
+        "InteractionResultHolder" => Some("net/minecraft/world/InteractionResultHolder.html"),
+        "TooltipFlag" => Some("net/minecraft/world/item/TooltipFlag.html"),
+        "SoundEvent" => Some("net/minecraft/sounds/SoundEvent.html"),
+        "SoundSource" => Some("net/minecraft/sounds/SoundSource.html"),
+        "ResourceLocation" => Some("net/minecraft/resources/ResourceLocation.html"),
+        "Holder" => Some("net/minecraft/core/Holder.html"),
+        "Registry" => Some("net/minecraft/core/Registry.html"),
+        "Recipe" => Some("net/minecraft/world/item/crafting/Recipe.html"),
+        "RecipeType" => Some("net/minecraft/world/item/crafting/RecipeType.html"),
+        "RecipeInput" => Some("net/minecraft/world/item/crafting/RecipeInput.html"),
+        "AbstractContainerMenu" => Some("net/minecraft/world/inventory/AbstractContainerMenu.html"),
+        "Container" => Some("net/minecraft/world/Container.html"),
+        "DeferredRegister" => Some("net/neoforged/neoforge/registries/DeferredRegister.html"),
+        "RegisterEvent" => Some("net/neoforged/neoforge/registries/RegisterEvent.html"),
+        "RegisterCapabilitiesEvent" => Some("net/neoforged/neoforge/capabilities/RegisterCapabilitiesEvent.html"),
+        "IItemHandler" => Some("net/neoforged/neoforge/items/IItemHandler.html"),
+        "IItemHandlerModifiable" => Some("net/neoforged/neoforge/items/IItemHandlerModifiable.html"),
+        "IFluidHandler" => Some("net/neoforged/neoforge/fluids/capability/IFluidHandler.html"),
+        "PacketDistributor" => Some("net/neoforged/neoforge/network/PacketDistributor.html"),
+        "CustomPacketPayload" => Some("net/minecraft/network/protocol/common/custom/CustomPacketPayload.html"),
+        "StreamCodec" => Some("net/minecraft/network/codec/StreamCodec.html"),
+        "BiomeModifier" => Some("net/neoforged/neoforge/common/world/BiomeModifier.html"),
+        "Goal" => Some("net/minecraft/world/entity/ai/goal/Goal.html"),
+        "PathNavigation" => Some("net/minecraft/world/entity/ai/navigation/PathNavigation.html"),
+        "MobEffectInstance" => Some("net/minecraft/world/effect/MobEffectInstance.html"),
+        "FoodData" => Some("net/minecraft/world/food/FoodData.html"),
+        "Enchantment" => Some("net/minecraft/world/item/enchantment/Enchantment.html"),
+        _ => None,
+    }
+}
+
+fn target_documentation_urls(target: &str) -> Vec<String> {
+    let mut urls = BTreeSet::new();
+    for piece in target.split(" / ") {
+        let owner = piece.split('#').next().unwrap_or(piece).trim();
+        if let Some(path) = target_owner_doc_path(owner) {
+            urls.insert(format!("https://lexxie.dev/neoforge/1.21.1/{path}"));
+        }
+    }
+    urls.into_iter().collect()
+}
+
 fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
     let source_versions = definition.versions.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>();
-    let documentation_urls = definition.versions.iter()
-        .filter_map(|version| documentation_url(version, definition.docs))
-        .collect();
+    let mut documentation_urls = BTreeSet::new();
+    for version in definition.versions {
+        if !definition.docs.is_empty() {
+            if let Some(url) = documentation_url(version, definition.docs) {
+                documentation_urls.insert(url);
+            }
+        } else if let Some(path) = source_owner_doc_path(version, definition.owner) {
+            if let Some(url) = documentation_url(version, path) {
+                documentation_urls.insert(url);
+            }
+        }
+    }
     LegacyApiMethodMapping {
         source_owner: definition.owner.to_owned(),
         source_method: definition.method.to_owned(),
@@ -476,7 +612,8 @@ fn to_mapping(definition: &Definition) -> LegacyApiMethodMapping {
         category: definition.category.to_owned(),
         conversion_status: definition.status.to_owned(),
         notes: definition.notes.to_owned(),
-        documentation_urls,
+        documentation_urls: documentation_urls.into_iter().collect(),
+        target_documentation_urls: target_documentation_urls(definition.target),
     }
 }
 
