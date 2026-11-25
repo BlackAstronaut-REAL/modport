@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use tempfile::Builder;
 use walkdir::WalkDir;
+use rayon::prelude::*;
 use zip::ZipArchive;
 
 static REGISTRY_CACHE: OnceLock<Mutex<HashMap<String, (u64, CompiledRegistryIndex)>>> = OnceLock::new();
@@ -500,10 +501,21 @@ pub fn scan_compiled_registrations(roots: &[PathBuf]) -> Result<CompiledRegistry
     paths.sort();
     paths.dedup();
 
+    // Class-file decoding is independent per file and is the CPU-heavy portion
+    // of large legacy mod scans. Parse in parallel, then merge in sorted path
+    // order so duplicate-class precedence and diagnostics remain deterministic.
+    let parsed_results: Vec<(PathBuf, Result<ClassFile>)> = paths.par_iter()
+        .map(|path| {
+            let parsed = fs::read(path)
+                .with_context(|| format!("Reading compiled class {}", path.display()))
+                .and_then(|bytes| ClassFile::parse(&bytes));
+            (path.clone(), parsed)
+        })
+        .collect();
+
     let mut parsed = HashMap::<String, ClassFile>::new();
-    for path in &paths {
-        let bytes = match fs::read(path) { Ok(value) => value, Err(_) => continue };
-        let class = match ClassFile::parse(&bytes) {
+    for (path, result) in parsed_results {
+        let class = match result {
             Ok(value) => value,
             Err(error) => {
                 index.warnings.push(format!("Skipped unreadable class {}: {error}", path.display()));
