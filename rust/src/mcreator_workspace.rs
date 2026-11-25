@@ -325,6 +325,8 @@ pub fn export_living_entities_to_workspace_with_modid(
     roots.extend(graph.source_roots.iter().cloned());
     roots.sort();
     roots.dedup();
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(&roots, &source_modid);
+    let localization = crate::localization::LocalizationCatalog::load(&roots, &field_registry_map);
     let shallow_roots = graph.source_roots.clone();
     let texture_index = TextureIndex::new(&roots, &shallow_roots).ok();
 
@@ -444,10 +446,19 @@ pub fn export_living_entities_to_workspace_with_modid(
         let mut metadata_files: Vec<String> = written_sources.values().cloned().collect();
         metadata_files.push(texture_relative);
 
-        let element = build_living_entity_element(
+        let display_name = localization.translated_name(&registry_name, &raw_meta.display_name);
+        let mut element = build_living_entity_element(
             template.as_ref(), &raw_meta, registration, &cached.class_name,
             &texture_name, &cached.export.animations
         );
+        if let Some(definition) = element.get_mut("definition").and_then(Value::as_object_mut) {
+            if definition.contains_key("mobName") {
+                definition.insert("mobName".to_owned(), json!(display_name));
+            }
+            if definition.contains_key("mobLabel") && definition.get("mobLabel").and_then(Value::as_str).unwrap_or("").is_empty() {
+                definition.insert("mobLabel".to_owned(), json!(display_name));
+            }
+        }
         let element_path = write_living_entity_element(&elements_dir, &element_name, &element)?;
         metadata_files.push(relative_path(&workspace_root, &element_path));
 
@@ -476,7 +487,7 @@ pub fn export_living_entities_to_workspace_with_modid(
         } else {
             descriptors.push(descriptor);
         }
-        update_language(&mut workspace, &modid, &element_name, &registry_name, &raw_meta.display_name);
+        update_language(&mut workspace, &modid, &element_name, &registry_name, &display_name);
 
         records.push(WorkspaceEntityRecord {
             entity_class: registration.entity_class.clone(),
