@@ -402,7 +402,7 @@ pub fn port_to_neoforge(
         .map(|record| NativeBlockEntityPlan {
             registry_name: record.registry_name.clone(),
             source_class: record.source_class.clone(),
-            source_path: record.source_path.clone(),
+            source_path: prepared.display_source_path(&record.source_path),
             associated_blocks: record.associated_blocks.clone(),
             generated_class: generated_block_entity_class(&record.source_class),
             generated_as: if record.associated_blocks.is_empty() {
@@ -1709,13 +1709,14 @@ public final class ModBlockEntities {{
 "#);
     for entity in block_entities {
         let field = java_field_name(&entity.registry_name, "BLOCK_ENTITY");
-        let first_block = &entity.associated_blocks[0];
-        let block_field = java_field_name(first_block, "BLOCK");
+        let block_fields = entity.associated_blocks.iter()
+            .map(|block| format!("ModBlocks.{}.get()", java_field_name(block, "BLOCK")))
+            .collect::<Vec<_>>().join(",\n            ");
         body.push_str(&format!(
             r#"    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<{class_name}>> {field} =
         BLOCK_ENTITY_TYPES.register("{id}", () -> BlockEntityType.Builder.of(
             (pos, state) -> new {class_name}(ModBlockEntities.{field}.get(), pos, state),
-            ModBlocks.{block_field}.get()
+            {block_fields}
         ).build(null));
 "#,
             class_name = entity.generated_class,
@@ -2192,7 +2193,6 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -2931,6 +2931,68 @@ mod tests {
         assert!(items.contains(".craftRemainder(Items.BUCKET)"));
         assert!(items.contains("import net.minecraft.world.item.Rarity;\n"));
         assert!(items.contains("import net.minecraft.world.item.Items;\n"));
+    }
+
+    #[test]
+    fn ports_registered_block_entities_with_entity_block_owners() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("machine_mod");
+        let output = temp.path().join("machine_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"machinemod","name":"Machine Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/RubyMachineBlock.java"), r#"
+            public class RubyMachineBlock extends Block {
+                public RubyMachineBlock() { super(BlockBehaviour.Properties.of().strength(3.0F, 5.0F)); }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/RubyMachineBlockEntity.java"), r#"
+            public class RubyMachineBlockEntity extends BlockEntity {
+                public RubyMachineBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+                    super(type, pos, state);
+                }
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/ModBlocks.java"), r#"
+            public class ModBlocks {
+                public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);
+                public static final DeferredBlock<Block> RUBY_MACHINE =
+                    BLOCKS.register("ruby_machine", () -> new RubyMachineBlock());
+            }
+        "#).unwrap();
+        fs::write(source.join("src/main/java/demo/ModBlockEntities.java"), r#"
+            public class ModBlockEntities {
+                public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
+                    DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
+                public static final Supplier<BlockEntityType<RubyMachineBlockEntity>> RUBY_MACHINE =
+                    BLOCK_ENTITY_TYPES.register("ruby_machine", () -> BlockEntityType.Builder.of(
+                        RubyMachineBlockEntity::new, ModBlocks.RUBY_MACHINE.get()
+                    ).build(null));
+            }
+        "#).unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+
+        assert_eq!(report.blocks.len(), 1);
+        assert_eq!(report.block_entities.len(), 1);
+        let entity = &report.block_entities[0];
+        assert_eq!(entity.registry_name, "ruby_machine");
+        assert_eq!(entity.associated_blocks, vec!["ruby_machine"]);
+        assert!(entity.generated_as.contains("EntityBlock"));
+
+        let java_root = output.join("src/main/java/com/modport/machinemod");
+        let blocks = fs::read_to_string(java_root.join("registry/ModBlocks.java")).unwrap();
+        assert!(blocks.contains("implements EntityBlock"));
+        assert!(blocks.contains("new ConvertedRubyMachineBlockEntity"));
+        let registry = fs::read_to_string(java_root.join("registry/ModBlockEntities.java")).unwrap();
+        assert!(registry.contains("BlockEntityType.Builder.of"));
+        assert!(registry.contains("ModBlocks.BLOCK_RUBY_MACHINE.get()"));
+        let generated = fs::read_to_string(java_root.join("blockentity/ConvertedRubyMachineBlockEntity.java")).unwrap();
+        assert!(generated.contains("extends BlockEntity"));
+        assert!(generated.contains("super(type, pos, state)"));
+        let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
+        assert_eq!(status["converted"]["block_entity_placeholders"], 1);
     }
 
     #[test]
