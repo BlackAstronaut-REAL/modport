@@ -36,8 +36,17 @@ pub struct NativeItemPlan {
     pub stack_size: u32,
     pub source_path: String,
     pub lore: Vec<String>,
+    pub food: Option<NativeFoodPlan>,
     pub generated_as: String,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NativeFoodPlan {
+    pub nutrition: u32,
+    pub saturation: f32,
+    pub always_edible: bool,
+    pub fast: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -150,7 +159,16 @@ struct ItemRecord {
     stack_size: u32,
     kind: String,
     lore: Vec<String>,
+    food: Option<FoodRecord>,
     warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct FoodRecord {
+    nutrition: u32,
+    saturation: f32,
+    always_edible: bool,
+    fast: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -359,7 +377,18 @@ pub fn port_to_neoforge(
         stack_size: item.stack_size,
         source_path: item.source_path.clone(),
         lore: item.lore.clone(),
-        generated_as: if item.lore.is_empty() { "vanilla Item registration".to_owned() } else { "native Item subclass with formatted legacy tooltip lore".to_owned() },
+        food: item.food.as_ref().map(|food| NativeFoodPlan {
+            nutrition: food.nutrition,
+            saturation: food.saturation,
+            always_edible: food.always_edible,
+            fast: food.fast,
+        }),
+        generated_as: match (item.lore.is_empty(), item.food.is_some()) {
+            (false, true) => "native Item with FoodProperties and formatted legacy tooltip lore".to_owned(),
+            (true, true) => "native Item with FoodProperties".to_owned(),
+            (false, false) => "native Item subclass with formatted legacy tooltip lore".to_owned(),
+            (true, false) => "vanilla Item registration".to_owned(),
+        },
         warnings: item.warnings.clone(),
     }).collect();
     items.extend(tool_records.iter().map(|tool| NativeItemPlan {
@@ -656,6 +685,56 @@ fn java_field_name(value: &str, prefix: &str) -> String {
     format!("{prefix}_{name}")
 }
 
+fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
+    let identity = format!("{} {}", source.class_name, source.superclass).to_ascii_lowercase();
+    if !identity.contains("itemfood") && !identity.contains("fooditem")
+        && !source.source_text.to_ascii_lowercase().contains("foodproperties") {
+        return None;
+    }
+
+    let class_pattern = Regex::new(&format!(
+        r"(?s)\\b{}\\s*\\([^)]*\\)\\s*\\{{(.*?)\\}}",
+        regex::escape(&source.class_name)
+    )).expect("static constructor-body regex");
+    let constructor_body = class_pattern.captures(&source.source_text)
+        .and_then(|capture| capture.get(1))
+        .map(|capture| capture.as_str())
+        .unwrap_or(&source.source_text);
+    let super_call = Regex::new(r"(?s)\\bsuper\\s*\\(([^)]*)\\)")
+        .expect("static food superclass constructor regex");
+    let args = super_call.captures(constructor_body)
+        .and_then(|capture| capture.get(1))
+        .map(|capture| capture.as_str())
+        .unwrap_or("");
+    let numeric = Regex::new(r"-?\\d+(?:\\.\\d+)?")
+        .expect("static food numeric argument regex");
+    let values: Vec<f64> = numeric.find_iter(args)
+        .filter_map(|value| value.as_str().parse::<f64>().ok())
+        .filter(|value| value.is_finite())
+        .collect();
+
+    let nutrition = values.first().copied().unwrap_or(4.0).round().clamp(0.0, 40.0) as u32;
+    let saturation = values.get(1).copied().unwrap_or(0.6).clamp(0.0, 20.0) as f32;
+    let lower = source.source_text.to_ascii_lowercase();
+    Some(FoodRecord {
+        nutrition,
+        saturation,
+        always_edible: lower.contains("setalwaysedible") || lower.contains("alwaysedible"),
+        fast: lower.contains("fastfood") || lower.contains("fast_eating") || lower.contains("fastfood()"),
+    })
+}
+
+fn food_properties_java(food: &FoodRecord) -> String {
+    let mut builder = format!(
+        "new FoodProperties.Builder().nutrition({}).saturationMod({}F)",
+        food.nutrition, food.saturation
+    );
+    if food.always_edible { builder.push_str(".alwaysEdible()"); }
+    if food.fast { builder.push_str(".fast()"); }
+    builder.push_str(".build()");
+    builder
+}
+
 fn collect_source_lore(
     source_text: &str,
     language_lore: &LegacyLanguageLoreIndex,
@@ -696,10 +775,14 @@ fn collect_items(
             record_warnings.push("Tool/weapon registry recovered, but its legacy combat stats, mining rules, durability and use behavior are not yet transferred.".to_owned());
         }
         let lore = collect_source_lore(&source.source_text, language_lore, &source.registry_name);
-        if lore.is_empty() {
+        let food = recover_food_properties(source);
+        if lore.is_empty() && food.is_none() {
             record_warnings.push("Non-tooltip custom item methods are not copied; this entry is emitted as a basic native Item.".to_owned());
-        } else {
+        } else if !lore.is_empty() {
             record_warnings.push("Legacy formatted tooltip lore was reconstructed; other custom item methods remain unported.".to_owned());
+        }
+        if food.is_some() && (source.source_text.contains("setPotionEffect") || source.source_text.contains("addEffect")) {
+            record_warnings.push("Custom food effects were detected; nutrition/saturation are ported, but effect type, duration, amplifier and chance are not yet reconstructed.".to_owned());
         }
         items.push(ItemRecord {
             id: normalized_id(&source.registry_name),
@@ -709,6 +792,7 @@ fn collect_items(
             stack_size,
             kind: source.tool_type.clone().unwrap_or_else(|| source.element_type.clone()),
             lore,
+            food,
             warnings: record_warnings,
         });
     }
@@ -1881,6 +1965,9 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 "#);
+    if items.iter().any(|item| item.food.is_some()) {
+        body.push_str("import net.minecraft.world.food.FoodProperties;\\n");
+    }
     if !armors.is_empty() {
         body.push_str("import net.minecraft.world.item.ArmorItem;\n");
         body.push_str(&format!("import {package}.registry.ModArmorMaterials;\n"));
@@ -1914,18 +2001,22 @@ public final class ModItems {
 "#);
     for item in items {
         let field = java_field_name(&item.id, "ITEM");
+        let mut properties = format!("new Item.Properties().stacksTo({})", item.stack_size);
+        if let Some(food) = &item.food {
+            properties.push_str(&format!(".food({})", food_properties_java(food)));
+        }
         if item.lore.is_empty() {
             body.push_str(&format!(
-                r#"    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem("{id}", new Item.Properties().stacksTo({stack_size}));
-"#,
+                "    public static final DeferredItem<Item> {field} = ITEMS.registerSimpleItem(\"{id}\", {properties});\n",
                 id = item.id,
-                stack_size = item.stack_size
+                properties = properties
             ));
         } else {
             let class_name = lore_class_name(&item.id);
             body.push_str(&format!(
-                "    public static final DeferredItem<{package}.item.{class_name}> {field} = ITEMS.register(\"{id}\", () -> new {package}.item.{class_name}(new Item.Properties().stacksTo({stack_size})));\n",
-                id = item.id, stack_size = item.stack_size
+                "    public static final DeferredItem<{package}.item.{class_name}> {field} = ITEMS.register(\"{id}\", () -> new {package}.item.{class_name}({properties}));\n",
+                id = item.id,
+                properties = properties
             ));
         }
     }
@@ -2436,6 +2527,39 @@ mod tests {
         assert!(output.join("src/main/resources/assets/toolmod/models/item/ruby_sword.json").is_file());
         let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
         assert_eq!(status["converted"]["tools_and_weapons"], 2);
+    }
+
+    #[test]
+    fn ports_legacy_food_nutrition_and_saturation_into_food_properties() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("food_mod");
+        let output = temp.path().join("food_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"foodmod","name":"Food Mod"}"#).unwrap();
+        fs::write(source.join("src/main/java/demo/ModFoods.java"), r#"
+            public class ModFoods {
+                public static final Item ROAST = new ItemFoodRoast();
+                public static void register() { GameRegistry.registerItem(ROAST, "roast"); }
+            }
+            public class ItemFoodRoast extends ItemFood {
+                public ItemFoodRoast() {
+                    super(6, 0.8F, false);
+                    setAlwaysEdible();
+                }
+            }
+        "#).unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+        let food = report.items.iter().find(|item| item.registry_name == "roast").unwrap();
+        let food_props = food.food.as_ref().expect("food properties should be recovered");
+        assert_eq!(food_props.nutrition, 6);
+        assert!((food_props.saturation - 0.8).abs() < 0.001);
+        assert!(food_props.always_edible);
+
+        let items = fs::read_to_string(output.join("src/main/java/com/modport/foodmod/registry/ModItems.java")).unwrap();
+        assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationMod(0.8F).alwaysEdible().build()"));
     }
 
     #[test]
