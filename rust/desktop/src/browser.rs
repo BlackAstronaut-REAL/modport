@@ -126,6 +126,21 @@ pub fn scan_mod_roots(roots: &[PathBuf]) -> Result<BrowserIndex> {
     all_files.dedup();
 
 
+    let equipment = discover_equipment_sources(&source_roots)?;
+    let mut tool_materials = compiled_tool_materials(&source_roots)?;
+    tool_materials.extend(source_tool_materials(&source_roots, &source_modid));
+    let blocks = discover_block_sources(&source_roots)?;
+    let armor_sets = discover_armor_sources(&source_roots)?;
+    let compiled_armor = compiled_armor_stats(&source_roots)?;
+    let languages = load_language_data(&all_files, &source_modid);
+    let mut entries = Vec::<BrowserEntry>::new();
+    let mut seen = HashSet::<String>::new();
+
+    let mut add = |entry: BrowserEntry| {
+        let key = format!("{}:{}", entry.category.to_ascii_lowercase(), entry.name.to_ascii_lowercase());
+        if seen.insert(key) { entries.push(entry); }
+    };
+
     // Registered mobs are taken from the existing registration graph.
     // Registered mobs are discovered independently of client renderer registrations.
     for (entity_name, entity) in &graph.entities {
