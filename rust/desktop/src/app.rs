@@ -144,7 +144,7 @@ fn parse_animated_texture(
 fn preferred_texture_index(entry: &BrowserEntry, textures: &[PathBuf]) -> usize {
     // When a model references multiple images, show an animated block/item
     // texture by default instead of silently choosing a static first texture.
-    if textures.len() > 1 {
+    if entry.category != "Armor" && textures.len() > 1 {
         if let Some(index) = textures.iter().position(|path| {
             let metadata_path = PathBuf::from(format!("{}.mcmeta", path.display()));
             fs::read(&metadata_path).ok()
@@ -1171,8 +1171,15 @@ mod armor_texture_selection_tests {
 
     #[test]
     fn leggings_select_layer_two_while_other_armor_selects_layer_one() {
-        let layer_one = PathBuf::from("dragon_layer_1.png");
-        let layer_two = PathBuf::from("dragon_layer_2.png");
+        let temp = tempfile::tempdir().unwrap();
+        let layer_one = temp.path().join("dragon_layer_1.png");
+        let layer_two = temp.path().join("dragon_layer_2.png");
+        fs::write(&layer_one, b"png").unwrap();
+        fs::write(&layer_two, b"png").unwrap();
+        fs::write(
+            PathBuf::from(format!("{}.mcmeta", layer_one.display())),
+            r#"{"animation":{"frametime":2}}"#,
+        ).unwrap();
         let textures = vec![layer_one.clone(), layer_two.clone()];
 
         let leggings = BrowserEntry {
