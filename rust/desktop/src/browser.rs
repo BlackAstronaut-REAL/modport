@@ -70,12 +70,32 @@ impl BrowserIndex {
 }
 
 pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
-    if !root.is_dir() {
-        bail!("Choose an extracted mod/project directory. Raw JAR/ZIP browser indexing is not enabled yet.");
+    scan_mod_roots(&[root.to_path_buf()])
+}
+
+/// Merge compiled, decompiled and original-source directories into one browser
+/// index. The roots are retained separately so textures/resources can resolve
+/// across an independently extracted source tree.
+pub fn scan_mod_roots(roots: &[PathBuf]) -> Result<BrowserIndex> {
+    let mut source_roots = Vec::<PathBuf>::new();
+    for candidate in roots {
+        if candidate.as_os_str().is_empty() { continue; }
+        if !candidate.is_dir() {
+            bail!("Choose extracted mod directories; '{}' is not a directory.", candidate.display());
+        }
+        let canonical = fs::canonicalize(candidate)
+            .with_context(|| format!("Resolving mod directory {}", candidate.display()))?;
+        if !source_roots.contains(&canonical) {
+            source_roots.push(canonical);
+        }
     }
-    let root = fs::canonicalize(root)
-        .with_context(|| format!("Resolving mod directory {}", root.display()))?;
-    let metadata = infer_mod_metadata(&root);
+    let Some(root) = source_roots.first().cloned() else {
+        bail!("Choose at least one Compiled, Decompiled, or Source directory.");
+    };
+    let metadata = source_roots.iter()
+        .map(|source_root| infer_mod_metadata(source_root))
+        .find(|metadata| !metadata.modid.is_empty() || !metadata.name.is_empty())
+        .unwrap_or_else(|| infer_mod_metadata(&root));
     let source_modid = metadata.modid.clone();
     let display_name = if !metadata.name.is_empty() {
         metadata.name
@@ -85,37 +105,26 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         root.file_name().and_then(|value| value.to_str()).unwrap_or("Mod project").to_owned()
     };
 
-    let graph = scan_mod_graph(&root, &[])?;
+    let graph = scan_mod_graph(&root, &source_roots[1..])?;
     let mut all_files = Vec::<PathBuf>::new();
-    for entry in WalkDir::new(&root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
-        if !entry.file_type().is_file() { continue; }
-        let path = entry.path();
-        if path.components().any(|component| {
-            matches!(component.as_os_str().to_string_lossy().to_ascii_lowercase().as_str(),
-                ".git" | ".gradle" | "build" | "target" | "node_modules")
-        }) {
-            continue;
+    for source_root in &source_roots {
+        for entry in WalkDir::new(source_root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+            if !entry.file_type().is_file() { continue; }
+            let path = entry.path();
+            if path.components().any(|component| {
+                matches!(component.as_os_str().to_string_lossy().to_ascii_lowercase().as_str(),
+                    ".git" | ".gradle" | "build" | "target" | "node_modules")
+            }) {
+                continue;
+            }
+            all_files.push(path.to_path_buf());
+            if all_files.len() >= 250_000 { break; }
         }
-        all_files.push(path.to_path_buf());
         if all_files.len() >= 250_000 { break; }
     }
     all_files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    all_files.dedup();
 
-    let source_roots = vec![root.clone()];
-    let equipment = discover_equipment_sources(&source_roots)?;
-    let mut tool_materials = compiled_tool_materials(&source_roots)?;
-    tool_materials.extend(source_tool_materials(&source_roots, &source_modid));
-    let blocks = discover_block_sources(&source_roots)?;
-    let armor_sets = discover_armor_sources(&source_roots)?;
-    let compiled_armor = compiled_armor_stats(&source_roots)?;
-    let languages = load_language_data(&all_files, &source_modid);
-    let mut entries = Vec::<BrowserEntry>::new();
-    let mut seen = HashSet::<String>::new();
-
-    let mut add = |entry: BrowserEntry| {
-        let key = format!("{}:{}", entry.category.to_ascii_lowercase(), entry.name.to_ascii_lowercase());
-        if seen.insert(key) { entries.push(entry); }
-    };
 
     // Registered mobs are taken from the existing registration graph.
     // Registered mobs are discovered independently of client renderer registrations.
@@ -447,7 +456,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
         root: Some(root.clone()),
         display_name,
         entries,
-        texture_roots: vec![root],
+        texture_roots: source_roots,
         warnings,
     })
 }
@@ -2545,6 +2554,31 @@ mod tests {
         assert_eq!(json["attributes"]["attack_damage"], 14.0);
         assert_eq!(json["special_abilities"], true);
         assert_eq!(json["ai_goals"][0], "EntityAIAttackMelee");
+    }
+
+    #[test]
+    fn scan_mod_roots_merges_model_sources_across_independent_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let compiled = temp.path().join("compiled");
+        let decompiled = temp.path().join("decompiled");
+        let source = temp.path().join("source");
+        fs::create_dir_all(&compiled).unwrap();
+        fs::create_dir_all(&decompiled).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        fs::write(decompiled.join("ModelAlpha.java"), "class ModelAlpha {}").unwrap();
+        fs::write(source.join("ModelBeta.java"), "class ModelBeta {}").unwrap();
+
+        let index = scan_mod_roots(&[
+            compiled.clone(),
+            decompiled.clone(),
+            source.clone(),
+        ]).unwrap();
+
+        assert_eq!(index.texture_roots.len(), 3);
+        assert_eq!(index.in_category("Models").len(), 2);
+        assert!(index.entries.iter().any(|entry| entry.name == "Alpha"));
+        assert!(index.entries.iter().any(|entry| entry.name == "Beta"));
+        assert_eq!(index.root, Some(fs::canonicalize(compiled).unwrap()));
     }
 
     #[test]
