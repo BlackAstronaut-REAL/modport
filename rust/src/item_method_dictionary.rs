@@ -70,6 +70,10 @@ const DEFINITIONS: &[Definition] = &[
     Definition { source: "setPotionEffect", target: "FoodProperties.Builder#effect(Supplier<MobEffectInstance>, float)", category: "food_effects", status: "effect_adapter_required", notes: "Recover the effect registry entry, duration, amplifier, and chance. Use the supplier overload to avoid premature effect classloading.", docs: "items/index.md" },
     Definition { source: "setAlwaysEdible", target: "FoodProperties.Builder#alwaysEdible()", category: "food", status: "automatic_property", notes: "A static always-edible flag can be emitted on the modern food builder.", docs: "items/index.md" },
     Definition { source: "getItemStackDisplayName", target: "Item#getName(ItemStack) -> Component", category: "localization", status: "signature_adapter_required", notes: "Translate the legacy String-returning display name to a text Component and preserve stack-sensitive naming.", docs: "items/index.md" },
+    Definition { source: "getMaxDamage", target: "Item#getMaxDamage(ItemStack) / DataComponents#MAX_DAMAGE", category: "durability", status: "stack_sensitive_adapter_required", notes: "The maximum damage is represented by the stack's MAX_DAMAGE component in the modern item model; preserve any dynamic per-stack calculation.", docs: "items/datacomponents.md" },
+    Definition { source: "getDamageVsEntity", target: "ItemAttributeModifiers / Tier#getAttackDamageBonus()", category: "attributes", status: "manual_adapter_required", notes: "Translate legacy flat attack damage into modern attribute modifiers or the appropriate tool tier bonus; preserve entity- and stack-specific behavior if present.", docs: "items/tools.md" },
+    Definition { source: "getHealAmount", target: "FoodProperties#nutrition()", category: "food", status: "property_recovery", notes: "Compiled getter stubs expose the legacy hunger value; transfer it into FoodProperties.Builder#nutrition when it is a constant.", docs: "items/index.md" },
+    Definition { source: "getSaturationModifier", target: "FoodProperties#saturationMod()", category: "food", status: "property_recovery", notes: "Compiled getter stubs expose the legacy saturation modifier; transfer constant values into FoodProperties.Builder#saturationMod.", docs: "items/index.md" },
     Definition { source: "getItemStackLimit", target: "DataComponents#MAX_STACK_SIZE / Item.Properties#stacksTo(int)", category: "stacking", status: "manual_adapter_required", notes: "Static values can use stacksTo; conditional stack limits need a stack-aware component or custom item behavior.", docs: "items/datacomponents.md" },
     Definition { source: "initCapabilities", target: "RegisterCapabilitiesEvent#registerItem(...) / item capability provider", category: "capabilities", status: "capability_adapter_required", notes: "Move per-stack capability construction into NeoForge capability registration and preserve provider lifetime and invalidation semantics.", docs: "inventories/capabilities.md" },
     Definition { source: "getShareTag", target: "DataComponentType persistent/network codec", category: "networking", status: "component_codec_adapter_required", notes: "Replace ad-hoc item-stack share tags with persistent and/or network-synchronized data components as appropriate.", docs: "items/datacomponents.md" },
@@ -142,6 +146,8 @@ mod tests {
             "onBlockDestroyed", "addInformation", "getArmorTexture",
             "onEntityItemUpdate", "getIsRepairable", "getItemBurnTime",
             "getItemAttributeModifiers", "onArmorTick", "hasCustomEntity",
+            "getMaxDamage", "getItemStackLimit", "getDamageVsEntity",
+            "getHealAmount", "getSaturationModifier",
         ] {
             assert!(names.contains(expected), "missing dictionary entry: {expected}");
         }
