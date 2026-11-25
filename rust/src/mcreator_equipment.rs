@@ -151,9 +151,7 @@ fn bytecode_method_number(class: &ClassFile, method: &MemberInfo) -> Option<f64>
 /// Synthesize only named numeric getters from compiled classes. This reuses the
 /// source-property parser downstream, without guessing from unrelated constants
 /// or conflating a long use-duration getter with attack damage.
-fn compiled_equipment_getter_stubs(path: &Path) -> String {
-    let Ok(bytes) = fs::read(path) else { return String::new(); };
-    let Ok(class) = ClassFile::parse(&bytes) else { return String::new(); };
+fn compiled_equipment_getter_stubs(class: &ClassFile) -> String {
     let getters: &[(&str, &[&str])] = &[
         ("getMaxDamage", &["getMaxDamage", "func_77612_l"]),
         ("getItemStackLimit", &["getItemStackLimit", "func_77639_j"]),
@@ -169,11 +167,23 @@ fn compiled_equipment_getter_stubs(path: &Path) -> String {
         else {
             continue;
         };
-        let Some(value) = bytecode_method_number(&class, method) else { continue; };
+        let Some(value) = bytecode_method_number(class, method) else { continue; };
         output.push_str(&format!(
             "public double {canonical}() {{ return {:.8}; }}\n",
             value
         ));
+    }
+
+    // Compiled-only legacy items frequently keep their icon path solely in a
+    // constant-pool String, not in a recoverable Java source file.
+    for index in 1..class.constant_pool.len().min(u16::MAX as usize + 1) {
+        let Some(ConstantValue::String(value)) = class.constant(index as u16) else { continue; };
+        let normalized = value.replace('\\', "/");
+        if normalized.to_ascii_lowercase().ends_with(".png") {
+            if let Ok(literal) = serde_json::to_string(&normalized) {
+                output.push_str(&format!("// TextureRef {literal}\n"));
+            }
+        }
     }
     output
 }
@@ -1289,11 +1299,20 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
     }
 
     let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    let mut compiled_texts = HashMap::<String, String>::new();
     for (class, info) in &compiled.classes {
         class_paths.entry(class.clone()).or_insert_with(|| info.path.clone());
         class_parents.entry(class.clone()).or_insert_with(|| info.superclass.clone());
         if info.access_flags & 0x0400 != 0 {
             abstract_classes.insert(class.clone());
+        }
+        if let Some(internal) = compiled.parsed_classes.iter().find_map(|(internal, parsed)| {
+            let simple = parsed.this_name().unwrap_or("").rsplit('/').next().unwrap_or("");
+            (simple.rsplit('$').next().unwrap_or(simple) == class).then_some(internal)
+        }) {
+            if let Some(parsed) = compiled.parsed_classes.get(internal) {
+                compiled_texts.insert(class.clone(), compiled_equipment_getter_stubs(parsed));
+            }
         }
     }
 
@@ -1310,7 +1329,8 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
         let Some(source_path) = class_paths.get(&class) else { continue };
         let source_text = class_texts.get(&class).cloned()
             .filter(|text| !text.trim().is_empty())
-            .unwrap_or_else(|| compiled_equipment_getter_stubs(source_path));
+            .or_else(|| compiled_texts.get(&class).cloned())
+            .unwrap_or_default();
         let Some(superclass) = class_parents.get(&class) else { continue };
         let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents, &source_text) else { continue };
 
