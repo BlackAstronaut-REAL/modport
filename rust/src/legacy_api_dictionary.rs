@@ -995,6 +995,13 @@ fn typed_variable_regex() -> &'static Regex {
     ).expect("static legacy API typed-variable regex"))
 }
 
+fn inheritance_list_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\b(?:extends|implements)\s+(?P<owners>[A-Za-z_$][A-Za-z0-9_$.]*(?:\s*,\s*[A-Za-z_$][A-Za-z0-9_$.]*)*)"
+    ).expect("static Java inheritance list regex"))
+}
+
 fn inheritance_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
@@ -1103,8 +1110,10 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
 
 #[derive(Debug)]
 struct ClassScope {
+    name: String,
     start: usize,
     end: usize,
+    parents: Vec<String>,
     owners: BTreeSet<String>,
     receivers: BTreeMap<String, BTreeSet<String>>,
 }
@@ -1112,7 +1121,7 @@ struct ClassScope {
 fn class_declaration_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
-        r"(?m)\b(?:class|interface|enum|record)\s+[A-Za-z_$][A-Za-z0-9_$]*(?:\s*<[^{}]*>)?[^{};]*\{"
+        r"(?m)\b(?:class|interface|enum|record)\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)(?:\s*<[^{}]*>)?(?P<header>[^{};]*)\{"
     ).expect("static Java class declaration regex"))
 }
 
@@ -1170,14 +1179,33 @@ fn matching_class_brace(source: &str, open: usize) -> Option<usize> {
 fn class_scopes(source: &str) -> Vec<ClassScope> {
     let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
     let mut scopes = Vec::new();
-    for declaration in class_declaration_regex().find_iter(source) {
-        let Some(open) = declaration.end().checked_sub(1) else { continue; };
+    for declaration in class_declaration_regex().captures_iter(source) {
+        let (Some(whole), Some(class_name), Some(header)) = (
+            declaration.get(0),
+            declaration.name("name"),
+            declaration.name("header"),
+        ) else { continue; };
+        let Some(open) = whole.end().checked_sub(1) else { continue; };
         let Some(close) = matching_class_brace(source, open) else { continue; };
-        let header = &source[declaration.start()..open];
         let body = &source[open + 1..close];
-        let owners: BTreeSet<String> = declared_owner_candidates(header).into_iter()
+        let class_name = class_name.as_str().to_owned();
+
+        // Track every declared superclass/interface so inherited mod base classes
+        // can be resolved after the complete source file has been indexed.
+        let mut parents = Vec::new();
+        for capture in inheritance_list_regex().captures_iter(header.as_str()) {
+            if let Some(list) = capture.name("owners") {
+                parents.extend(list.as_str().split(',').map(str::trim)
+                    .map(|owner| owner.split('<').next().unwrap_or(owner).trim().to_owned())
+                    .filter(|owner| !owner.is_empty()));
+            }
+        }
+
+        let owners: BTreeSet<String> = parents.iter()
+            .flat_map(|parent| owner_candidates(parent))
             .filter(|owner| known_owners.contains(owner.as_str()))
             .collect();
+
         let mut receivers = BTreeMap::<String, BTreeSet<String>>::new();
         for capture in typed_variable_regex().captures_iter(body) {
             let (Some(owner), Some(variable)) = (capture.name("owner"), capture.name("variable")) else { continue; };
@@ -1186,7 +1214,47 @@ fn class_scopes(source: &str) -> Vec<ClassScope> {
                 receivers.entry(variable.as_str().to_owned()).or_default().extend(candidates);
             }
         }
-        scopes.push(ClassScope { start: open + 1, end: close, owners, receivers });
+        scopes.push(ClassScope {
+            name: class_name,
+            start: open + 1,
+            end: close,
+            parents,
+            owners,
+            receivers,
+        });
+    }
+
+    // Build a same-file inheritance graph and resolve it transitively. The
+    // visiting set prevents malformed/cyclic bytecode decompilation output from
+    // causing recursion loops.
+    let parent_map: BTreeMap<String, Vec<String>> = scopes.iter()
+        .map(|scope| (scope.name.clone(), scope.parents.clone()))
+        .collect();
+
+    fn inherited_owners(
+        parents: &[String],
+        parent_map: &BTreeMap<String, Vec<String>>,
+        known_owners: &BTreeSet<&str>,
+        visiting: &mut BTreeSet<String>,
+        output: &mut BTreeSet<String>,
+    ) {
+        for parent in parents {
+            let candidates = owner_candidates(parent);
+            output.extend(candidates.into_iter().filter(|owner| known_owners.contains(owner.as_str())));
+            let short = parent.rsplit('.').next().unwrap_or(parent);
+            if let Some(next) = parent_map.get(short) {
+                if visiting.insert(short.to_owned()) {
+                    inherited_owners(next, parent_map, known_owners, visiting, output);
+                    visiting.remove(short);
+                }
+            }
+        }
+    }
+
+    for scope in &mut scopes {
+        let mut visiting = BTreeSet::new();
+        visiting.insert(scope.name.clone());
+        inherited_owners(&scope.parents, &parent_map, &known_owners, &mut visiting, &mut scope.owners);
     }
     scopes
 }
@@ -1407,7 +1475,10 @@ mod tests {
     #[test]
     fn recognizes_package_private_overrides_from_decompiled_sources() {
         let source = r#"
-            class ExampleItem extends Item {
+            class ModItemBase extends Item {
+                void sharedHelper() { }
+            }
+            class ExampleItem extends ModItemBase {
                 boolean hitEntity(ItemStack stack, EntityLivingBase target, EntityLivingBase attacker) {
                     return true;
                 }
