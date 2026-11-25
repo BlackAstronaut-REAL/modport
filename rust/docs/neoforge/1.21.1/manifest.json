@@ -1,0 +1,457 @@
+{
+  "format_version": 1,
+  "platform": "NeoForge",
+  "minecraft_version": "1.21.1",
+  "documentation_scope": "NeoForge versioned documentation only",
+  "source_repository": "https://github.com/BlackAstronaut-REAL/docs",
+  "source_path": "versioned_docs/version-1.21.1",
+  "source_ref": "main",
+  "source_commit": "a0b6ed89a964fc9826102c8098bfd22367b40dfc",
+  "source_license": "MIT",
+  "page_count": 63,
+  "category_count": 15,
+  "total_source_bytes": 863018,
+  "pages": [
+    {
+      "path": "advanced/accesstransformers.md",
+      "section": "Advanced",
+      "source_sha": "c5f061fcdb6411a473ae6202d61543ef766c678e",
+      "bytes": 5943,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/advanced/accesstransformers.md"
+    },
+    {
+      "path": "advanced/extensibleenums.md",
+      "section": "Advanced",
+      "source_sha": "2df255c67172d145c77bb19142dae99c309968cf",
+      "bytes": 8201,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/advanced/extensibleenums.md"
+    },
+    {
+      "path": "blockentities/ber.md",
+      "section": "Blockentities",
+      "source_sha": "9bd1e7ad2307914c6fd8714653885f8528a4a343",
+      "bytes": 6357,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/blockentities/ber.md"
+    },
+    {
+      "path": "blockentities/index.md",
+      "section": "Blockentities",
+      "source_sha": "6982f8fb771f16498961ecf944aee749dfd926d1",
+      "bytes": 13159,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/blockentities/index.md"
+    },
+    {
+      "path": "blocks/index.md",
+      "section": "Blocks",
+      "source_sha": "7229dd496e855d5ac04495507f667718f636498c",
+      "bytes": 21152,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/blocks/index.md"
+    },
+    {
+      "path": "blocks/states.md",
+      "section": "Blocks",
+      "source_sha": "906bf5895e19bfa08489c671221a83015e6c2602",
+      "bytes": 10649,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/blocks/states.md"
+    },
+    {
+      "path": "concepts/events.md",
+      "section": "Concepts",
+      "source_sha": "edfec8538b54544a2a108f80d6a83c55be9e46ec",
+      "bytes": 11995,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/concepts/events.md"
+    },
+    {
+      "path": "concepts/registries.md",
+      "section": "Concepts",
+      "source_sha": "48fba6c76de092fa24e03f0c3e6dddbc871e133f",
+      "bytes": 17844,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/concepts/registries.md"
+    },
+    {
+      "path": "concepts/sides.md",
+      "section": "Concepts",
+      "source_sha": "3cd62898e8eb067616dbc6e0c8d1b5b2dcc92879",
+      "bytes": 6651,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/concepts/sides.md"
+    },
+    {
+      "path": "datastorage/attachments.md",
+      "section": "Datastorage",
+      "source_sha": "8fc59c4d826505f02a790dc46739ac9793f0abbb",
+      "bytes": 4958,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/datastorage/attachments.md"
+    },
+    {
+      "path": "datastorage/codecs.md",
+      "section": "Datastorage",
+      "source_sha": "82f56b7ab206648e895a86af8fe44329ea801c55",
+      "bytes": 22494,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/datastorage/codecs.md"
+    },
+    {
+      "path": "datastorage/nbt.md",
+      "section": "Datastorage",
+      "source_sha": "4532cf06f11db58dba350f54b2c48fa40129b7ac",
+      "bytes": 4980,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/datastorage/nbt.md"
+    },
+    {
+      "path": "datastorage/saveddata.md",
+      "section": "Datastorage",
+      "source_sha": "68992cdbbd3edcd570e2c53f05bf9337c157d1b3",
+      "bytes": 2989,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/datastorage/saveddata.md"
+    },
+    {
+      "path": "gettingstarted/index.md",
+      "section": "Gettingstarted",
+      "source_sha": "a5f100bb794e0e87ead382ad7b2bd9ffafabd94f",
+      "bytes": 6614,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gettingstarted/index.md"
+    },
+    {
+      "path": "gettingstarted/modfiles.md",
+      "section": "Gettingstarted",
+      "source_sha": "9a570704ae12852b98f458c8e3a79adce8cc75c8",
+      "bytes": 35207,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gettingstarted/modfiles.md"
+    },
+    {
+      "path": "gettingstarted/structuring.md",
+      "section": "Gettingstarted",
+      "source_sha": "2f8017726c50f571734dea8a19eb4740628c8983",
+      "bytes": 4783,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gettingstarted/structuring.md"
+    },
+    {
+      "path": "gettingstarted/versioning.md",
+      "section": "Gettingstarted",
+      "source_sha": "5fdcce37d0009dc8f8b92d50b73414e3be7524e4",
+      "bytes": 9514,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gettingstarted/versioning.md"
+    },
+    {
+      "path": "gui/menus.md",
+      "section": "Gui",
+      "source_sha": "1c7de3ed6415bb3d07355cec591aa5c3116847e0",
+      "bytes": 17662,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gui/menus.md"
+    },
+    {
+      "path": "gui/screens.md",
+      "section": "Gui",
+      "source_sha": "92c99b69cf0f07e275b60355c78affa81ba6de9c",
+      "bytes": 23570,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/gui/screens.md"
+    },
+    {
+      "path": "inventories/capabilities.md",
+      "section": "Inventories",
+      "source_sha": "32e975d16714ad78e0e717c39c6f507249eeb927",
+      "bytes": 15654,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/inventories/capabilities.md"
+    },
+    {
+      "path": "inventories/container.md",
+      "section": "Inventories",
+      "source_sha": "277b26c89d139957bfb8552eacf73b510bc7d390",
+      "bytes": 15486,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/inventories/container.md"
+    },
+    {
+      "path": "items/datacomponents.md",
+      "section": "Items",
+      "source_sha": "e5caa28737bd910bfea3a268fae32eee492269d7",
+      "bytes": 16646,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/items/datacomponents.md"
+    },
+    {
+      "path": "items/index.md",
+      "section": "Items",
+      "source_sha": "43e5617a11827c6e11f15ec0d30fa54bee83c517",
+      "bytes": 17130,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/items/index.md"
+    },
+    {
+      "path": "items/interactionpipeline.md",
+      "section": "Items",
+      "source_sha": "ff9f56ddcaf716956134e623f62879044af1cb45",
+      "bytes": 8879,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/items/interactionpipeline.md"
+    },
+    {
+      "path": "items/mobeffects.md",
+      "section": "Items",
+      "source_sha": "21f739a70e1908adca46c743e38280a29f01cd0e",
+      "bytes": 9876,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/items/mobeffects.md"
+    },
+    {
+      "path": "items/tools.md",
+      "section": "Items",
+      "source_sha": "03637c91d513d7a0320a86db25b1faa31d6ad23b",
+      "bytes": 14921,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/items/tools.md"
+    },
+    {
+      "path": "misc/config.md",
+      "section": "Misc",
+      "source_sha": "2a7e4e5d56644f747927e9f79b6eb794102ca031",
+      "bytes": 10964,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/config.md"
+    },
+    {
+      "path": "misc/debugprofiler.md",
+      "section": "Misc",
+      "source_sha": "f90f99c02560598ffa7a75626fad2f26138fcc9c",
+      "bytes": 2769,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/debugprofiler.md"
+    },
+    {
+      "path": "misc/gametest.md",
+      "section": "Misc",
+      "source_sha": "c461afd79c5e3f71f138bf7088012b50b4217e7f",
+      "bytes": 13405,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/gametest.md"
+    },
+    {
+      "path": "misc/keymappings.md",
+      "section": "Misc",
+      "source_sha": "4a5b98f4ca2471904c63935d88cdfd3fac8aeb90",
+      "bytes": 8179,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/keymappings.md"
+    },
+    {
+      "path": "misc/resourcelocation.md",
+      "section": "Misc",
+      "source_sha": "dda7c1de613039ddbfee2379ba7e8130a6bff4d6",
+      "bytes": 6122,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/resourcelocation.md"
+    },
+    {
+      "path": "misc/updatechecker.md",
+      "section": "Misc",
+      "source_sha": "79a601dbab0383dfcbd5c72eacbf967d01eb7673",
+      "bytes": 3810,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/misc/updatechecker.md"
+    },
+    {
+      "path": "networking/configuration-tasks.md",
+      "section": "Networking",
+      "source_sha": "76a38f2d5284294274360ffe3699cf60d5913257",
+      "bytes": 5628,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/networking/configuration-tasks.md"
+    },
+    {
+      "path": "networking/entities.md",
+      "section": "Networking",
+      "source_sha": "80be9b6dc0dfb7b9ce1fb2dc76f9b2362974ec5b",
+      "bytes": 2309,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/networking/entities.md"
+    },
+    {
+      "path": "networking/index.md",
+      "section": "Networking",
+      "source_sha": "982997ef5a2a5d103b98ef774d0fdec90b022fa7",
+      "bytes": 1018,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/networking/index.md"
+    },
+    {
+      "path": "networking/payload.md",
+      "section": "Networking",
+      "source_sha": "b0457a83c49c8a528d71efa06f810ea9207f153d",
+      "bytes": 8786,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/networking/payload.md"
+    },
+    {
+      "path": "networking/streamcodecs.md",
+      "section": "Networking",
+      "source_sha": "ac26b7087af25957ebadfa0f09ae3014c2131d26",
+      "bytes": 18271,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/networking/streamcodecs.md"
+    },
+    {
+      "path": "resources/client/i18n.md",
+      "section": "Resources / Client",
+      "source_sha": "ec06c0a49b92409f2cfffd8f7d2803ccea8f638d",
+      "bytes": 11598,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/i18n.md"
+    },
+    {
+      "path": "resources/client/models/bakedmodel.md",
+      "section": "Resources / Client / Models",
+      "source_sha": "37ce8e708d50e743959ebed43a2b87f517f3e8c3",
+      "bytes": 15058,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/models/bakedmodel.md"
+    },
+    {
+      "path": "resources/client/models/datagen.md",
+      "section": "Resources / Client / Models",
+      "source_sha": "c6ab9546be4849c8fa4cf3b5502c6de6f967eefb",
+      "bytes": 22119,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/models/datagen.md"
+    },
+    {
+      "path": "resources/client/models/index.md",
+      "section": "Resources / Client / Models",
+      "source_sha": "b0339a3724ed698a01c047c751552c8e73aaf018",
+      "bytes": 24280,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/models/index.md"
+    },
+    {
+      "path": "resources/client/models/modelloaders.md",
+      "section": "Resources / Client / Models",
+      "source_sha": "cfa6d061a0b8f401ccbefd3df4ed4a08a316c374",
+      "bytes": 21313,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/models/modelloaders.md"
+    },
+    {
+      "path": "resources/client/particles.md",
+      "section": "Resources / Client",
+      "source_sha": "1dfcaeea419b8c967e5f85a5798526c896712263",
+      "bytes": 13072,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/particles.md"
+    },
+    {
+      "path": "resources/client/sounds.md",
+      "section": "Resources / Client",
+      "source_sha": "5a38872ff1bbfa29f801420775b50a8340bd6e95",
+      "bytes": 14770,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/sounds.md"
+    },
+    {
+      "path": "resources/client/textures.md",
+      "section": "Resources / Client",
+      "source_sha": "c3bc5f520410a0ee7a14ca5c6bae45f8a33be89b",
+      "bytes": 3570,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/client/textures.md"
+    },
+    {
+      "path": "resources/index.md",
+      "section": "Resources",
+      "source_sha": "cb902562eb1994570e9345b84a1a09a40c2ea284",
+      "bytes": 18832,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/index.md"
+    },
+    {
+      "path": "resources/server/advancements.md",
+      "section": "Resources / Server",
+      "source_sha": "1a099e4a120c97d4d27d8eb2c8d131f59f5ba572",
+      "bytes": 18054,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/advancements.md"
+    },
+    {
+      "path": "resources/server/conditions.md",
+      "section": "Resources / Server",
+      "source_sha": "139b4354378628cfae0a5dcf4aa7caa35c6111aa",
+      "bytes": 6746,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/conditions.md"
+    },
+    {
+      "path": "resources/server/damagetypes.md",
+      "section": "Resources / Server",
+      "source_sha": "c801dd5b95b267ca8288f9bf5359c2af88857ed7",
+      "bytes": 8328,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/damagetypes.md"
+    },
+    {
+      "path": "resources/server/datamaps/builtin.md",
+      "section": "Resources / Server / Datamaps",
+      "source_sha": "a7baa7ec6ca1fc1461220d22105b49f31c8d3128",
+      "bytes": 7415,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/datamaps/builtin.md"
+    },
+    {
+      "path": "resources/server/datamaps/index.md",
+      "section": "Resources / Server / Datamaps",
+      "source_sha": "1e4fbdc24e106bbf06db9bedda21cd05ac28cb6f",
+      "bytes": 17321,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/datamaps/index.md"
+    },
+    {
+      "path": "resources/server/enchantments/builtin.md",
+      "section": "Resources / Server / Enchantments",
+      "source_sha": "75fdafc686833f79122c53a5ba88c7852190315d",
+      "bytes": 16687,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/enchantments/builtin.md"
+    },
+    {
+      "path": "resources/server/enchantments/index.md",
+      "section": "Resources / Server / Enchantments",
+      "source_sha": "fb1faef8c98642c578ff96f75fe7ae02b1500c55",
+      "bytes": 15751,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/enchantments/index.md"
+    },
+    {
+      "path": "resources/server/loottables/custom.md",
+      "section": "Resources / Server / Loottables",
+      "source_sha": "fb7dba12f5c7287b227e6a29a8269c381f7a64c7",
+      "bytes": 14047,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/loottables/custom.md"
+    },
+    {
+      "path": "resources/server/loottables/glm.md",
+      "section": "Resources / Server / Loottables",
+      "source_sha": "84c85396fe7c81d01847ffdbc1f60fe0b8a183dd",
+      "bytes": 8864,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/loottables/glm.md"
+    },
+    {
+      "path": "resources/server/loottables/index.md",
+      "section": "Resources / Server / Loottables",
+      "source_sha": "f361b3b7f378564d28abcb95e134ac2e1ae85fe3",
+      "bytes": 39512,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/loottables/index.md"
+    },
+    {
+      "path": "resources/server/loottables/lootconditions.md",
+      "section": "Resources / Server / Loottables",
+      "source_sha": "fce74fe25c4349de1a38a364730026ea61f2b1b6",
+      "bytes": 16316,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/loottables/lootconditions.md"
+    },
+    {
+      "path": "resources/server/loottables/lootfunctions.md",
+      "section": "Resources / Server / Loottables",
+      "source_sha": "5d508d3e88c1b86f122744829fb6a9860c78970f",
+      "bytes": 31265,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/loottables/lootfunctions.md"
+    },
+    {
+      "path": "resources/server/recipes/builtin.md",
+      "section": "Resources / Server / Recipes",
+      "source_sha": "a3d9d91e5e9bd6db71d7ff87ec642ddce7894d4e",
+      "bytes": 17148,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/recipes/builtin.md"
+    },
+    {
+      "path": "resources/server/recipes/index.md",
+      "section": "Resources / Server / Recipes",
+      "source_sha": "afeff28a266c14a22587aabd4f8d374545be9edc",
+      "bytes": 28552,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/recipes/index.md"
+    },
+    {
+      "path": "resources/server/recipes/ingredients.md",
+      "section": "Resources / Server / Recipes",
+      "source_sha": "20a3eec22d082af8d53534ccdf9e9d4ee7653e45",
+      "bytes": 9716,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/recipes/ingredients.md"
+    },
+    {
+      "path": "resources/server/tags.md",
+      "section": "Resources / Server",
+      "source_sha": "d6fb3e8eb8da6704e4e3344909a3bde3f6f0f6e3",
+      "bytes": 16225,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/resources/server/tags.md"
+    },
+    {
+      "path": "worldgen/biomemodifier.md",
+      "section": "Worldgen",
+      "source_sha": "1d57c867e3243806e681bc67f15e5bfbc2ccd701",
+      "bytes": 31884,
+      "source_url": "https://github.com/BlackAstronaut-REAL/docs/blob/a0b6ed89a964fc9826102c8098bfd22367b40dfc/versioned_docs/version-1.21.1/worldgen/biomemodifier.md"
+    }
+  ]
+}

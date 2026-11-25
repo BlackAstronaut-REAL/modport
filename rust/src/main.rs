@@ -19,6 +19,7 @@ use mojmodelbridge::mcreator_worldgen::export_worldgen_to_workspace;
 use mojmodelbridge::mcreator_projectile::export_projectiles_to_workspace;
 use mojmodelbridge::mcreator_pipeline::export_all_to_workspace;
 use mojmodelbridge::gradle_bridge::compile_workspace;
+use mojmodelbridge::neoforge_docs::{default_docs_root, NeoForgeDocsIndex};
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -37,6 +38,21 @@ enum Command {
         /// Write the scan report to this JSON path instead of stdout.
         #[arg(short, long)]
         output: Option<PathBuf>,
+    },
+    /// Search the bundled NeoForge 1.21.1 documentation.
+    DocsSearch {
+        query: String,
+        #[arg(long, default_value_t = 8)]
+        limit: usize,
+        #[arg(long)]
+        docs_root: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Validate and report the bundled NeoForge documentation corpus.
+    DocsStatus {
+        #[arg(long)]
+        docs_root: Option<PathBuf>,
     },
     /// Convert a decompiled legacy or modern Java model into a Blockbench project.
     ConvertModel {
@@ -636,6 +652,33 @@ fn main() -> Result<()> {
         Command::CopyModelSources { output_root, package, model_files, animation_files } => {
             let written = copy_model_sources(&output_root, &package, &model_files, &animation_files)?;
             println!("Copied {} model/animation Java source file(s) into {}.", written.len(), output_root.display());
+        }
+        Command::DocsSearch { query, limit, docs_root, json } => {
+            let root = docs_root.unwrap_or_else(default_docs_root);
+            let index = NeoForgeDocsIndex::load(&root)?;
+            let results = index.search(&query, limit);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&results)?);
+            } else if results.is_empty() {
+                println!("No NeoForge 1.21.1 documentation matches for: {query}");
+            } else {
+                println!("NeoForge {} docs — {} result(s) for '{}':", index.manifest().minecraft_version, results.len(), query);
+                for (position, result) in results.iter().enumerate() {
+                    println!("\n{}. {}  [{:.2}]", position + 1, result.title, result.score);
+                    println!("   {} · {}", result.section, result.path);
+                    println!("   {}", result.snippet);
+                    println!("   {}", result.source_url);
+                }
+            }
+        }
+        Command::DocsStatus { docs_root } => {
+            let root = docs_root.unwrap_or_else(default_docs_root);
+            let index = NeoForgeDocsIndex::load(&root)?;
+            let manifest = index.manifest();
+            println!("{} documentation — Minecraft {}", manifest.platform, manifest.minecraft_version);
+            println!("{} Markdown pages · {} category metadata files · {} bytes", manifest.page_count, manifest.category_count, manifest.total_source_bytes);
+            println!("Source: {} @ {}", manifest.source_repository, manifest.source_commit);
+            println!("Local corpus: {}", index.root().display());
         }
         Command::Extract { archive, destination } => {
             let path = mojmodelbridge::archive::extract_archive(&archive, &destination)?;

@@ -6,6 +6,20 @@ behavioral reference. The Rust application does not spawn Python, import Python
 modules, or require a Python installation. The Windows release workflow compiles
 the engine into the native executable.
 
+## NeoForge 1.21.1 documentation index
+
+The complete 1.21.1 NeoForge versioned documentation snapshot is bundled under `docs/neoforge/1.21.1` (63 Markdown pages and 15 category metadata files). Its source commit and per-page provenance are recorded in `manifest.json`; the original Markdown hierarchy and MIT license are retained.
+
+The native Rust crate exposes offline, identifier-aware search commands:
+
+```powershell
+cargo run --manifest-path rust/Cargo.toml -- docs-status
+cargo run --manifest-path rust/Cargo.toml -- docs-search "DeferredRegister registry"
+cargo run --manifest-path rust/Cargo.toml -- docs-search "DataComponentType" --limit 10 --json
+```
+
+Set `MODPORT_NEOFORGE_DOCS` or pass `--docs-root` to search another local corpus. Search ranks titles, headings, paths, and body text, and splits Java/PascalCase identifiers while preserving complete identifiers. This is a deterministic retrieval layer; subsequent exporter work can consume its version-specific references rather than relying exclusively on hardcoded assumptions.
+
 ## Native stages implemented
 
 - Project layout discovery, metadata inference and merged compiled/decompiled inventory.
