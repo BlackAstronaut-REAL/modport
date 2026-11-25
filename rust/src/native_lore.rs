@@ -140,86 +140,103 @@ fn decode_java_string(raw: &str) -> String {
     output
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct LegacyLanguageLoreIndex {
+    descriptions: BTreeMap<String, Vec<String>>,
+}
+
+impl LegacyLanguageLoreIndex {
+    /// Walk source roots once and index all English tooltip/description strings.
+    pub fn load(source_roots: &[PathBuf], source_modid: &str) -> Self {
+        let mut descriptions = BTreeMap::<String, Vec<String>>::new();
+        let mut language_files = Vec::new();
+        let mut java_files = Vec::new();
+
+        for root in source_roots {
+            if !root.exists() { continue; }
+            for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+                if !entry.file_type().is_file() { continue; }
+                let path = entry.into_path();
+                let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+                if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("lang"))
+                    && path.file_stem().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("en_us")) {
+                    language_files.push(path);
+                } else if name.eq_ignore_ascii_case("en_us.json") {
+                    language_files.push(path);
+                } else if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("java")) {
+                    java_files.push(path);
+                }
+            }
+        }
+        language_files.sort();
+        java_files.sort();
+
+        for path in language_files {
+            let Ok(bytes) = fs::read(&path) else { continue };
+            if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("json")) {
+                let Ok(Value::Object(values)) = serde_json::from_slice::<Value>(&bytes) else { continue };
+                for (key, value) in values {
+                    if let Some(value) = value.as_str() {
+                        add_description(&mut descriptions, &key, value);
+                    }
+                }
+            } else {
+                let text = String::from_utf8_lossy(&bytes);
+                for line in text.lines() {
+                    let line = line.trim_start_matches('\u{feff}').trim();
+                    if line.is_empty() || line.starts_with('#') { continue; }
+                    let Some((key, value)) = line.split_once('=') else { continue };
+                    add_description(&mut descriptions, key, value);
+                }
+            }
+        }
+
+        // Older Forge code often creates localization entries in Java instead
+        // of packaging en_US.lang; recover addStringLocalization once per mod.
+        let localize = Regex::new(
+            r#"(?is)\baddStringLocalization\s*\(\s*["']([^"']+)["']\s*,\s*["'](?:en_US|en_us)["']\s*,\s*["']((?:\\.|[^"'\\])*)["']\s*\)"#
+        ).expect("static Java localization regex");
+        for path in java_files {
+            let Ok(bytes) = fs::read(path) else { continue };
+            let source = crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes));
+            for capture in localize.captures_iter(&source) {
+                let key = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+                let value = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+                add_description(&mut descriptions, key, &decode_java_string(value));
+            }
+        }
+
+        let _ = source_modid;
+        Self { descriptions }
+    }
+
+    /// Resolve pre-indexed descriptions for one registry entry without rescanning files.
+    pub fn for_registry(&self, registry: &str) -> Vec<String> {
+        let compact = compact_registry(registry);
+        let mut variants = vec![compact.clone()];
+        for suffix in ["ingot", "ore", "block", "item", "tool", "sword", "staff", "bow", "helmet", "chestplate", "leggings", "boots"] {
+            if compact.ends_with(suffix) && compact.len() > suffix.len() {
+                variants.push(compact[..compact.len() - suffix.len()].to_owned());
+            }
+        }
+        let mut result = Vec::new();
+        for variant in variants {
+            if let Some(values) = self.descriptions.get(&variant) {
+                for value in values {
+                    if !result.contains(value) { result.push(value.clone()); }
+                }
+            }
+        }
+        result
+    }
+}
+
 pub fn extract_language_descriptions(
     source_roots: &[PathBuf],
     registry: &str,
     source_modid: &str,
 ) -> Vec<String> {
-    let mut descriptions = BTreeMap::<String, Vec<String>>::new();
-    let mut language_files = Vec::new();
-    let mut java_files = Vec::new();
-
-    for root in source_roots {
-        if !root.exists() { continue; }
-        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
-            if !entry.file_type().is_file() { continue; }
-            let path = entry.into_path();
-            let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
-            if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("lang"))
-                && path.file_stem().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("en_us")) {
-                language_files.push(path);
-            } else if name.eq_ignore_ascii_case("en_us.json") {
-                language_files.push(path);
-            } else if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("java")) {
-                java_files.push(path);
-            }
-        }
-    }
-    language_files.sort();
-    java_files.sort();
-
-    for path in language_files {
-        let Ok(bytes) = fs::read(&path) else { continue };
-        if path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("json")) {
-            let Ok(Value::Object(values)) = serde_json::from_slice::<Value>(&bytes) else { continue };
-            for (key, value) in values {
-                if let Some(value) = value.as_str() {
-                    add_description(&mut descriptions, &key, value);
-                }
-            }
-        } else {
-            let text = String::from_utf8_lossy(&bytes);
-            for line in text.lines() {
-                let line = line.trim_start_matches('\u{feff}').trim();
-                if line.is_empty() || line.starts_with('#') { continue; }
-                let Some((key, value)) = line.split_once('=') else { continue };
-                add_description(&mut descriptions, key, value);
-            }
-        }
-    }
-
-    // Older Forge code often creates localization entries in Java instead of
-    // packaging en_US.lang. Recover the string-localization form as well.
-    let localize = Regex::new(
-        r#"(?is)\baddStringLocalization\s*\(\s*["']([^"']+)["']\s*,\s*["'](?:en_US|en_us)["']\s*,\s*["']((?:\\.|[^"'\\])*)["']\s*\)"#
-    ).expect("static Java localization regex");
-    for path in java_files {
-        let Ok(bytes) = fs::read(path) else { continue };
-        let source = crate::source::java::strip_java_comments(&String::from_utf8_lossy(&bytes));
-        for capture in localize.captures_iter(&source) {
-            let key = capture.get(1).map(|value| value.as_str()).unwrap_or("");
-            let value = capture.get(2).map(|value| value.as_str()).unwrap_or("");
-            add_description(&mut descriptions, key, &decode_java_string(value));
-        }
-    }
-
-    let compact = compact_registry(registry);
-    let mut variants = vec![compact.clone()];
-    for suffix in ["ingot", "ore", "block", "item", "tool", "sword", "staff", "bow", "helmet", "chestplate", "leggings", "boots"] {
-        if compact.ends_with(suffix) && compact.len() > suffix.len() {
-            variants.push(compact[..compact.len() - suffix.len()].to_owned());
-        }
-    }
-    let mut result = Vec::new();
-    for variant in variants {
-        if let Some(values) = descriptions.get(&variant) {
-            for value in values {
-                if !result.contains(value) { result.push(value.clone()); }
-            }
-        }
-    }
-    let _ = source_modid;
-    result
+    LegacyLanguageLoreIndex::load(source_roots, source_modid).for_registry(registry)
 }
 
 fn add_description(
