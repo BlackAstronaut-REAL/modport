@@ -426,7 +426,13 @@ pub fn port_to_neoforge(
         &target_mod_id,
     )?;
     let native_entities = collect_native_entities(&graph.entities);
-    let mut native_projectile_records = collect_native_projectiles(&projectile_sources, &equipment);
+    // Only bind automatically to generic Item records here. Tiered tools have
+    // their own generated classes and should not be pointed at a launcher class
+    // that would conflict with their specialized constructor.
+    let launchable_item_ids: BTreeSet<String> = item_records.iter().map(|item| item.id.clone()).collect();
+    let mut native_projectile_records = collect_native_projectiles(
+        &projectile_sources, &equipment, &launchable_item_ids
+    );
     for projectile in &mut native_projectile_records {
         projectile.source_path = prepared.display_source_path(&projectile.source_path);
     }
@@ -1942,6 +1948,7 @@ fn armor_item_type(part: &str) -> &'static str {
 fn collect_native_projectiles(
     sources: &[ProjectileSource],
     equipment: &[EquipmentSource],
+    launchable_item_ids: &BTreeSet<String>,
 ) -> Vec<ProjectileRecord> {
     let mut records = Vec::new();
     let mut seen = BTreeSet::new();
@@ -1973,7 +1980,7 @@ fn collect_native_projectiles(
                 let priority = if item.tool_type.is_some() { 1 } else { 2 };
                 (priority, normalized_id(&item.registry_name))
             })
-            .filter(|(_, item_id)| !item_id.is_empty())
+            .filter(|(_, item_id)| !item_id.is_empty() && launchable_item_ids.contains(item_id))
             .collect();
         candidates.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         candidates.dedup_by(|a, b| a.1 == b.1);
