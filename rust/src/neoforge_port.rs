@@ -96,9 +96,31 @@ pub struct NeoForgePortReport {
 
 struct PreparedSources {
     roots: Vec<PathBuf>,
+    origins: Vec<PreparedSourceOrigin>,
     // Keep extracted JARs alive until every source/bytecode pass has completed.
     _temporary_roots: Vec<TempDir>,
     warnings: Vec<String>,
+}
+
+struct PreparedSourceOrigin {
+    staged_root: PathBuf,
+    original: PathBuf,
+    is_archive_or_loose_file: bool,
+}
+
+impl PreparedSources {
+    fn display_source_path(&self, source_path: &str) -> String {
+        let path = Path::new(source_path);
+        for origin in &self.origins {
+            let Ok(relative) = path.strip_prefix(&origin.staged_root) else { continue };
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            if origin.is_archive_or_loose_file {
+                return format!("{}!/{relative}", origin.original.display());
+            }
+            return origin.original.join(relative).to_string_lossy().replace('\\', "/");
+        }
+        source_path.to_owned()
+    }
 }
 
 struct ItemRecord {
@@ -214,6 +236,12 @@ pub fn port_to_neoforge(
 
     let mut item_records = collect_items(&equipment, &armor_sources, &mut warnings);
     let mut block_records = collect_blocks(&block_sources, &mut warnings);
+    for item in &mut item_records {
+        item.source_path = prepared.display_source_path(&item.source_path);
+    }
+    for block in &mut block_records {
+        block.source_path = prepared.display_source_path(&block.source_path);
+    }
     deduplicate_items(&mut item_records, &mut warnings);
     deduplicate_blocks(&mut block_records, &mut warnings);
 
@@ -315,7 +343,7 @@ pub fn port_to_neoforge(
         source_metadata,
         source_mod_id: source_mod_id.clone(),
         target_mod_id: target_mod_id.clone(),
-        source_roots: roots.iter().map(|root| root.to_string_lossy().to_string()).collect(),
+        source_roots: input_roots.iter().map(|root| root.to_string_lossy().to_string()).collect(),
         source_file_counts,
         items,
         blocks,
@@ -376,11 +404,18 @@ pub fn port_to_neoforge(
 
 fn prepare_sources(inputs: &[PathBuf]) -> Result<PreparedSources> {
     let mut roots = Vec::new();
+    let mut origins = Vec::new();
     let mut temporary_roots = Vec::new();
     let mut warnings = Vec::new();
     for (index, input) in inputs.iter().enumerate() {
         if input.is_dir() {
-            roots.push(fs::canonicalize(input).unwrap_or_else(|_| input.clone()));
+            let root = fs::canonicalize(input).unwrap_or_else(|_| input.clone());
+            roots.push(root.clone());
+            origins.push(PreparedSourceOrigin {
+                staged_root: root,
+                original: input.clone(),
+                is_archive_or_loose_file: false,
+            });
             continue;
         }
         if !input.is_file() { bail!("Source input does not exist: {}", input.display()); }
@@ -398,10 +433,15 @@ fn prepare_sources(inputs: &[PathBuf]) -> Result<PreparedSources> {
             }
             _ => bail!("Unsupported source input {}; expected a directory, JAR, ZIP, Java or class file", input.display()),
         }
-        roots.push(root);
+        roots.push(root.clone());
+        origins.push(PreparedSourceOrigin {
+            staged_root: root,
+            original: input.clone(),
+            is_archive_or_loose_file: true,
+        });
         temporary_roots.push(temp);
     }
-    Ok(PreparedSources { roots, _temporary_roots: temporary_roots, warnings })
+    Ok(PreparedSources { roots, origins, _temporary_roots: temporary_roots, warnings })
 }
 
 fn infer_namespace(root: &Path) -> Option<String> {
