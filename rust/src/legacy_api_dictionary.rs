@@ -3629,6 +3629,66 @@ const DEFINITIONS: &[Definition] = &[
     d!("MapStorage", "setData", V_ALL, "map_storage_register_data", "Saved data registration/update", "persistence", "Preserve ID key and object identity; replacing a key changes future saves.", "net/minecraft/world/storage/MapStorage.html"),
     d!("MapStorage", "saveAllData", V_ALL, "map_storage_save_all", "All WorldSavedData serialization", "persistence", "Preserve dirty-only save behavior, storage ordering and exception handling.", "net/minecraft/world/storage/MapStorage.html"),
 
+    // Forge forced-chunk ticket lifecycle and persistent chunk loading.
+    d!("ForgeChunkManager", "addConfigProperty", V_112, "chunk_ticket_config_property", "ForgeChunkManager configuration value registration", "world_chunks", "Preserve configuration category/name/property type and default; only valid ticket settings may be changed by mod config.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "captureConfig", V_112, "chunk_ticket_capture_config", "Per-mod chunk loading configuration capture", "world_chunks", "Preserve mod container and configuration file; capture settings before tickets are granted.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "forceChunk", V_ALL, "chunk_ticket_force_chunk", "Force a chunk loaded by a ticket", "world_chunks", "Preserve ticket owner, chunk coordinates, depth limits and forced chunk persistence across saves.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "getMaxChunkDepthFor", V_112, "chunk_ticket_max_depth", "Per-mod maximum forced chunk depth", "world_chunks", "Preserve configuration-defined chunk count limit and mod ownership.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "getPersistentChunksFor", V_ALL, "chunk_ticket_persistent_set", "Persistent forced chunks for a world", "world_chunks", "Preserve ticket and chunk mapping; these chunks remain loaded independently from player tracking.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "loadWorld", V_112, "chunk_ticket_world_load", "World forced chunk ticket restoration", "world_chunks", "Preserve saved ticket NBT, mod callbacks and ticket validation order during world load.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "requestTicket", V_ALL, "chunk_ticket_request", "Request Forge chunk loading ticket", "world_chunks", "Overloads include normal, player and entity tickets; preserve owner mod, world, ticket type and depth constraints.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "releaseTicket", V_ALL, "chunk_ticket_release", "Release Forge chunk loading ticket", "world_chunks", "Preserve ticket identity and forced chunk unload scheduling.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "reorderChunk", V_112, "chunk_ticket_reorder_chunk", "Forced chunk priority/reordering", "world_chunks", "Preserve ticket and chunk identity as ordering metadata changes.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "saveWorld", V_112, "chunk_ticket_world_save", "Forced chunk ticket persistence", "world_chunks", "Preserve ticket serialization, mod callback order and dimension/world association.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "setForcedChunkLoadingCallback", V_ALL, "chunk_ticket_callback_register", "Mod forced chunk loading callback registration", "world_chunks", "Preserve mod container and callback object identity; callback restores mod-specific ticket references on world load.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "unforceChunk", V_ALL, "chunk_ticket_unforce_chunk", "Remove forced chunk from ticket", "world_chunks", "Preserve ticket/chunk association and unload only when no other ticket requires the chunk.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "unloadWorld", V_112, "chunk_ticket_world_unload", "Release world forced chunk ticket runtime state", "world_chunks", "Preserve world-scoped ticket cache cleanup after final save.", "net/minecraftforge/common/ForgeChunkManager.html"),
+
+    // Ticket exposes mod/player/entity ownership and forced chunk metadata.
+    d!("ForgeChunkManager.Ticket", "getChunkList", V_112, "chunk_ticket_chunk_list", "Ticket forced chunk coordinates", "world_chunks", "Preserve mutable/ordered chunk list and distinction between requested and effective forced chunk depth.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getDepth", V_112, "chunk_ticket_depth", "Ticket maximum chunk depth", "world_chunks", "Preserve configured depth limit and ticket type constraints.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getEntity", V_112, "chunk_ticket_entity_owner", "Entity-bound chunk ticket owner", "world_chunks", "Preserve nullable entity reference and entity UUID binding through save/load.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getModData", V_112, "chunk_ticket_mod_nbt", "Ticket-owned mod persistent NBTTagCompound", "world_chunks", "Preserve arbitrary mod NBT tag payload across world save and ticket restoration.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getModId", V_112, "chunk_ticket_mod_id", "Ticket owner mod ID", "world_chunks", "Preserve canonical mod namespace and callback routing.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getPlayerName", V_112, "chunk_ticket_player_owner", "Player-bound chunk ticket owner", "world_chunks", "Preserve nullable player name and ticket ownership type.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getType", V_112, "chunk_ticket_type", "Ticket.Type NORMAL/ENTITY/PLAYER", "world_chunks", "Preserve ticket type because player/entity tickets have different ownership/validation behavior.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "getWorld", V_112, "chunk_ticket_world", "Ticket owning World", "world_chunks", "Preserve exact world/dimension instance and null after release/unload.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "isPlayerTicket", V_112, "chunk_ticket_is_player", "Player ticket predicate", "world_chunks", "Preserve PLAYER ticket subtype semantics and player-name ownership.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+    d!("ForgeChunkManager.Ticket", "setChunkListDepth", V_112, "chunk_ticket_depth_write", "Ticket maximum forced chunk depth mutation", "world_chunks", "Preserve valid configured bounds and update effective forced chunk set after depth changes.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
+
+    // World generator and feature interfaces.
+    d!("WorldGenerator", "setScale", V_112, "world_generator_scale", "WorldGenerator scaling configuration", "worldgen", "Preserve X/Y/Z scale and generator coordinate transformation.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
+    d!("WorldGenerator", "setHeightRange", V_112, "world_generator_height_range", "WorldGenerator vertical placement range", "worldgen", "Preserve min/max height and random selection semantics.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
+    d!("WorldGenMinable", "generate", V_ALL, "worldgen_minable_ore", "Ore vein placement", "worldgen", "Preserve Random consumption, origin, vein size, block replacement predicate and exact vein walk.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
+    d!("WorldGenAbstractTree", "generate", V_ALL, "worldgen_tree_feature", "Tree generator block placement", "worldgen", "Preserve trunk/leaf random sequence, soil validation, bounds checks and placement order.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "generateSaplings", V_112, "worldgen_tree_sapling_replacement", "Sapling/soil replacement after tree generation", "worldgen", "Preserve world, Random, origin and replaced sapling states.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "setDecorationDefaults", V_112, "worldgen_tree_decoration_defaults", "Tree generator decoration configuration", "worldgen", "Preserve configured leaf/vine/decorative feature flags before generation.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenTrees", "generate", V_ALL, "worldgen_normal_tree", "Standard tree feature placement", "worldgen", "Preserve height selection, trunk/leaf radii, vines, cocoa and forced soil placement options.", "net/minecraft/world/gen/feature/WorldGenTrees.html"),
+    d!("WorldGenBigTree", "generate", V_ALL, "worldgen_large_tree", "Large tree feature placement", "worldgen", "Preserve height-limit, branch-node random generation, leaf clusters and trunk/branch placement order.", "net/minecraft/world/gen/feature/WorldGenBigTree.html"),
+    d!("WorldGenBigTree", "setDecorationDefaults", V_112, "worldgen_large_tree_defaults", "Large tree decoration default setup", "worldgen", "Preserve foliage/trunk/branch geometry parameters initialized before generation.", "net/minecraft/world/gen/feature/WorldGenBigTree.html"),
+    d!("WorldGenFlowers", "generate", V_ALL, "worldgen_flower_patch", "Flower/plant feature placement", "worldgen", "Preserve number of attempts, random offsets, target block and placement predicate.", "net/minecraft/world/gen/feature/WorldGenFlowers.html"),
+
+    // Chunk generator and provider APIs used by custom dimensions.
+    d!("IChunkGenerator", "generateChunk", V_112, "chunk_generator_generate", "IChunkGenerator chunk generation", "worldgen", "Preserve chunk X/Z, seed/random state, primer contents and deterministic feature ordering.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "populate", V_112, "chunk_generator_populate", "IChunkGenerator post-generation population", "worldgen", "Preserve neighbor chunk availability, decoration events and random seed derivation.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "recreateStructures", V_112, "chunk_generator_recreate_structures", "Structure recreation in existing chunk", "worldgen", "Preserve chunk coordinates, structure starts and saved structure reference data.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "getPossibleCreatures", V_112, "chunk_generator_possible_creatures", "Spawn list query for category and position", "worldgen", "Preserve EnumCreatureType, biome and structure-specific spawn list modifications.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "getStrongholdGen", V_112, "chunk_generator_stronghold_query", "Stronghold feature location query", "worldgen", "Preserve structure type and input position; custom dimension may return null.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "getNearestStructurePos", V_112, "chunk_generator_nearest_structure", "Nearest structure location lookup", "worldgen", "Preserve structure name, origin position and unexplored-only predicate.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "isInsideStructure", V_112, "chunk_generator_inside_structure", "Structure membership predicate", "worldgen", "Preserve structure name and target BlockPos.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkGenerator", "isPositionInStructure", V_112, "chunk_generator_position_in_structure", "Structure position predicate", "worldgen", "Preserve position/structure-start boundary behavior.", "net/minecraft/world/gen/IChunkGenerator.html"),
+    d!("IChunkProvider", "canSave", V_112, "chunk_provider_can_save", "Chunk provider world save eligibility", "world_chunks", "Preserve server/client provider persistence policy.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "chunkExists", V_ALL, "chunk_provider_exists", "Chunk existence/load state query", "world_chunks", "Preserve chunk generation vs loaded distinction and no-load query behavior.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "getLoadedChunkCount", V_112, "chunk_provider_loaded_count", "Currently loaded chunk count", "world_chunks", "Preserve count after unload queue processing and chunk ticket forcing.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "getLoadedChunks", V_112, "chunk_provider_loaded_chunks", "Loaded chunk collection/iterator", "world_chunks", "Preserve live collection versus snapshot semantics.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "getLoadedChunkIterator", V_112, "chunk_provider_loaded_chunk_iterator", "Loaded chunk iterator", "world_chunks", "Preserve iteration order and mutation behavior during chunk save/unload passes.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "getPossibleCreatures", V_112, "chunk_provider_possible_creatures", "Chunk provider spawn list lookup", "worldgen", "Preserve creature category and BlockPos biome/structure context.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "makeString", V_ALL, "chunk_provider_debug_string", "Chunk provider diagnostic string", "world_chunks", "Preserve diagnostic state when source logs provider status.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "populate", V_ALL, "chunk_provider_populate", "Chunk provider population/decorate callback", "worldgen", "Preserve provider and generator random state plus neighbor chunk loads.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "provideChunk", V_ALL, "chunk_provider_provide", "Chunk load/generation by coordinates", "world_chunks", "Preserve force-load/generate policy and chunk load event ordering.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "saveChunks", V_ALL, "chunk_provider_save_chunks", "Chunk provider save lifecycle", "world_persistence", "Preserve save-all flag and progress callback ordering.", "net/minecraft/world/chunk/IChunkProvider.html"),
+    d!("IChunkProvider", "unloadQueuedChunks", V_ALL, "chunk_provider_unload_queued", "Chunk unload queue processing", "world_chunks", "Preserve queue mutation and return value that indicates pending unload work.", "net/minecraft/world/chunk/IChunkProvider.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5506,6 +5566,26 @@ mod tests {
             ("IFixableData", "fixTagCompound"), ("IDataWalker", "process"),
             ("WorldSavedData", "markDirty"), ("WorldSavedData", "writeToNBT"),
             ("MapStorage", "getOrLoadData"), ("MapStorage", "saveAllData"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn forced_chunk_tickets_and_world_generation_interfaces_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("ForgeChunkManager", "forceChunk"), ("ForgeChunkManager", "requestTicket"),
+            ("ForgeChunkManager", "setForcedChunkLoadingCallback"),
+            ("ForgeChunkManager.Ticket", "getModData"),
+            ("ForgeChunkManager.Ticket", "getChunkList"),
+            ("IWorldGenerator", "generate"), ("WorldGenerator", "generate"),
+            ("WorldGenMinable", "generate"), ("WorldGenAbstractTree", "generate"),
+            ("IChunkGenerator", "generateChunk"), ("IChunkGenerator", "populate"),
+            ("IChunkGenerator", "getNearestStructurePos"),
+            ("IChunkProvider", "provideChunk"), ("IChunkProvider", "saveChunks"),
+            ("IChunkProvider", "unloadQueuedChunks"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
