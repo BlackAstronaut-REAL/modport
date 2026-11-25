@@ -315,6 +315,8 @@ pub fn export_worldgen_to_workspace(
     let import_modid = source_roots.first()
         .map(|root| source_modid_for_root(root, source_modid))
         .unwrap_or_else(|| source_modid_for_root(&workspace_root, source_modid));
+    let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, &import_modid);
+    let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
 
     let biomes = source_biomes(source_roots, &import_modid);
     let (dimensions, dimension_types) = source_dimensions(source_roots, &import_modid);
@@ -351,8 +353,14 @@ pub fn export_worldgen_to_workspace(
             continue;
         }
         let updates = crate::worldgen_bridge::resource_biome_updates(payload);
-        let name = display_name(registry);
-        let definition = merge_definition(&biome_template,&updates,&name);
+        let name = localization.translated_name(registry, &display_name(registry));
+        let mut definition = merge_definition(&biome_template,&updates,&name);
+        if let Some(object) = definition.as_object_mut() {
+            let information = localization.descriptions(registry);
+            if !information.is_empty() && object.contains_key("specialInformation") {
+                object.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
+        }
         let element_name = unique_element_name(&format!("{}Biome",pascal_name(registry)),&mut used_names);
         write_worldgen_element(
             &output_elements,&element_name,"biome",template_version(&biome_template,imported_fv),definition
@@ -384,8 +392,14 @@ pub fn export_worldgen_to_workspace(
         let updates = crate::worldgen_bridge::resource_dimension_updates(
             payload,&dtype,&biome_fallback,&import_modid
         );
-        let name = display_name(registry);
-        let definition = merge_definition(&dimension_template,&updates,&name);
+        let name = localization.translated_name(registry, &display_name(registry));
+        let mut definition = merge_definition(&dimension_template,&updates,&name);
+        if let Some(object) = definition.as_object_mut() {
+            let information = localization.descriptions(registry);
+            if !information.is_empty() && object.contains_key("specialInformation") {
+                object.insert("specialInformation".to_owned(), json!({"fixedValue": information}));
+            }
+        }
         let element_name = unique_element_name(&format!("{}Dimension",pascal_name(registry)),&mut used_names);
         write_worldgen_element(
             &output_elements,&element_name,"dimension",template_version(&dimension_template,imported_fv),definition
