@@ -746,6 +746,7 @@ impl MojModelBridgeApp {
                     self.texture_images.clear();
                     self.preview_image = None;
                     self.preview_texture = None;
+                    self.texture_animation = None;
                     self.selected_error.clear();
                 }
             }
@@ -930,7 +931,7 @@ impl MojModelBridgeApp {
                 self.camera.orbit(delta.x, delta.y);
             }
         }
-        if response.hovered() {
+        if response.hovered() && context.input(|input| input.modifiers.ctrl) {
             let wheel = context.input(|input| input.smooth_scroll_delta.y);
             if wheel.abs() > f32::EPSILON { self.camera.zoom(wheel); }
         }
@@ -1026,7 +1027,7 @@ impl MojModelBridgeApp {
                 MUTED,
             );
         }
-        ui.label(RichText::new("Drag to orbit · right-drag to pan · scroll to zoom").size(9.0).color(MUTED));
+        ui.label(RichText::new("Drag to orbit · right-drag to pan · Ctrl+scroll to zoom").size(9.0).color(MUTED));
     }
 
     fn show_editor(&mut self, ui: &mut egui::Ui) {
