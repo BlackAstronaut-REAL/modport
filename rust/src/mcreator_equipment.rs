@@ -1495,6 +1495,9 @@ struct EquipmentTextureFile {
 #[derive(Debug, Clone, Default)]
 struct EquipmentTextureIndex {
     files: Vec<EquipmentTextureFile>,
+    /// Exact normalized and compact item texture names -> indexes into files.
+    by_normalized_stem: HashMap<String, Vec<usize>>,
+    by_compact_stem: HashMap<String, Vec<usize>>,
     item_model_refs: HashMap<String, Vec<String>>,
 }
 
@@ -1555,6 +1558,19 @@ impl EquipmentTextureIndex {
             a.root_priority.cmp(&b.root_priority)
                 .then_with(|| a.lower_path.cmp(&b.lower_path))
         });
+        // Resolve the common exact and separator-insensitive paths through maps.
+        // The old resolver scanned every PNG for every registered item even
+        // though the source tree itself had already been indexed once.
+        for (file_index, file) in index.files.iter().enumerate() {
+            if !file.normalized_stem.is_empty() {
+                index.by_normalized_stem.entry(file.normalized_stem.clone())
+                    .or_default().push(file_index);
+            }
+            if !file.compact_stem.is_empty() {
+                index.by_compact_stem.entry(file.compact_stem.clone())
+                    .or_default().push(file_index);
+            }
+        }
         index
     }
 
@@ -1571,12 +1587,36 @@ impl EquipmentTextureIndex {
             return Vec::new();
         }
 
+        let mut candidate_indices = BTreeSet::<usize>::new();
+        for target in &normalized_targets {
+            if let Some(indices) = self.by_normalized_stem.get(target) {
+                candidate_indices.extend(indices.iter().copied());
+            }
+        }
+        for target in &compact_targets {
+            if let Some(indices) = self.by_compact_stem.get(target) {
+                candidate_indices.extend(indices.iter().copied());
+            }
+        }
+
         let mut scored = Vec::<(i32, usize, String, PathBuf)>::new();
-        for file in &self.files {
+        for file_index in candidate_indices {
+            let file = &self.files[file_index];
             let exact = normalized_targets.contains(&file.normalized_stem);
             let compact = !exact && compact_targets.contains(&file.compact_stem);
             let mut score = if exact { 1200 } else if compact { 1100 } else { 0 };
-            if score == 0 {
+            if file.lower_path.contains("/textures/item/") || file.lower_path.contains("/textures/items/") {
+                score += 60;
+            }
+            scored.push((score, file.root_priority, file.lower_path.clone(), file.path.clone()));
+        }
+
+        // Fuzzy prefix matching is intentionally a last resort. It used to run
+        // over the complete PNG list for every item even when an exact name
+        // already existed; exact/compact indexed matches always outrank it.
+        if scored.is_empty() {
+            for file in &self.files {
+                let mut score = 0;
                 for target in &compact_targets {
                     let shortest = file.compact_stem.len().min(target.len());
                     let longest = file.compact_stem.len().max(target.len());
@@ -1586,15 +1626,16 @@ impl EquipmentTextureIndex {
                         score = score.max(500 - longest.saturating_sub(shortest) as i32 * 20);
                     }
                 }
+                if score == 0 {
+                    continue;
+                }
+                if file.lower_path.contains("/textures/item/") || file.lower_path.contains("/textures/items/") {
+                    score += 60;
+                }
+                scored.push((score, file.root_priority, file.lower_path.clone(), file.path.clone()));
             }
-            if score == 0 {
-                continue;
-            }
-            if file.lower_path.contains("/textures/item/") || file.lower_path.contains("/textures/items/") {
-                score += 60;
-            }
-            scored.push((score, file.root_priority, file.lower_path.clone(), file.path.clone()));
         }
+
         scored.sort_by(|a, b| b.0.cmp(&a.0)
             .then_with(|| a.1.cmp(&b.1))
             .then_with(|| a.2.cmp(&b.2)));
@@ -1604,8 +1645,17 @@ impl EquipmentTextureIndex {
 
 fn texture_candidates(index: &EquipmentTextureIndex, source: &EquipmentSource) -> Vec<PathBuf> {
     let mut stems = Vec::<String>::new();
-    if let Some(model_refs) = index.item_model_refs.get(&compact_name(&source.registry_name)) {
-        stems.extend(model_refs.iter().filter_map(|reference| texture_stem_from_reference(reference)));
+    let mut model_keys = BTreeSet::from([
+        compact_name(&source.registry_name),
+        compact_name(&source.class_name),
+    ]);
+    if let Some(stripped) = source.class_name.strip_prefix("Item") {
+        model_keys.insert(compact_name(stripped));
+    }
+    for key in model_keys {
+        if let Some(model_refs) = index.item_model_refs.get(&key) {
+            stems.extend(model_refs.iter().filter_map(|reference| texture_stem_from_reference(reference)));
+        }
     }
     for reference in declared_equipment_texture_refs(&source.source_text) {
         if let Some(stem) = texture_stem_from_reference(&reference) {
