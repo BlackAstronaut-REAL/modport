@@ -2598,8 +2598,8 @@ mod tests {
         assert!(items.contains(".rarity(Rarity.RARE)"));
         assert!(items.contains(".fireResistant()"));
         assert!(items.contains(".craftRemainder(Items.BUCKET)"));
-        assert!(items.contains("import net.minecraft.world.item.Rarity;\\n"));
-        assert!(items.contains("import net.minecraft.world.item.Items;\\n"));
+        assert!(items.contains("import net.minecraft.world.item.Rarity;\n"));
+        assert!(items.contains("import net.minecraft.world.item.Items;\n"));
     }
 
     #[test]
