@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct ToolMaterialStats {
+    pub harvest_level: Option<i32>,
     pub uses: Option<i64>,
     pub efficiency: Option<f64>,
     pub damage: Option<f64>,
@@ -1068,6 +1069,7 @@ fn parse_material_numbers(arguments: &[String]) -> Option<[f64; 5]> {
 
 fn material_stats_from_values(values: [f64; 5]) -> ToolMaterialStats {
     ToolMaterialStats {
+        harvest_level: Some(values[0].round() as i32),
         uses: Some(values[1].round() as i64),
         efficiency: Some(values[2]),
         damage: Some(values[3]),
@@ -1115,6 +1117,7 @@ fn compiled_tool_numbers_before(
 fn compiled_tool_stats_from_numbers(values: &[f64]) -> Option<ToolMaterialStats> {
     if values.len() < 5 { return None; }
     Some(ToolMaterialStats {
+        harvest_level: Some(values[0].round() as i32),
         uses: Some(values[1].round() as i64),
         efficiency: Some(values[2]),
         damage: Some(values[3]),
