@@ -1000,7 +1000,7 @@ fn entity_attribute_name(field: &str) -> Option<&'static str> {
     }
 }
 
-fn default_compiled_entity_metadata(class_name: &str, registry: Option<&str>) -> EntityMetadata {
+fn default_entity_metadata(class_name: &str, registry: Option<&str>) -> EntityMetadata {
     EntityMetadata {
         class_name: class_name.to_owned(),
         display_name: class_display_name(registry.unwrap_or(class_name)),
@@ -1025,7 +1025,7 @@ fn default_compiled_entity_metadata(class_name: &str, registry: Option<&str>) ->
 fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&str>) -> EntityMetadata {
     let parsed = fs::read(path).ok().and_then(|bytes| ClassFile::parse(&bytes).ok());
     let Some(class) = parsed else {
-        let mut metadata = default_compiled_entity_metadata(class_name, registry);
+        let mut metadata = default_entity_metadata(class_name, registry);
         metadata.warnings.push(
             "Compiled entity class could not be parsed; numeric attributes and superclass traits remain defaults.".to_owned()
         );
@@ -1035,7 +1035,7 @@ fn parse_entity_class_metadata(path: &Path, class_name: &str, registry: Option<&
 }
 
 fn parse_entity_class_metadata_from_class(class: &ClassFile, class_name: &str, registry: Option<&str>) -> EntityMetadata {
-    let mut metadata = default_compiled_entity_metadata(class_name, registry);
+    let mut metadata = default_entity_metadata(class_name, registry);
     metadata.superclass = class.super_name().map(simple_name).unwrap_or("").to_owned();
     let superclass = metadata.superclass.to_ascii_lowercase();
     metadata.water_mob = ["watermob", "squid", "fish"].iter().any(|token| superclass.contains(token));
@@ -1397,47 +1397,42 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
         reg.source_offset
     ));
 
-    let mut entities = BTreeMap::new();
-    let mut entity_names: HashSet<String> = entity_registry.keys().cloned().collect();
+    let mut entity_names: Vec<String> = entity_registry.keys().cloned().collect();
     entity_names.extend(registrations.iter().map(|registration| registration.entity_class.clone()));
-    for entity_name in entity_names {
-        let entity_registry_name = entity_registry.get(&entity_name).or_else(|| registry.get(&entity_name));
-        let source = java_files.get(&entity_name).or_else(|| java_files.get(simple_name(&entity_name)));
-        let compiled = class_files.get(&entity_name).or_else(|| class_files.get(simple_name(&entity_name)));
-        let metadata = if let Some(path) = source {
-            java_texts.get(path)
-                .map(|text| parse_entity_source_metadata_from_text(text, path, entity_registry_name.map(String::as_str)))
-                .unwrap_or_else(|| parse_entity_source_metadata(path, entity_registry_name.map(String::as_str)))
-                .unwrap_or_else(|_| EntityMetadata {
-                    class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
-                    registry_name: entity_registry_name.cloned().unwrap_or_else(|| registry_slug(&entity_name)),
-                    superclass: String::new(), width: default_width(), height: default_height(),
-                    health: default_health(), movement_speed: default_speed(), attack_damage: default_attack(),
-                    armor: 0.0, follow_range: default_follow(), xp: 0, fire_immune: false, water_mob: false,
-                    flying_mob: false, ai_classes: Vec::new(),
-                    warnings: vec!["Entity source metadata was not fully parsed; defaults remain in use.".to_owned()]
-                })
-        } else if let Some(path) = compiled {
-            if let Some(class) = compiled_content.parsed_class_paths.get(path) {
-                parse_entity_class_metadata_from_class(
-                    class.as_ref(), &entity_name, entity_registry_name.map(String::as_str)
-                )
+    entity_names.sort_by_key(|name| (name.to_ascii_lowercase(), name.clone()));
+    entity_names.dedup();
+
+    let entity_results: Vec<(String, EntityMetadata)> = entity_names.par_iter()
+        .map(|entity_name| {
+            let entity_registry_name = entity_registry.get(entity_name).or_else(|| registry.get(entity_name));
+            let source = java_files.get(entity_name).or_else(|| java_files.get(simple_name(entity_name)));
+            let compiled = class_files.get(entity_name).or_else(|| class_files.get(simple_name(entity_name)));
+            let metadata = if let Some(path) = source {
+                java_texts.get(path)
+                    .map(|text| parse_entity_source_metadata_from_text(text, path, entity_registry_name.map(String::as_str)))
+                    .unwrap_or_else(|| parse_entity_source_metadata(path, entity_registry_name.map(String::as_str)))
+                    .unwrap_or_else(|_| {
+                        let mut fallback = default_entity_metadata(entity_name, entity_registry_name.map(String::as_str));
+                        fallback.warnings.push("Entity source metadata was not fully parsed; defaults remain in use.".to_owned());
+                        fallback
+                    })
+            } else if let Some(path) = compiled {
+                if let Some(class) = compiled_content.parsed_class_paths.get(path) {
+                    parse_entity_class_metadata_from_class(
+                        class.as_ref(), entity_name, entity_registry_name.map(String::as_str)
+                    )
+                } else {
+                    parse_entity_class_metadata(path, entity_name, entity_registry_name.map(String::as_str))
+                }
             } else {
-                parse_entity_class_metadata(path, &entity_name, entity_registry_name.map(String::as_str))
-            }
-        } else {
-            EntityMetadata {
-                class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
-                registry_name: entity_registry_name.cloned().unwrap_or_else(|| registry_slug(&entity_name)),
-                superclass: String::new(), width: default_width(), height: default_height(),
-                health: default_health(), movement_speed: default_speed(), attack_damage: default_attack(),
-                armor: 0.0, follow_range: default_follow(), xp: 0, fire_immune: false, water_mob: false,
-                flying_mob: false, ai_classes: Vec::new(),
-                warnings: vec!["Entity class source and compiled class were not found; metadata defaults remain in use.".to_owned()]
-            }
-        };
-        entities.insert(entity_name, metadata);
-    }
+                let mut fallback = default_entity_metadata(entity_name, entity_registry_name.map(String::as_str));
+                fallback.warnings.push("Entity class source and compiled class were not found; metadata defaults remain in use.".to_owned());
+                fallback
+            };
+            (entity_name.clone(), metadata)
+        })
+        .collect();
+    let entities: BTreeMap<String, EntityMetadata> = entity_results.into_iter().collect();
 
     if registrations.is_empty() {
         warnings.push("No supported source or compiled renderer registrations were found in the supplied roots.".to_owned());
