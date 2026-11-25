@@ -2380,6 +2380,11 @@ public final class ModBlocks {{
     body
 }
 
+fn generated_block_entity_class(source_class: &str) -> String {
+    let simple = source_class.rsplit('.').next().unwrap_or(source_class);
+    format!("Converted{}", java_type_identifier(simple))
+}
+
 fn generated_entity_block_class(block_id: &str) -> String {
     format!("EntityBlock{}", java_type_identifier(block_id))
 }
