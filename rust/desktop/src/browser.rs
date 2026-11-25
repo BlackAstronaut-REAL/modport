@@ -1320,7 +1320,7 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if ["block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory"]
+    } else if ["block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory", "block/fence_gate"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         Some("fence")
     } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
@@ -1329,6 +1329,12 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         Some("pane")
+    } else if ["block/button", "block/template_button"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
+        Some("button")
+    } else if ["block/lever", "block/template_orientable"].iter().any(|candidate| parent.ends_with(candidate))
+        && stem.contains("lever") {
+        Some("lever")
     } else if ["block/door_bottom", "block/door_top", "block/template_door"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         Some("door")
@@ -1434,6 +1440,10 @@ fn infer_legacy_block_shape(source: &mojmodelbridge::mcreator_block::BlockSource
         "wall".to_owned()
     } else if evidence.contains("blockpane") || evidence.contains("glasspane") || evidence.contains("pane") {
         "pane".to_owned()
+    } else if evidence.contains("blockbutton") || evidence.contains("button") {
+        "button".to_owned()
+    } else if evidence.contains("blocklever") || evidence.contains("lever") {
+        "lever".to_owned()
     } else if evidence.contains("blocktrapdoor") || evidence.contains("trapdoor") {
         if evidence.contains("top") { "trapdoor_top".to_owned() } else { "trapdoor_bottom".to_owned() }
     } else if evidence.contains("blockdoor") || evidence.contains("door") {
@@ -2150,6 +2160,26 @@ mod tests {
         source.class_name = "ItemBattleAxe".to_owned();
         source.registry_name = "battle_axe".to_owned();
         assert!(is_weapon_source(&source));
+    }
+
+    #[test]
+    fn detects_button_and_lever_block_shapes() {
+        let button = mojmodelbridge::mcreator_block::BlockSource {
+            class_name: "BlockStoneButton".to_owned(),
+            superclass: "BlockButton".to_owned(),
+            registry_name: "stone_button".to_owned(),
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        let lever = mojmodelbridge::mcreator_block::BlockSource {
+            class_name: "BlockLever".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "lever".to_owned(),
+            source_path: String::new(),
+            source_text: String::new(),
+        };
+        assert_eq!(infer_legacy_block_shape(&button), "button");
+        assert_eq!(infer_legacy_block_shape(&lever), "lever");
     }
 
     #[test]
