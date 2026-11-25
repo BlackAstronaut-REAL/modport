@@ -10,6 +10,10 @@ pub struct ModMetadata {
     pub modid: String,
     pub name: String,
     pub version: String,
+    /// Minecraft target declared by mcmod.info or a loader dependency.
+    pub minecraft_version: String,
+    /// Forge loader version/range when it can be recovered from metadata.
+    pub forge_version: String,
     pub authors: Vec<String>,
     pub description: String,
     pub website: String,
@@ -68,6 +72,8 @@ fn from_json_metadata(path: &Path, fabric: bool) -> Option<ModMetadata> {
         modid: first(object.get(if fabric { "id" } else { "modid" }).or_else(|| object.get("id"))),
         name: first(object.get("name")),
         version: first(object.get("version")),
+        minecraft_version: first(object.get("mcversion").or_else(|| object.get("minecraftVersion")).or_else(|| object.get("minecraft_version"))),
+        forge_version: first(object.get("forgeVersion").or_else(|| object.get("forge_version"))),
         authors: authors(object.get("authors").or_else(|| object.get("authorList")).or_else(|| object.get("author")).or_else(|| object.get("contributors"))),
         description: first(object.get("description")),
         website: first(object.get("url").or_else(|| object.get("website")).or_else(|| contact.and_then(|c| c.get("homepage")))),
@@ -83,13 +89,52 @@ fn toml_string(text: &str, key: &str) -> String {
         .and_then(|c| c.get(1)).map(|m| m.as_str().trim().to_owned()).unwrap_or_default()
 }
 
+fn dependency_version_range(text: &str, dependency_id: &str) -> String {
+    let mut in_dependency = false;
+    let mut current_mod_id = String::new();
+    let mut current_range = String::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with("[[") || (line.starts_with('[') && line.ends_with(']')) {
+            if in_dependency && current_mod_id.eq_ignore_ascii_case(dependency_id) && !current_range.is_empty() {
+                return current_range;
+            }
+            in_dependency = line.starts_with("[[dependencies.");
+            current_mod_id.clear();
+            current_range.clear();
+            continue;
+        }
+        if !in_dependency { continue; }
+        if current_mod_id.is_empty() {
+            current_mod_id = toml_string(line, "modId");
+        }
+        if current_range.is_empty() {
+            current_range = toml_string(line, "versionRange");
+        }
+    }
+    if in_dependency && current_mod_id.eq_ignore_ascii_case(dependency_id) { current_range } else { String::new() }
+}
+
+fn version_from_range(value: &str) -> String {
+    Regex::new(r"(?i)(?:\\[|\\()\\s*(\\d+\\.\\d+(?:\\.\\d+)?)")
+        .ok()
+        .and_then(|regex| regex.captures(value))
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_owned())
+        .unwrap_or_default()
+}
+
 fn from_mods_toml(path: &Path) -> Option<ModMetadata> {
     let text = fs::read_to_string(path).ok()?;
     let modid = toml_string(&text, "modId");
     if modid.is_empty() { return None; }
     let author_text = toml_string(&text, "authors");
+    let minecraft_range = dependency_version_range(&text, "minecraft");
+    let forge_range = dependency_version_range(&text, "forge");
     Some(ModMetadata {
         modid, name: toml_string(&text, "displayName"), version: toml_string(&text, "version"),
+        minecraft_version: version_from_range(&minecraft_range),
+        forge_version: version_from_range(&forge_range),
         authors: authors(Some(&Value::String(author_text))),
         description: toml_string(&text, "description"), website: toml_string(&text, "displayURL"),
         license: toml_string(&text, "license"), source: path.to_string_lossy().to_string(),
@@ -130,6 +175,8 @@ fn merge(mut primary: ModMetadata, fallback: Option<ModMetadata>) -> ModMetadata
     if primary.modid.is_empty() { primary.modid = fallback.modid; }
     if primary.name.is_empty() { primary.name = fallback.name; }
     if primary.version.is_empty() { primary.version = fallback.version; }
+    if primary.minecraft_version.is_empty() { primary.minecraft_version = fallback.minecraft_version; }
+    if primary.forge_version.is_empty() { primary.forge_version = fallback.forge_version; }
     if primary.authors.is_empty() { primary.authors = fallback.authors; }
     if primary.description.is_empty() { primary.description = fallback.description; }
     if primary.website.is_empty() { primary.website = fallback.website; }
@@ -177,4 +224,62 @@ pub fn infer_mod_metadata(root: &Path) -> ModMetadata {
         if let Some(namespace) = namespaces.first() { result.modid = namespace.clone(); }
     }
     result
+}
+ 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcmod_info_minecraft_version_is_not_confused_with_mod_version() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("mcmod.info");
+        fs::write(&path, r#"[{"modid":"sample","name":"Sample","version":"4.2.0","mcversion":"1.7.10"}]"#).unwrap();
+        let metadata = from_json_metadata(&path, false).unwrap();
+        assert_eq!(metadata.version, "4.2.0");
+        assert_eq!(metadata.minecraft_version, "1.7.10");
+    }
+
+    #[test]
+    fn mods_toml_minecraft_and_forge_dependencies_are_recovered() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("mods.toml");
+        fs::write(&path, r#"
+modLoader="javafml"
+loaderVersion="[14,)"
+[[mods]]
+modId="sample"
+version="1.0"
+displayName="Sample"
+[[dependencies.sample]]
+modId="forge"
+mandatory=true
+versionRange="[14.23.5.2854,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.sample]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.12.2,1.13)"
+ordering="NONE"
+side="BOTH"
+"#).unwrap();
+        let metadata = from_mods_toml(&path).unwrap();
+        assert_eq!(metadata.minecraft_version, "1.12.2");
+        assert_eq!(metadata.forge_version, "14.23.5");
+    }
+
+    #[test]
+    fn dependency_version_range_is_scoped_to_dependency_table() {
+        let text = r#"
+[[dependencies.sample]]
+modId="forge"
+versionRange="[14.23.5,)"
+[[dependencies.sample]]
+modId="minecraft"
+versionRange="[1.12.2,1.13)"
+"#;
+        assert_eq!(dependency_version_range(text, "minecraft"), "[1.12.2,1.13)");
+        assert_eq!(dependency_version_range(text, "forge"), "[14.23.5,)");
+    }
 }
