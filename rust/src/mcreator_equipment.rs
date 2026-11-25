@@ -1001,8 +1001,9 @@ pub fn source_tool_materials(
     results
 }
 
-/// Discover concrete Java-registered item/tool subclasses. Compiled-only registrations
-/// are not yet inferred here; bytecode registry scanning is a subsequent parity stage.
+/// Discover concrete source- and bytecode-registered item/tool subclasses.
+/// Compiled-only classes also contribute any named numeric getters that can be
+/// safely evaluated from their JVM method bodies.
 pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<EquipmentSource>> {
     use crate::source::java::strip_java_comments;
 
