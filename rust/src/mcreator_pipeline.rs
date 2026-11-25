@@ -4,12 +4,14 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportStageResult {
     pub name: String,
     pub exported: usize,
     pub skipped: usize,
+    pub duration_ms: u64,
     pub details: Value,
 }
 
@@ -18,6 +20,7 @@ pub struct ExportAllReport {
     pub workspace_file: PathBuf,
     pub source_modid: String,
     pub validation_ok: bool,
+    pub total_duration_ms: u64,
     pub stages: Vec<ExportStageResult>,
     pub warnings: Vec<String>,
 }
@@ -85,11 +88,16 @@ fn count_field(value: &Value, field: &str) -> usize {
     }
 }
 
-fn stage(name: &str, exported: usize, skipped: usize, details: Value) -> ExportStageResult {
+fn elapsed_ms(started: Instant) -> u64 {
+    started.elapsed().as_millis().min(u64::MAX as u128) as u64
+}
+
+fn stage(name: &str, exported: usize, skipped: usize, duration_ms: u64, details: Value) -> ExportStageResult {
     ExportStageResult {
         name: name.to_owned(),
         exported,
         skipped,
+        duration_ms,
         details,
     }
 }
@@ -102,6 +110,7 @@ pub fn export_all_to_workspace(
     source_modid: &str,
     imported_fv: i64,
 ) -> Result<ExportAllReport> {
+    let total_started = Instant::now();
     let workspace_root = fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
     let workspace_file = selected_workspace(&workspace_root)?;
     let import_modid = if !source_modid.trim().is_empty() {
@@ -116,6 +125,7 @@ pub fn export_all_to_workspace(
     let mut stages = Vec::<ExportStageResult>::new();
     let mut warnings = Vec::<String>::new();
 
+    let equipment_started = Instant::now();
     let equipment = crate::mcreator_equipment::export_equipment_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -127,9 +137,11 @@ pub fn export_all_to_workspace(
         "equipment",
         equipment.exported,
         equipment.skipped,
+        elapsed_ms(equipment_started),
         serde_json::to_value(&equipment)?,
     ));
 
+    let armor_started = Instant::now();
     let armor = crate::mcreator_armor::export_armor_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -141,9 +153,11 @@ pub fn export_all_to_workspace(
         "armor",
         armor.exported,
         armor.skipped,
+        elapsed_ms(armor_started),
         serde_json::to_value(&armor)?,
     ));
 
+    let blocks_started = Instant::now();
     let blocks = crate::mcreator_block::export_blocks_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -155,9 +169,11 @@ pub fn export_all_to_workspace(
         "blocks",
         blocks.exported,
         blocks.skipped,
+        elapsed_ms(blocks_started),
         serde_json::to_value(&blocks)?,
     ));
 
+    let plants_started = Instant::now();
     let plants = crate::mcreator_plant::export_plants_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -169,9 +185,11 @@ pub fn export_all_to_workspace(
         "plants",
         plants.exported,
         plants.skipped,
+        elapsed_ms(plants_started),
         serde_json::to_value(&plants)?,
     ));
 
+    let worldgen_started = Instant::now();
     let worldgen = crate::mcreator_worldgen::export_worldgen_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -183,9 +201,11 @@ pub fn export_all_to_workspace(
         "worldgen",
         worldgen.biomes_exported + worldgen.dimensions_exported,
         worldgen.skipped,
+        elapsed_ms(worldgen_started),
         serde_json::to_value(&worldgen)?,
     ));
 
+    let entities_started = Instant::now();
     let graph_root = source_roots.first()
         .ok_or_else(|| anyhow::anyhow!("export-all requires at least one source root"))?;
     let graph = crate::mod_graph::scan_mod_graph(graph_root, source_roots)?;
@@ -211,9 +231,11 @@ pub fn export_all_to_workspace(
         "living_entities",
         count_field(&entity_details, "exported_entities"),
         count_field(&entity_details, "skipped_entities"),
+        elapsed_ms(entities_started),
         entity_details,
     ));
 
+    let projectiles_started = Instant::now();
     let projectiles = crate::mcreator_projectile::export_projectiles_to_workspace(
         source_roots, &workspace_root, &import_modid, imported_fv
     )?;
@@ -225,10 +247,12 @@ pub fn export_all_to_workspace(
         "projectiles",
         projectiles.exported,
         projectiles.skipped,
+        elapsed_ms(projectiles_started),
         serde_json::to_value(&projectiles)?,
     ));
 
     // Recipe references are resolved only after item/tool/block elements exist.
+    let recipes_started = Instant::now();
     let registry_to_element = registry_element_map(&workspace_file)?;
     let recipes = crate::recipe_bridge::export_recipes_to_workspace(
         source_roots, &workspace_root, &import_modid, &registry_to_element, imported_fv
@@ -241,9 +265,11 @@ pub fn export_all_to_workspace(
         "recipes",
         recipes.exported.len(),
         0,
+        elapsed_ms(recipes_started),
         serde_json::to_value(&recipes)?,
     ));
 
+    let validation_started = Instant::now();
     let validation = crate::workspace_validation::validate_workspace(
         &workspace_root,
         None,
@@ -269,6 +295,7 @@ pub fn export_all_to_workspace(
         "validation",
         0,
         0,
+        elapsed_ms(validation_started),
         validation_details,
     ));
 
@@ -276,6 +303,7 @@ pub fn export_all_to_workspace(
         workspace_file,
         source_modid: import_modid,
         validation_ok,
+        total_duration_ms: elapsed_ms(total_started),
         stages,
         warnings,
     })
