@@ -1383,17 +1383,26 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
     } else if ["block/stairs", "block/inner_stairs", "block/outer_stairs"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
         if stem.contains("top") || stem.contains("upper") { Some("stairs_top") } else { Some("stairs") }
-    } else if [
-        "block/fence", "block/fence_post", "block/fence_side", "block/fence_inventory",
-        "block/fence_gate", "block/template_fence_post", "block/template_fence_side",
-        "block/template_fence_gate",
-    ].iter().any(|candidate| parent.ends_with(candidate)) {
+    } else if parent.ends_with("block/template_fence_post") || parent.ends_with("block/fence_post") {
+        Some("fence_post")
+    } else if parent.ends_with("block/template_fence_side") || parent.ends_with("block/fence_side") {
+        Some("fence_side")
+    } else if parent.ends_with("block/template_fence_gate") || parent.ends_with("block/fence_gate") {
+        Some("fence_gate")
+    } else if ["block/fence_inventory", "block/fence"]
+        .iter().any(|candidate| parent.ends_with(candidate)) {
         Some("fence")
-    } else if ["block/wall_inventory", "block/template_wall_post", "block/template_wall_side"]
-        .iter().any(|candidate| parent.ends_with(candidate)) {
+    } else if parent.ends_with("block/template_wall_post") {
+        Some("wall_post")
+    } else if parent.ends_with("block/template_wall_side") {
+        Some("wall_side")
+    } else if parent.ends_with("block/wall_inventory") {
         Some("wall")
-    } else if ["block/pane_post", "block/pane_side", "block/template_glass_pane"]
-        .iter().any(|candidate| parent.ends_with(candidate)) {
+    } else if parent.ends_with("block/template_glass_pane_post") || parent.ends_with("block/pane_post") {
+        Some("pane_post")
+    } else if parent.ends_with("block/template_glass_pane_side") || parent.ends_with("block/pane_side") {
+        Some("pane_side")
+    } else if parent.ends_with("block/template_glass_pane") || parent.ends_with("block/pane") {
         Some("pane")
     } else if ["block/button", "block/template_button"]
         .iter().any(|candidate| parent.ends_with(candidate)) {
@@ -1408,8 +1417,7 @@ fn block_shape_for_parent(parent: &str, stem: &str) -> Option<&'static str> {
         .iter().any(|candidate| parent.ends_with(candidate)) {
         if stem.contains("top") { Some("trapdoor_top") } else { Some("trapdoor_bottom") }
     } else if ["block/cube", "block/cube_all", "block/cube_column", "block/orientable"]
-        .iter().any(|candidate| parent.ends_with(candidate))
-    {
+        .iter().any(|candidate| parent.ends_with(candidate)) {
         Some("cube")
     } else {
         None
@@ -2319,14 +2327,14 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_vanilla_template_fence_model_parents() {
-        for parent in [
-            "minecraft:block/template_fence_post",
-            "minecraft:block/template_fence_side",
-            "minecraft:block/template_fence_gate",
-        ] {
-            assert_eq!(block_shape_for_parent(parent, "oak_fence"), Some("fence"));
-        }
+    fn recognizes_vanilla_multipart_fence_wall_and_pane_model_parents() {
+        assert_eq!(block_shape_for_parent("minecraft:block/template_fence_post", "oak_fence_post"), Some("fence_post"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_fence_side", "oak_fence_side"), Some("fence_side"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_fence_gate", "oak_fence_gate"), Some("fence_gate"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_wall_post", "cobblestone_wall_post"), Some("wall_post"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_wall_side", "cobblestone_wall_side"), Some("wall_side"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_glass_pane_post", "glass_pane_post"), Some("pane_post"));
+        assert_eq!(block_shape_for_parent("minecraft:block/template_glass_pane_side", "glass_pane_side"), Some("pane_side"));
     }
 
     #[test]
