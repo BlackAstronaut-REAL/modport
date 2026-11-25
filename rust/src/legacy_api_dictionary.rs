@@ -3848,6 +3848,16 @@ const DEFINITIONS: &[Definition] = &[
     d!("Profiler", "getNameOfLastSection", V_112, "profiler_current_section", "Current profiler section name", "performance", "Preserve current nesting path for diagnostic/debug output.", "net/minecraft/profiler/Profiler.html"),
     d!("Profiler", "startSection", V_ALL, "profiler_start_section", "Profiler timing scope start", "performance", "Preserve nested section stack and exact ordering; do not remove instrumentation if source observes profiling data.", "net/minecraft/profiler/Profiler.html"),
 
+    // Block core state/metadata, harvest/drop and lifecycle hooks.
+    d!("Block", "getItem", V_ALL, "block_pick_item", "Block item form lookup at world position", "blocks_loot", "Preserve world/position/state context and nullable item result for blocks with no item form.", "net/minecraft/block/Block.html"),
+    d!("Block", "getRenderLayer", V_112, "block_render_layer", "Block render layer selection", "blocks_render", "Preserve CUTOUT/CUTOUT_MIPPED/TRANSLUCENT layer choice separately from render type.", "net/minecraft/block/Block.html"),
+    d!("Block", "getStateForPlacement", V_112, "block_state_for_placement", "Placement-context-derived BlockState", "blocks_interaction", "Preserve ItemStack, EntityLivingBase, EnumFacing, hit coordinates, hand and world placement context.", "net/minecraft/block/Block.html"),
+    d!("Block", "onEntityWalk", V_ALL, "block_entity_walk_callback", "Entity walking across block callback", "blocks_physics", "Preserve state/world/position/entity and movement trigger order for pressure plates, traps and custom blocks.", "net/minecraft/block/Block.html"),
+    d!("Block", "onPlayerDestroy", V_112, "block_player_destroy_cleanup", "Player block destruction cleanup callback", "blocks_loot", "Preserve world, position and state after removal but before neighbor update/drop finalization.", "net/minecraft/block/Block.html"),
+
+    // Item callbacks for entity combat/use and item-entity lifecycle.
+    d!("Item", "onItemExpire", V_112, "item_entity_expire_callback", "ItemEntity expiration callback", "items_entities", "Preserve EntityItem and lifespan reset behavior; custom items may prevent despawn.", "net/minecraft/item/Item.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5804,6 +5814,25 @@ mod tests {
             ("GameRules", "addGameRule"), ("GameRules", "setOrCreateGameRule"),
             ("GameRules", "getBoolean"), ("DifficultyInstance", "getAdditionalDifficulty"),
             ("Profiler", "startSection"), ("Profiler", "endStartSection"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn block_harvest_placement_and_item_entity_callbacks_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("Block", "getStateFromMeta"), ("Block", "getMetaFromState"),
+            ("Block", "getActualState"), ("Block", "getExtendedState"),
+            ("Block", "getDrops"), ("Block", "getPickBlock"),
+            ("Block", "onBlockActivated"), ("Block", "onBlockPlacedBy"),
+            ("Block", "onEntityCollidedWithBlock"), ("Block", "onEntityWalk"),
+            ("Block", "randomTick"), ("Block", "updateTick"),
+            ("Item", "hitEntity"), ("Item", "itemInteractionForEntity"),
+            ("Item", "onDroppedByPlayer"), ("Item", "onEntityItemUpdate"),
+            ("Item", "onLeftClickEntity"), ("Item", "onUpdate"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
