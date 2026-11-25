@@ -18,6 +18,7 @@ pub mod neoforge_docs;
 pub mod neoforge_project;
 pub mod neoforge_port;
 pub mod native_recipe_bridge;
+pub mod native_lore;
 pub mod localization;
 pub mod mcreator_model;
 pub mod mcreator_entity;
