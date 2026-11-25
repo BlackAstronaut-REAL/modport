@@ -1142,7 +1142,7 @@ fn collect_native_tools(
             attribute_damage,
             attribute_speed,
             durability,
-            lore: collect_source_lore(&source.source_text, source_roots, &source.registry_name, source_modid),
+            lore: collect_source_lore(&source.source_text, language_lore, &source.registry_name),
             warnings: tool_warnings,
         });
     }
