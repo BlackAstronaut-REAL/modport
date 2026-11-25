@@ -2564,7 +2564,7 @@ mod tests {
         let status: Value = serde_json::from_slice(&fs::read(output.join("modport/port-status.json")).unwrap()).unwrap();
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 1);
-        assert_eq!(status["converted"]["blocks"], 1);
+        assert_eq!(status["converted"]["blocks"], 2);
     }
 
     #[test]
