@@ -3715,6 +3715,73 @@ const DEFINITIONS: &[Definition] = &[
     d!("TileEntity", "getKey", V_112, "tile_entity_registry_key", "TileEntity registry ResourceLocation", "block_entities", "Preserve class-to-registry key mapping and alias behavior.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "register", V_ALL, "tile_entity_register_class", "TileEntity class/name registration", "registration", "Preserve numeric legacy ID, class and namespaced registry key/aliases.", "net/minecraft/tileentity/TileEntity.html"),
 
+    // Dedicated server player operations and network state.
+    d!("EntityPlayerMP", "addExperience", V_ALL, "server_player_add_experience", "Server-side player XP orb/experience award", "player_progression", "Preserve XP points, level progress and server-to-client experience synchronization.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "addExperienceLevel", V_ALL, "server_player_add_experience_level", "Server-side player XP level change", "player_progression", "Preserve positive/negative level changes, enchantment seed refresh and container sync.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "addExhaustion", V_ALL, "server_player_add_exhaustion", "Server-side food exhaustion increase", "player_survival", "Preserve exhaustion amount and food/saturation tick thresholds.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "canCommandSenderUseCommand", V_ALL, "server_player_command_permission", "Server player command permission check", "player_commands", "Preserve permission level, command name and server operator/broadcast rules.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "changeDimension", V_ALL, "server_player_dimension_transfer", "Server player dimension transfer", "dimensions", "Preserve teleporter, player list membership, respawn packet, world change and dimension event ordering.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "closeContainer", V_112, "server_player_close_container", "Server container close synchronization", "player_inventory", "Preserve container close callbacks, cursor stack drop/recovery and open-container state update.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "copyFrom", V_112, "server_player_clone_copy", "Player clone/respawn persistent state transfer", "player_lifecycle", "Preserve death-vs-dimension-change flag, inventory, XP, capabilities, shoulder entities and mod attachments.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "getChatVisibility", V_112, "server_player_chat_visibility", "Server player chat visibility setting", "chat", "Preserve FULL/SYSTEM/HIDDEN client chat preference for server message routing.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "getGameProfile", V_112, "server_player_game_profile", "Authenticated GameProfile identity", "player_identity", "Preserve UUID, name and profile properties; do not replace with display name.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "getServer", V_ALL, "server_player_server", "Owning MinecraftServer access", "player_identity", "Preserve server object identity and lifecycle; may be unavailable before login attachment.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "getServerWorld", V_112, "server_player_server_world", "ServerPlayer owning WorldServer", "player_identity", "Preserve server-only world type and current dimension after teleport.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "getStatFile", V_112, "server_player_stat_file", "PlayerStatFile persistent statistics manager", "player_progression", "Preserve player-specific stat manager and persistence/dirty state.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "isInvulnerableDimensionChange", V_112, "server_player_dimension_invulnerability", "Player dimension-transfer temporary invulnerability", "combat", "Preserve transfer-specific damage immunity duration separately from creative/spectator invulnerability.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "isSpectator", V_ALL, "server_player_spectator_predicate", "Server player spectator game mode", "player_gamemode", "Preserve server-authoritative spectator flag and interaction restrictions.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "sendContainerToPlayer", V_112, "server_player_container_initial_sync", "Container full slot/window synchronization", "player_inventory", "Preserve window ID, slot ordering, cursor stack and initial menu contents packet.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "sendMessage", V_ALL, "server_player_chat_send", "Server player chat component delivery", "chat", "Preserve component styles, chat visibility and server message routing.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "sendStatusMessage", V_112, "server_player_status_message", "Server player action-bar/status message", "chat", "Preserve actionBar boolean and ITextComponent formatting.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "setGameType", V_ALL, "server_player_game_mode_write", "Server authoritative player game mode mutation", "player_gamemode", "Preserve GameType transition side effects, abilities packet sync and interaction manager state.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "setPlayerHealthUpdated", V_112, "server_player_health_sync_flag", "Player health/food/experience synchronization flag", "player_survival", "Preserve deferred health/food/XP packet update scheduling.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "setPositionAndUpdate", V_ALL, "server_player_teleport", "Server player forced position/teleport synchronization", "player_movement", "Preserve teleport packet, movement reset, dimension tracking and vehicle dismount behavior.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "setSpawnPoint", V_112, "server_player_spawn_point_write", "Server player respawn position update", "player_respawn", "Preserve spawn dimension, forced flag and bed validity checks.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+    d!("EntityPlayerMP", "wakeUpPlayer", V_ALL, "server_player_wake_up", "Server player sleep termination", "player_respawn", "Preserve immediate/forced wake behavior, bed validity, time skip and sleeping-player list synchronization.", "net/minecraft/entity/player/EntityPlayerMP.html"),
+
+    // PlayerInteractionManager authoritative block/item interaction logic.
+    d!("PlayerInteractionManager", "activateBlockOrUseItem", V_ALL, "interaction_manager_use_item_or_block", "Server right-click block/item dispatch", "player_interaction", "Preserve block activation vs held-item use ordering, hand, face, hit vector and EnumActionResult.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "blockRemoving", V_ALL, "interaction_manager_block_remove_tick", "Server progressive block destruction update", "player_interaction", "Preserve current block, damage progress, hardness, packet crack stage and final harvest timing.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "getBlockReachDistance", V_112, "interaction_manager_block_reach", "Server block interaction reach distance", "player_interaction", "Preserve game mode and attribute-modified reach distance; client reach is not authoritative.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "getGameType", V_112, "interaction_manager_game_type", "Server interaction manager GameType", "player_gamemode", "Preserve server-side survival/creative/adventure/spectator state.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "isCreative", V_ALL, "interaction_manager_is_creative", "Server creative interaction mode predicate", "player_gamemode", "Preserve server authoritative game mode rather than client capability flag alone.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "isSurvivalOrAdventure", V_112, "interaction_manager_survival_adventure", "Server survival/adventure interaction mode predicate", "player_gamemode", "Preserve mode grouping independently from creative and spectator modes.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "onBlockClicked", V_ALL, "interaction_manager_start_break", "Server block break start callback", "player_interaction", "Preserve hit face, block position, reach check, adventure mode restrictions and initial crack packet.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "processBlockBreakingAction", V_112, "interaction_manager_break_packet", "Server CPacketPlayerDigging action handling", "player_interaction", "Preserve START/STOP/ABORT actions, sequence/progress and server-side target validity.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "processRightClick", V_112, "interaction_manager_right_click_item", "Server held-item right click action", "player_interaction", "Preserve hand, stack copy, cooldown/active use and ActionResult stack handling.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "processRightClickBlock", V_112, "interaction_manager_right_click_block", "Server block right click action", "player_interaction", "Preserve hit location, face, hand, stack and block-first/item-fallback behavior.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "setGameType", V_112, "interaction_manager_game_type_write", "Server interaction mode update", "player_gamemode", "Preserve GameType assignment and ability/interaction state recalculation.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "tryHarvestBlock", V_ALL, "interaction_manager_harvest_block", "Server block harvest/remove operation", "player_interaction", "Preserve spawn protection, adventure mode, tool damage, harvest event, drops and XP side effects.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+    d!("PlayerInteractionManager", "updateBlockRemoving", V_ALL, "interaction_manager_update_breaking", "Server ongoing block damage tick", "player_interaction", "Preserve incremental hardness progress, crack stage updates and harvest threshold.", "net/minecraft/server/management/PlayerInteractionManager.html"),
+
+    // Server network handler: inbound player actions and authoritative state.
+    d!("NetHandlerPlayServer", "captureCurrentPosition", V_112, "network_capture_player_position", "Server movement packet position snapshot", "networking", "Preserve previous XYZ/rotation snapshot used for movement validation and teleport correction.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "disconnect", V_ALL, "network_disconnect_player", "Server player connection termination", "networking", "Preserve disconnect reason component, player logout event and cleanup ordering.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processAnimation", V_ALL, "network_player_arm_animation", "Server CPacketAnimation handling", "networking", "Preserve hand swing animation broadcast and entity status timing.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processChatMessage", V_ALL, "network_player_chat_packet", "Server incoming chat message packet", "networking", "Preserve message validation, chat event mutation/cancellation and broadcast routing.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processClickWindow", V_ALL, "network_container_click_packet", "Server inventory/window click packet", "networking", "Preserve window ID, slot/button, ClickType, action number and server transaction confirmation/rollback.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processClientSettings", V_ALL, "network_player_client_settings", "Server client locale/skin/view-distance settings", "networking", "Preserve language, view distance, chat visibility, model part flags and main hand.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processClientStatus", V_ALL, "network_player_client_status", "Client status request packet handling", "networking", "Preserve respawn/statistics/open-inventory request types and associated server actions.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processCloseWindow", V_ALL, "network_container_close_packet", "Server close window packet", "networking", "Preserve open container ID validation and cursor stack return/drop behavior.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processConfirmTransaction", V_ALL, "network_container_confirm_transaction", "Server inventory action confirmation", "networking", "Preserve transaction ID and accepted/rejected resync behavior.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processCreativeInventoryAction", V_ALL, "network_creative_inventory_packet", "Server creative inventory slot mutation", "networking", "Preserve creative-mode check, slot bounds, stack validation and item NBT limits.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processCustomPayload", V_ALL, "network_custom_payload_packet", "Server custom payload channel packet", "networking", "Preserve channel name, ByteBuf readable bytes, payload size limits and main-thread dispatch.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processEnchantItem", V_ALL, "network_enchant_item_packet", "Server enchantment table button packet", "networking", "Preserve container ID, enchant option ID, XP seed, lapis and server-side result validation.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processEntityAction", V_ALL, "network_player_entity_action", "Server entity action packet handling", "networking", "Preserve START/STOP sneaking/sprinting, horse jump, horse inventory and elytra action flags.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processHeldItemChange", V_ALL, "network_player_held_slot_change", "Server selected hotbar slot packet", "networking", "Preserve slot bounds validation and held item change event/synchronization.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processInput", V_ALL, "network_player_movement_input", "Server player input packet handling", "networking", "Preserve strafe, forward, jump and sneak flags for server-controlled vehicle/player behavior.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processKeepAlive", V_ALL, "network_keep_alive_response", "Server connection keep-alive response", "networking", "Preserve ping timing and disconnect-on-timeout behavior.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processPlayer", V_ALL, "network_player_movement_packet", "Server player movement packet validation", "networking", "Preserve anti-cheat speed/flight checks, collision checks, vehicle state and teleport correction.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processPlayerAbilities", V_ALL, "network_player_abilities_packet", "Server player flight/creative ability packet", "networking", "Preserve authoritative allowFlying/isFlying/invulnerable/creative state and reject client-forged abilities.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processPlayerDigging", V_ALL, "network_player_digging_packet", "Server player dig/harvest packet handling", "networking", "Preserve START/STOP/ABORT destroy semantics and block reach/permission checks.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processPlayerTryUseItem", V_112, "network_player_use_item_packet", "Server player use-item packet", "networking", "Preserve hand and active item use state.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processPlayerTryUseItemOnBlock", V_112, "network_player_use_item_on_block_packet", "Server player use-item-on-block packet", "networking", "Preserve hit vector, face, hand, sequence/packet order and block/item interaction fallback.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processSteerBoat", V_112, "network_player_steer_boat_packet", "Server boat steering input", "networking", "Preserve left/right paddle state and boat movement tick timing.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processTabComplete", V_ALL, "network_player_tab_complete", "Server command/chat completion request", "networking", "Preserve input text, target block position and permission/source context.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processTryUseItem", V_ALL, "network_player_try_use_item_legacy", "Legacy server item use packet", "networking", "Preserve hand selection and server-side item cooldown/use result.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processUseEntity", V_ALL, "network_player_use_entity_packet", "Server interact/attack entity packet", "networking", "Preserve ATTACK/INTERACT/INTERACT_AT action distinction, hit vector, reach and target validation.", "net/minecraft/network/NetHandlerPlayServer.html"),
+    d!("NetHandlerPlayServer", "processVehicleMove", V_112, "network_player_vehicle_move_packet", "Server vehicle movement packet validation", "networking", "Preserve vehicle identity, XYZ/yaw/pitch and server correction/anti-cheat checks.", "net/minecraft/network/NetHandlerPlayServer.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -5630,6 +5697,28 @@ mod tests {
             ("DimensionManager", "registerDimension"), ("DimensionManager", "unloadWorld"),
             ("DimensionManager", "getWorlds"), ("DimensionType", "create"),
             ("DimensionType", "getById"), ("TileEntity", "create"),
+        ] { assert!(has(owner, method), "missing {owner}#{method}"); }
+    }
+
+
+    #[test]
+    fn server_player_interaction_and_network_handlers_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter().any(|e|
+            e.source_owner == owner && e.source_method == method);
+        for (owner, method) in [
+            ("EntityPlayerMP", "changeDimension"), ("EntityPlayerMP", "copyFrom"),
+            ("EntityPlayerMP", "setGameType"), ("EntityPlayerMP", "sendContainerToPlayer"),
+            ("PlayerInteractionManager", "tryHarvestBlock"),
+            ("PlayerInteractionManager", "processRightClickBlock"),
+            ("PlayerInteractionManager", "getBlockReachDistance"),
+            ("NetHandlerPlayServer", "processPlayer"),
+            ("NetHandlerPlayServer", "processUseEntity"),
+            ("NetHandlerPlayServer", "processCustomPayload"),
+            ("NetHandlerPlayServer", "processClickWindow"),
+            ("NetHandlerPlayServer", "processPlayerAbilities"),
+            ("NetHandlerPlayServer", "processPlayerDigging"),
+            ("NetHandlerPlayServer", "processPlayerTryUseItemOnBlock"),
         ] { assert!(has(owner, method), "missing {owner}#{method}"); }
     }
 
