@@ -206,7 +206,7 @@ impl CreativeTabCatalog {
     pub fn load(roots: &[PathBuf]) -> Self {
         let mut catalog = Self::default();
         let class_header = Regex::new(
-            r"\bclass\s+([A-Za-z_$][\w$]*)\s+extends\s+([A-Za-z_$][\w.$]*)"
+            r"\bclass\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([A-Za-z_$][\w.$]*))?"
         ).expect("Java class header regex");
 
         for root in roots {
@@ -230,7 +230,9 @@ impl CreativeTabCatalog {
                 for capture in class_header.captures_iter(&source) {
                     let child = capture.get(1).map(|value| value.as_str()).unwrap_or(class_name);
                     let parent = capture.get(2).map(|value| value.as_str()).unwrap_or("");
-                    catalog.class_parents.insert(child.to_owned(), simple_java_name(parent));
+                    if !parent.is_empty() {
+                        catalog.class_parents.insert(child.to_owned(), simple_java_name(parent));
+                    }
                     let header_end = capture.get(0).map(|value| value.end()).unwrap_or(0);
                     if let Some(open_index) = source[header_end..].find('{').map(|offset| header_end + offset) {
                         if let Ok((body, _)) = crate::source::java::extract_balanced(&source, open_index, '{', '}') {
