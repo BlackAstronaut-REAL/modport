@@ -1619,6 +1619,65 @@ const DEFINITIONS: &[Definition] = &[
     d!("InitNoiseGensEvent.ContextOverworld", "getForest", V_112, "overworld_noise_forest", "Overworld forest noise generator", "worldgen", "automatic_rename_candidate", "Preserve forest noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.ContextOverworld.html"),
     d!("InitNoiseGensEvent.ContextOverworld", "getHeight", V_112, "overworld_noise_height", "Overworld height noise generator", "worldgen", "automatic_rename_candidate", "Preserve height noise generator identity and seed.", "net/minecraftforge/event/terraingen/InitNoiseGensEvent.ContextOverworld.html"),
 
+    // Knockback is an independent ability hook: preserve vectors, base values
+    // and attacker overrides separately.
+    d!("LivingKnockBackEvent", "getAttacker", V_112, "knockback_attacker", "Entity knockback source", "events_combat", "Preserve the current knockback attacker, which listeners may replace.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getOriginalAttacker", V_112, "knockback_original_attacker", "Original Entity knockback source", "events_combat", "Keep original damage/knockback source separate from listener-modified attacker.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getOriginalRatioX", V_112, "knockback_original_ratio_x", "Original horizontal knockback ratio X", "events_combat", "Preserve the original X direction ratio before listener modifications.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getOriginalRatioZ", V_112, "knockback_original_ratio_z", "Original horizontal knockback ratio Z", "events_combat", "Preserve the original Z direction ratio before listener modifications.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getOriginalStrength", V_112, "knockback_original_strength", "Original knockback strength", "events_combat", "Preserve vanilla/computed strength separately from the mutable final strength.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getRatioX", V_112, "knockback_ratio_x", "Mutable horizontal knockback ratio X", "events_combat", "Preserve signed direction ratio and listener ordering.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getRatioZ", V_112, "knockback_ratio_z", "Mutable horizontal knockback ratio Z", "events_combat", "Preserve signed direction ratio and listener ordering.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "getStrength", V_112, "knockback_strength", "Mutable knockback strength", "events_combat", "Read final strength after previous event handlers.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "setAttacker", V_112, "knockback_attacker_write", "Entity knockback source", "events_combat", "Preserve null and non-player attacker replacement semantics.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "setRatioX", V_112, "knockback_ratio_x_write", "Mutable horizontal knockback ratio X", "events_combat", "Apply changed X ratio before knockback motion is calculated.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "setRatioZ", V_112, "knockback_ratio_z_write", "Mutable horizontal knockback ratio Z", "events_combat", "Apply changed Z ratio before knockback motion is calculated.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+    d!("LivingKnockBackEvent", "setStrength", V_112, "knockback_strength_write", "Mutable knockback strength", "events_combat", "Preserve reduced, amplified and zero knockback strength; event cancellation remains separate.", "net/minecraftforge/event/entity/living/LivingKnockBackEvent.html"),
+
+    // Looting level, potion color and visual-effect recalculation.
+    d!("LootingLevelEvent", "getDamageSource", V_112, "looting_damage_source", "DamageSource looting context", "events_loot", "Preserve direct/indirect damage source used to determine looting level.", "net/minecraftforge/event/entity/living/LootingLevelEvent.html"),
+    d!("LootingLevelEvent", "getLootingLevel", V_112, "looting_level_read", "Looting enchantment effective level", "events_loot", "Read current looting level after earlier listeners.", "net/minecraftforge/event/entity/living/LootingLevelEvent.html"),
+    d!("LootingLevelEvent", "setLootingLevel", V_112, "looting_level_write", "Looting enchantment effective level", "events_loot", "Apply level changes before drop generation; preserve negative/zero semantics if the source allows them.", "net/minecraftforge/event/entity/living/LootingLevelEvent.html"),
+    d!("PotionColorCalculationEvent", "areParticlesHidden", V_112, "potion_particles_hidden", "Potion effect particle visibility", "abilities_render", "Preserve hidden-particle aggregate state independently from effect color.", "net/minecraftforge/event/entity/living/PotionColorCalculationEvent.html"),
+    d!("PotionColorCalculationEvent", "getColor", V_112, "potion_combined_color", "Combined active potion effect color", "abilities_render", "Preserve packed RGB potion tint calculated from the current effects.", "net/minecraftforge/event/entity/living/PotionColorCalculationEvent.html"),
+    d!("PotionColorCalculationEvent", "getEffects", V_112, "potion_color_effects", "Collection of active PotionEffect values", "abilities_render", "Returned collection is unmodifiable; preserve iteration order and snapshot semantics.", "net/minecraftforge/event/entity/living/PotionColorCalculationEvent.html"),
+    d!("PotionColorCalculationEvent", "setColor", V_112, "potion_combined_color_write", "Combined active potion effect color", "abilities_render", "Apply packed RGB override before entity potion tint is rendered.", "net/minecraftforge/event/entity/living/PotionColorCalculationEvent.html"),
+    d!("PotionColorCalculationEvent", "shouldHideParticles", V_112, "potion_particles_hidden_write", "Potion effect particle visibility", "abilities_render", "Preserve the aggregate hidden-particle flag and the event's non-cancelable behavior.", "net/minecraftforge/event/entity/living/PotionColorCalculationEvent.html"),
+
+    // Zombie reinforcement/summon-aid ability lifecycle.
+    d!("ZombieEvent", "getSummoner", V_112, "zombie_summoner", "EntityZombie reinforcement source", "events_ai", "automatic_rename_candidate", "Preserve the zombie requesting aid, independently from its attacker.", "net/minecraftforge/event/entity/living/ZombieEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getAttacker", V_112, "zombie_aid_attacker", "EntityLivingBase damage attacker", "events_ai", "automatic_rename_candidate", "Preserve the living attacker responsible for triggering reinforcement.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getCustomSummonedAid", V_112, "zombie_custom_aid_entity", "EntityZombie custom reinforcement", "events_ai", "automatic_rename_candidate", "Read custom replacement reinforcement entity selected by earlier listeners.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getSummonChance", V_112, "zombie_aid_summon_chance", "Zombie reinforcement probability", "events_ai", "automatic_rename_candidate", "Preserve probability as a double and keep random-roll timing unchanged.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getWorld", V_112, "zombie_aid_world", "World reinforcement spawn context", "events_ai", "automatic_rename_candidate", "Preserve world and dimension where custom reinforcement is created.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getX", V_112, "zombie_aid_spawn_x", "Zombie reinforcement spawn coordinate X", "events_ai", "automatic_rename_candidate", "Preserve block spawn coordinate X.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getY", V_112, "zombie_aid_spawn_y", "Zombie reinforcement spawn coordinate Y", "events_ai", "automatic_rename_candidate", "Preserve block spawn coordinate Y.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "getZ", V_112, "zombie_aid_spawn_z", "Zombie reinforcement spawn coordinate Z", "events_ai", "automatic_rename_candidate", "Preserve block spawn coordinate Z.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+    d!("ZombieEvent.SummonAidEvent", "setCustomSummonedAid", V_112, "zombie_custom_aid_entity_write", "EntityZombie custom reinforcement", "events_ai", "adapter_required", "Preserve custom entity replacement, entity initialization and spawn side effects.", "net/minecraftforge/event/entity/living/ZombieEvent.SummonAidEvent.html"),
+
+    // Collision calculation allows mutations to the actual candidate box list.
+    d!("GetCollisionBoxesEvent", "getAabb", V_112, "collision_query_bounds", "AxisAlignedBB collision query", "events_physics", "automatic_rename_candidate", "Preserve query box and its exact min/max coordinates.", "net/minecraftforge/event/world/GetCollisionBoxesEvent.html"),
+    d!("GetCollisionBoxesEvent", "getCollisionBoxesList", V_112, "collision_candidate_boxes", "Mutable List<AxisAlignedBB> collision results", "events_physics", "adapter_required", "Preserve the mutable list and insertion/removal order; event is not cancelable.", "net/minecraftforge/event/world/GetCollisionBoxesEvent.html"),
+    d!("GetCollisionBoxesEvent", "getEntity", V_112, "collision_query_entity", "Nullable Entity collision context", "events_physics", "automatic_rename_candidate", "Entity may be null for World.collidesWithAnyBlock; preserve null separately from world collision checks.", "net/minecraftforge/event/world/GetCollisionBoxesEvent.html"),
+
+    // Note-block pitch/instrument behavior is a gameplay-visible ability hook.
+    d!("NoteBlockEvent", "getNote", V_112, "noteblock_note", "NoteBlockEvent.Note pitch", "events_blocks_audio", "automatic_rename_candidate", "Preserve musical note enum independently from octave and vanilla packed note ID.", "net/minecraftforge/event/world/NoteBlockEvent.html"),
+    d!("NoteBlockEvent", "getOctave", V_112, "noteblock_octave", "NoteBlockEvent.Octave", "events_blocks_audio", "automatic_rename_candidate", "Preserve octave enum and enforce source high-octave F-sharp constraint.", "net/minecraftforge/event/world/NoteBlockEvent.html"),
+    d!("NoteBlockEvent", "getVanillaNoteId", V_112, "noteblock_vanilla_note_id", "Packed vanilla note ID", "events_blocks_audio", "automatic_rename_candidate", "Preserve vanilla integer note ID encoding across Note and Octave values.", "net/minecraftforge/event/world/NoteBlockEvent.html"),
+    d!("NoteBlockEvent", "setNote", V_112, "noteblock_note_write", "NoteBlockEvent.Note and Octave", "events_blocks_audio", "adapter_required", "Replace note and octave together; preserve source constraint for HIGH octave and F_SHARP.", "net/minecraftforge/event/world/NoteBlockEvent.html"),
+
+    // Player attack target, name-format override and per-player data files.
+    d!("AttackEntityEvent", "getTarget", V_112, "player_attack_target", "Entity targeted by a player melee attack", "events_combat", "automatic_rename_candidate", "Preserve target entity identity and attack cancellation semantics.", "net/minecraftforge/event/entity/player/AttackEntityEvent.html"),
+    d!("PlayerEvent.NameFormat", "getDisplayname", V_112, "player_display_name", "Player display-name string", "player_identity", "automatic_rename_candidate", "Read mutable display name after previous listeners; preserve formatting codes and localization.", "net/minecraftforge/event/entity/player/PlayerEvent.NameFormat.html"),
+    d!("PlayerEvent.NameFormat", "getUsername", V_112, "player_username", "Player account name string", "player_identity", "automatic_rename_candidate", "Preserve immutable username separately from display name.", "net/minecraftforge/event/entity/player/PlayerEvent.NameFormat.html"),
+    d!("PlayerEvent.NameFormat", "setDisplayname", V_112, "player_display_name_write", "Player display-name string", "player_identity", "adapter_required", "Preserve display name replacement and formatting codes used in chat/list rendering.", "net/minecraftforge/event/entity/player/PlayerEvent.NameFormat.html"),
+    d!("PlayerEvent.LoadFromFile", "getPlayerDirectory", V_112, "player_data_directory", "File directory for auxiliary player data", "persistence", "automatic_rename_candidate", "Preserve actual player data directory and use the recommended suffix-based helper for mod-owned files.", "net/minecraftforge/event/entity/player/PlayerEvent.LoadFromFile.html"),
+    d!("PlayerEvent.LoadFromFile", "getPlayerFile", V_112, "player_data_file", "File for auxiliary player data", "persistence", "adapter_required", "Preserve source filename suffix construction and avoid overwriting vanilla player .dat files.", "net/minecraftforge/event/entity/player/PlayerEvent.LoadFromFile.html"),
+    d!("PlayerEvent.LoadFromFile", "getPlayerUUID", V_112, "player_data_uuid", "Player UUID string", "persistence", "automatic_rename_candidate", "Use UUID as stable key for per-player mod storage; do not substitute username.", "net/minecraftforge/event/entity/player/PlayerEvent.LoadFromFile.html"),
+    d!("PlayerEvent.SaveToFile", "getPlayerDirectory", V_112, "player_save_directory", "File directory for auxiliary player data", "persistence", "automatic_rename_candidate", "Preserve player data directory at save time, which can occur during logout.", "net/minecraftforge/event/entity/player/PlayerEvent.SaveToFile.html"),
+    d!("PlayerEvent.SaveToFile", "getPlayerFile", V_112, "player_save_file", "File for auxiliary player data", "persistence", "adapter_required", "Preserve source filename suffix construction and do not overwrite vanilla player .dat files.", "net/minecraftforge/event/entity/player/PlayerEvent.SaveToFile.html"),
+    d!("PlayerEvent.SaveToFile", "getPlayerUUID", V_112, "player_save_uuid", "Player UUID string", "persistence", "automatic_rename_candidate", "Use UUID as stable key when saving mod-owned per-player data.", "net/minecraftforge/event/entity/player/PlayerEvent.SaveToFile.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -2086,6 +2145,15 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
+        "LivingSpawnEvent.AllowDespawn" | "LivingSpawnEvent.CheckSpawn"
+        | "LivingSpawnEvent.SpecialSpawn" | "LivingSpawnEvent" | "LootingLevelEvent"
+        | "PotionColorCalculationEvent" | "ZombieEvent.SummonAidEvent" => {
+            candidates.insert("LivingSpawnEvent".to_owned());
+            candidates.insert("ZombieEvent".to_owned());
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
         "LivingEvent.LivingJumpEvent" | "LivingEvent.LivingUpdateEvent"
         | "AnimalTameEvent" | "LivingDestroyBlockEvent" | "LivingKnockBackEvent"
         | "LivingAttackEvent" | "LivingDeathEvent" | "LivingDropsEvent"
@@ -2096,6 +2164,13 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "ZombieEvent" | "PotionEvent" | "PotionEvent.PotionAddedEvent"
         | "PotionEvent.PotionApplicableEvent" | "PotionEvent.PotionExpiryEvent"
         | "PotionEvent.PotionRemoveEvent" => {
+            candidates.insert("LivingEvent".to_owned());
+            candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "PlayerEvent.NameFormat" | "PlayerEvent.LoadFromFile" | "PlayerEvent.SaveToFile"
+        | "PlayerEvent.Visibility" | "AttackEntityEvent" => {
+            candidates.insert("PlayerEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
             candidates.insert("Event".to_owned());
@@ -2112,6 +2187,10 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("PlayerEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "NoteBlockEvent" | "NoteBlockEvent.Change" | "NoteBlockEvent.Play" => {
+            candidates.insert("BlockEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
         "BlockEvent" | "BlockEvent.BreakEvent" | "BlockEvent.PlaceEvent"
@@ -2162,6 +2241,10 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
             candidates.insert("PlayerEvent".to_owned());
             candidates.insert("LivingEvent".to_owned());
             candidates.insert("EntityEvent".to_owned());
+            candidates.insert("Event".to_owned());
+        }
+        "GetCollisionBoxesEvent" => {
+            candidates.insert("WorldEvent".to_owned());
             candidates.insert("Event".to_owned());
         }
         "WorldEvent" | "WorldEvent.Load" | "WorldEvent.Save" | "WorldEvent.Unload"
@@ -2827,6 +2910,29 @@ mod tests {
             ("InitMapGenEvent", "setNewGen"),
             ("InitNoiseGensEvent", "getNewValues"),
             ("InitNoiseGensEvent.ContextOverworld", "getHeight"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn remaining_living_player_and_world_event_functions_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("LivingKnockBackEvent", "getOriginalStrength"),
+            ("LivingKnockBackEvent", "setRatioX"),
+            ("LootingLevelEvent", "setLootingLevel"),
+            ("PotionColorCalculationEvent", "shouldHideParticles"),
+            ("ZombieEvent.SummonAidEvent", "setCustomSummonedAid"),
+            ("GetCollisionBoxesEvent", "getCollisionBoxesList"),
+            ("NoteBlockEvent", "setNote"),
+            ("AttackEntityEvent", "getTarget"),
+            ("PlayerEvent.NameFormat", "setDisplayname"),
+            ("PlayerEvent.LoadFromFile", "getPlayerFile"),
+            ("PlayerEvent.SaveToFile", "getPlayerUUID"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
