@@ -751,7 +751,6 @@ mod tests {
     }
 
     #[test]
-        #[test]
     fn detects_typed_call_sites_without_confusing_same_named_methods() {
         let source = r#"
             class Example {
@@ -772,7 +771,20 @@ mod tests {
         assert!(!found.iter().any(|entry| entry.source_method == "updateTask"));
     }
 
-fn mappings_include_versioned_javadoc_sources() {
+    #[test]
+    fn detects_methods_from_multiple_implemented_interfaces() {
+        let source = r#"
+            class ExampleInventory implements ISidedInventory, IInventory {
+                public boolean canInsertItem(int slot, ItemStack stack, int side) { return true; }
+            }
+        "#;
+        let found = map_legacy_api_methods(source, Some("1.12.2"));
+        assert!(found.iter().any(|entry| entry.source_owner == "ISidedInventory"
+            && entry.source_method == "canInsertItem"));
+    }
+
+    #[test]
+    fn mappings_include_versioned_javadoc_sources() {
         let item = legacy_api_dictionary_for_version("1.7.10").into_iter()
             .find(|entry| entry.source_owner == "Item" && entry.source_method == "onItemRightClick")
             .unwrap();
