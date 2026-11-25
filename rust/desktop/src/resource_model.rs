@@ -294,16 +294,23 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
         if let Some(face_map) = builtin_face_texture_indices(
             &shape, &textures, roots, &namespace, &texture_paths,
         ) {
-            let face_uvs = std::array::from_fn(|face| {
-                let dimensions = texture_paths.get(face_map[face])
-                    .and_then(|path| image::image_dimensions(path).ok())
-                    .unwrap_or((texture_size[0], texture_size[1]));
-                [0.0, 0.0, dimensions.0 as f32, dimensions.1 as f32]
-            });
             for node in &mut nodes {
                 for cube in &mut node.cubes {
                     cube.face_texture_indices = Some(face_map);
-                    cube.face_uvs = Some(face_uvs);
+                    let from = [cube.min[0] + 8.0, cube.min[1] + 8.0, cube.min[2] + 8.0];
+                    let to = [cube.max[0] + 8.0, cube.max[1] + 8.0, cube.max[2] + 8.0];
+                    cube.face_uvs = Some(std::array::from_fn(|face| {
+                        let uv = default_face_uv(from, to, face);
+                        let dimensions = texture_paths.get(face_map[face])
+                            .and_then(|path| image::image_dimensions(path).ok())
+                            .unwrap_or((texture_size[0], texture_size[1]));
+                        [
+                            uv[0] * dimensions.0 as f32 / 16.0,
+                            uv[1] * dimensions.1 as f32 / 16.0,
+                            uv[2] * dimensions.0 as f32 / 16.0,
+                            uv[3] * dimensions.1 as f32 / 16.0,
+                        ]
+                    }));
                 }
             }
         }
