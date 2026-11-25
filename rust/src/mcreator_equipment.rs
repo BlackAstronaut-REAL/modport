@@ -297,7 +297,9 @@ fn food_updates(text: &str, superclass: &str) -> Map<String, Value> {
     }
 
     updates.insert("isFood".to_owned(), json!(true));
-    if let Some(value) = regex_number(text, &[r"\.nutrition\s*\(\s*(\d+)\s*\)"]) {
+    if let Some(value) = method_return_number(text, &["getHealAmount", "func_150905_g"]) {
+        updates.insert("nutritionalValue".to_owned(), json!(value.round() as i64));
+    } else if let Some(value) = regex_number(text, &[r"\.nutrition\s*\(\s*(\d+)\s*\)"]) {
         updates.insert("nutritionalValue".to_owned(), json!(value as i64));
     } else if legacy_food {
         let super_call = Regex::new(r"super\s*\(([^;]*)\)").unwrap();
@@ -323,6 +325,9 @@ fn food_updates(text: &str, superclass: &str) -> Map<String, Value> {
         }
     }
 
+    if let Some(value) = method_return_number(text, &["getSaturationModifier", "func_150906_h"]) {
+        updates.insert("saturation".to_owned(), json!(value));
+    }
     if let Some(value) = regex_number(text, &[r"\.saturationMod\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?\s*\)"]) {
         updates.insert("saturation".to_owned(), json!(value));
     }
@@ -1635,6 +1640,23 @@ mod tests {
         assert_eq!(element["definition"]["renderType"], 0);
         assert_eq!(element["definition"]["customModelName"], "Normal");
         assert_eq!(element["definition"]["templateMarker"]["keep"], true);
+    }
+
+    #[test]
+    fn recovers_compiled_food_getters_without_decompiled_constructor_source() {
+        let source = r#"
+            public class CookedMeat extends ItemFood {
+                public double getHealAmount() { return 8.0; }
+                public double getSaturationModifier() { return 0.8; }
+            }
+        "#;
+        let (element, warnings) = build_item_element(
+            None, "CookedMeat", "ItemFood", source, "cooked_meat", "meat.png", 89
+        );
+        assert!(warnings.is_empty());
+        assert_eq!(element["definition"]["isFood"], true);
+        assert_eq!(element["definition"]["nutritionalValue"], 8);
+        assert_eq!(element["definition"]["saturation"], 0.8);
     }
 
     #[test]
