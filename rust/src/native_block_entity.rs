@@ -149,7 +149,7 @@ pub fn discover_block_entities(
     // Associate only when the corresponding block source explicitly constructs
     // or returns the tile entity from its block-entity factory methods.
     let legacy_registration = Regex::new(
-        r#"(?i)GameRegistry\\s*\\.\\s*registerTileEntity\\s*\\(\\s*([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\.class\\s*,\\s*"([^"]+)""#
+        r#"(?i)GameRegistry\s*\.\s*registerTileEntity\s*\(\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*\.class\s*,\s*"([^"]+)""#
     ).expect("static legacy tile entity registration regex");
     for path in java_files(roots) {
         let Ok(source) = fs::read_to_string(&path) else { continue };
