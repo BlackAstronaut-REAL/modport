@@ -55,7 +55,6 @@ pub struct NativeFoodPlan {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[derive(Debug, Clone, Serialize)]
 pub struct NativeBlockEntityPlan {
     pub registry_name: String,
     pub source_class: String,
@@ -65,7 +64,8 @@ pub struct NativeBlockEntityPlan {
     pub generated_as: String,
     pub warnings: Vec<String>,
 }
-
+ 
+#[derive(Debug, Clone, Serialize)]
 pub struct NativeBlockPlan {
     pub registry_name: String,
     pub source_class: String,
@@ -1579,6 +1579,137 @@ fn write_native_registries(
     generated.dedup();
     Ok(generated)
 }
+fn lore_class_name(registry_id: &str) -> String {
+    format!("Lore{}", java_type_identifier(registry_id))
+}
+
+fn generate_lore_item_java(
+    package: &str,
+    class_name: &str,
+    parent_class: &str,
+    extra_imports: &[&str],
+    constructor_parameters: &str,
+    super_call: &str,
+    lore: &[String],
+) -> String {
+    let mut source = format!(r#"package {package}.item;
+
+import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+"#);
+    for import in extra_imports {
+        source.push_str(&format!("import {import};\n"));
+    }
+    source.push_str(&format!(r#"
+public final class {class_name} extends {parent_class} {{
+    private static final List<Component> LEGACY_LORE = List.of(
+"#));
+    let components: Vec<String> = lore.iter()
+        .flat_map(|line| lore_component_expressions(line))
+        .collect();
+    for (index, component) in components.iter().enumerate() {
+        source.push_str(&format!(
+            "        {component}{}\n",
+            if index + 1 == components.len() { "" } else { "," }
+        ));
+    }
+    source.push_str(&format!(r#"    );
+
+    public {class_name}({constructor_parameters}) {{
+        {super_call}
+    }}
+
+    @Override
+    public void appendHoverText(
+        ItemStack stack,
+        Item.TooltipContext context,
+        List<Component> tooltipComponents,
+        TooltipFlag tooltipFlag
+    ) {{
+        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+        tooltipComponents.addAll(LEGACY_LORE);
+    }}
+}}
+"#));
+    source
+}
+
+fn generate_projectile_launcher_java(
+    package: &str,
+    class_name: &str,
+    item: &ItemRecord,
+    projectile: &ProjectileRecord,
+) -> String {
+    let projectile_class = generated_projectile_class(projectile);
+    let entity_field = projectile_entity_field(projectile);
+    let components: Vec<String> = item.lore.iter()
+        .flat_map(|line| lore_component_expressions(line))
+        .collect();
+    let mut source = format!(r#"package {package}.item;
+
+import java.util.List;
+import {package}.registry.ModEntities;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+public final class {class_name} extends Item {{
+"#);
+    if !components.is_empty() {
+        source.push_str("    private static final List<Component> LEGACY_LORE = List.of(\n");
+        for (index, component) in components.iter().enumerate() {
+            source.push_str(&format!(
+                "        {component}{}\n",
+                if index + 1 == components.len() { "" } else { "," }
+            ));
+        }
+        source.push_str("    );\n");
+    }
+    source.push_str(&format!(r#"
+    public {class_name}(Item.Properties properties) {{
+        super(properties);
+    }}
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {{
+        ItemStack stack = player.getItemInHand(hand);
+        if (!level.isClientSide) {{
+            {projectile_class} projectile = new {projectile_class}(
+                ModEntities.{entity_field}.get(), player, level
+            );
+            projectile.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, 1.5F, 1.0F);
+            level.addFreshEntity(projectile);
+            player.getCooldowns().addCooldown(this, 10);
+        }}
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }}
+"#));
+    if !components.is_empty() {
+        source.push_str(r#"
+    @Override
+    public void appendHoverText(
+        ItemStack stack,
+        Item.TooltipContext context,
+        List<Component> tooltipComponents,
+        Item.TooltipFlag tooltipFlag
+    ) {
+        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+        tooltipComponents.addAll(LEGACY_LORE);
+    }
+"#);
+    }
+    source.push_str("}\n");
+    source
+}
+
 fn generate_tool_tiers_java(package: &str, tools: &[ToolRecord]) -> String {
     let mut body = format!(r#"package {package}.registry;
 
