@@ -302,7 +302,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
 
     let mut warnings = Vec::new();
     let dimensions = texture_paths.first()
-        .and_then(|path| image::image_dimensions(path).ok())
+        .and_then(|path| texture_frame_dimensions(path))
         .unwrap_or((16, 16));
     let texture_size = [dimensions.0.max(1), dimensions.1.max(1)];
     let mut nodes = Vec::new();
@@ -323,7 +323,7 @@ fn load_resource_model(path: &Path, roots: &[PathBuf], allow_builtin_block_shape
                     cube.face_uvs = Some(std::array::from_fn(|face| {
                         let uv = default_face_uv(from, to, face);
                         let dimensions = texture_paths.get(face_map[face])
-                            .and_then(|path| image::image_dimensions(path).ok())
+                            .and_then(|path| texture_frame_dimensions(path))
                             .unwrap_or((texture_size[0], texture_size[1]));
                         [
                             uv[0] * dimensions.0 as f32 / 16.0,
@@ -1379,6 +1379,30 @@ mod tests {
         );
         assert_eq!(result[2], [1.0, 2.0, 3.0, 4.0]);
         assert_eq!(result[3], [5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
+    fn builtin_cube_all_uses_animation_frame_dimensions_for_uvs() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let model = root.join("assets/demo/models/block/animated_cube.json");
+        let texture = root.join("assets/demo/textures/block/animated.png");
+        fs::create_dir_all(model.parent().unwrap()).unwrap();
+        fs::create_dir_all(texture.parent().unwrap()).unwrap();
+        RgbaImage::new(16, 128).save(&texture).unwrap();
+        fs::write(
+            PathBuf::from(format!("{}.mcmeta", texture.display())),
+            r#"{"animation":{"width":16,"height":16}}"#,
+        ).unwrap();
+        fs::write(
+            &model,
+            r##"{"parent":"minecraft:block/cube_all","textures":{"all":"demo:block/animated"}}"##,
+        ).unwrap();
+
+        let (scene, textures) = load_block_model(&model, &[root.to_path_buf()]).unwrap();
+        assert_eq!(textures, vec![texture]);
+        assert_eq!(scene.texture_size, [16, 16]);
+        assert_eq!(scene.nodes[0].cubes[0].face_uvs.unwrap()[0], [0.0, 0.0, 16.0, 16.0]);
     }
 
     #[test]
