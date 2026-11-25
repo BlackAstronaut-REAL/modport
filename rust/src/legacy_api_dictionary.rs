@@ -2480,6 +2480,64 @@ const DEFINITIONS: &[Definition] = &[
     d!("IBlockColor", "colorMultiplier", V_112, "block_color_multiplier", "Block-state tint index color handler", "client_render", "Preserve nullable world/position, tintIndex and ARGB output; null context is valid for inventory/item rendering.", "net/minecraft/client/renderer/color/IBlockColor.html"),
     d!("IItemColor", "colorMultiplier", V_112, "item_color_multiplier", "ItemStack tint index color handler", "client_render", "Preserve exact stack NBT/components and tintIndex; output is packed ARGB and different tint layers may represent different item regions.", "net/minecraft/client/renderer/color/IItemColor.html"),
 
+    // CraftingHelper JSON loading and custom recipe dispatch.
+    d!("CraftingHelper", "findFiles", V_112, "crafting_helper_find_files", "Mod JAR/directory recipe resource discovery", "recipes", "Overloads vary defaultUnfoundRoot and visitAllFiles; preserve traversal roots, preprocessor decisions and processor ordering.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "getCondition", V_112, "crafting_helper_get_condition", "JSON BooleanSupplier recipe condition parsing", "recipes", "Preserve lazy supplier evaluation and distinguish invalid condition JSON from a valid false condition.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "getIngredient", V_112, "crafting_helper_get_ingredient", "JSON Ingredient parser", "recipes", "Overloads accept JsonElement with JsonContext or an Object shorthand; preserve constants and typed object conversion.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "getItemStack", V_112, "crafting_helper_get_item_stack", "JSON ItemStack parser with context", "recipes", "Preserve item registry lookup, count, metadata, NBT and context-dependent namespaced item IDs.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "getItemStackBasic", V_112, "crafting_helper_get_item_stack_basic", "Basic JSON ItemStack parser", "recipes", "Preserve base item/count/metadata decoding separately from JsonContext constants and custom NBT expansion.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "getRecipe", V_112, "crafting_helper_get_recipe", "JSON IRecipe factory dispatch", "recipes", "Preserve recipe factory registry namespace lookup, JsonContext and unknown recipe type failures.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "init", V_112, "crafting_helper_init", "Crafting recipe factory bootstrap", "recipes", "Preserve built-in condition/ingredient/recipe factory registration before JSON recipe resources are loaded.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "loadContext", V_112, "crafting_helper_load_json_context", "Mod JSON context and ingredient constants loading", "recipes", "Overloads accept ResourceLocation alone or ResourceLocation+ModContainer; preserve mod namespace and context constants loaded from recipe files.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "loadFactories", V_112, "crafting_helper_load_factories", "Mod custom recipe/ingredient/condition factory discovery", "recipes", "Public overload accepts ModContainer, base path and FactoryLoader varargs; preserve discovery ordering and mod-specific registration.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "loadRecipes", V_112, "crafting_helper_load_recipes", "Recipe resource loading lifecycle", "recipes", "Public overload controls revertFrozen behavior; preserve registry reload timing and recipe manager freeze/unfreeze order.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "parseShaped", V_112, "crafting_helper_parse_shaped", "Shaped recipe vararg parsing into ShapedPrimer", "recipes", "Preserve pattern dimensions, mirroring policy, ingredient positions and empty slots.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "processConditions", V_112, "crafting_helper_process_conditions", "JSON recipe/loot condition evaluation", "recipes", "Overloads accept JsonArray or JsonObject+member name; preserve AND semantics and lazy condition supplier behavior.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+    d!("CraftingHelper", "register", V_112, "crafting_helper_factory_register", "ResourceLocation factory registration", "recipes", "Overloads register IConditionFactory, IIngredientFactory or IRecipeFactory; preserve registry namespace and duplicate-key handling.", "net/minecraftforge/common/crafting/CraftingHelper.html"),
+
+    // JsonContext namespaces mod resources and resolves shared ingredient constants.
+    d!("JsonContext", "appendModId", V_112, "json_context_append_namespace", "ResourceLocation mod namespace completion", "recipes", "Preserve explicit namespace if present and prepend current mod ID only to unqualified resource strings.", "net/minecraftforge/common/crafting/JsonContext.html"),
+    d!("JsonContext", "getConstant", V_112, "json_context_get_ingredient_constant", "Recipe JSON named Ingredient constant lookup", "recipes", "Preserve null for unknown constants and the current mod's constant namespace.", "net/minecraftforge/common/crafting/JsonContext.html"),
+    d!("JsonContext", "getModId", V_112, "json_context_mod_id", "Recipe JSON parsing mod namespace", "recipes", "Preserve exact mod ID used to resolve all unqualified recipe/ingredient resource identifiers.", "net/minecraftforge/common/crafting/JsonContext.html"),
+
+    // Vanilla Ingredient is the base matcher used by Forge's custom variants.
+    d!("Ingredient", "apply", V_112, "recipe_ingredient_match", "Ingredient ItemStack predicate", "recipes", "Preserve null/empty stack behavior, item metadata and matcher-specific NBT semantics.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "fromItem", V_112, "recipe_ingredient_from_item", "Single-item Ingredient factory", "recipes", "Preserve wildcard/meta defaults and the ingredient matching-stack cache behavior.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "fromItems", V_112, "recipe_ingredient_from_items", "Multi-item Ingredient factory", "recipes", "Preserve varargs order and item-to-stack expansion semantics.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "fromStacks", V_112, "recipe_ingredient_from_stacks", "ItemStack-based Ingredient factory", "recipes", "Preserve input stack metadata/NBT and defensive stack-copy semantics.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "getMatchingStacks", V_112, "recipe_ingredient_matching_stacks", "Ingredient matching ItemStack expansion", "recipes", "Preserve expanded stack variants and cached results; custom ingredients can override the expansion.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "getValidItemStacksPacked", V_112, "recipe_ingredient_packed_item_ids", "Packed item ID list for recipe ingredient matching", "recipes", "Preserve packed ID ordering and invalidation after ore/ingredient registry updates.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "invalidate", V_112, "recipe_ingredient_cache_invalidate", "Ingredient matching-stack cache invalidation", "recipes", "Protected subclass hook; preserve cache clearing when ingredient definitions change.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "invalidateAll", V_112, "recipe_ingredient_cache_invalidate_all", "Global ingredient cache invalidation", "recipes", "Preserve global cache invalidation timing after ore dictionary/ingredient changes.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "isSimple", V_112, "recipe_ingredient_simple_predicate", "Ingredient simple/packed matching predicate", "recipes", "Preserve whether the ingredient can use packed item IDs or must evaluate full ItemStack/NBT state.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "merge", V_112, "recipe_ingredient_merge", "Compound Ingredient merge", "recipes", "Preserve ingredient child order and CompoundIngredient behavior; empty collection maps to the source empty ingredient.", "net/minecraft/item/crafting/Ingredient.html"),
+    d!("Ingredient", "test", V_112, "recipe_ingredient_predicate_test", "Java Predicate<ItemStack> ingredient match", "recipes", "Bridge to apply(ItemStack) while preserving the functional Predicate interface used by Java 8 stream/filter code.", "net/minecraft/item/crafting/Ingredient.html"),
+
+    // Special ingredient variants override matching and packed-cache behavior.
+    d!("IngredientNBT", "apply", V_112, "recipe_ingredient_nbt_match", "NBT-sensitive ItemStack ingredient predicate", "recipes", "Preserve exact NBT matching and null input behavior; this is stricter than ordinary item/meta Ingredient matching.", "net/minecraftforge/common/crafting/IngredientNBT.html"),
+    d!("IngredientNBT", "isSimple", V_112, "recipe_ingredient_nbt_simple", "NBT-sensitive Ingredient packed-ID safety", "recipes", "Preserve non-simple status so recipes do not incorrectly match solely by packed item ID.", "net/minecraftforge/common/crafting/IngredientNBT.html"),
+    d!("CompoundIngredient", "apply", V_112, "recipe_compound_ingredient_match", "Compound Ingredient child predicate matching", "recipes", "Preserve child OR semantics and child evaluation order.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("CompoundIngredient", "getChildren", V_112, "recipe_compound_ingredient_children", "Compound Ingredient child collection", "recipes", "Preserve child collection order and nested compound structure.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("CompoundIngredient", "getMatchingStacks", V_112, "recipe_compound_matching_stacks", "Compound Ingredient expanded matching stacks", "recipes", "Preserve concatenated child stack expansion and duplicate behavior.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("CompoundIngredient", "getValidItemStacksPacked", V_112, "recipe_compound_packed_ids", "Compound Ingredient packed item IDs", "recipes", "Preserve union/deduplication behavior for child ingredient IDs and cache invalidation.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("CompoundIngredient", "invalidate", V_112, "recipe_compound_cache_invalidate", "Compound Ingredient protected cache invalidation", "recipes", "Preserve invalidation of compound and child ingredient caches together.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("CompoundIngredient", "isSimple", V_112, "recipe_compound_is_simple", "Compound Ingredient packed matching safety", "recipes", "Preserve aggregate simple status across all children.", "net/minecraftforge/common/crafting/CompoundIngredient.html"),
+    d!("OreIngredient", "apply", V_112, "ore_ingredient_match", "OreDictionary-backed Ingredient predicate", "recipes", "Preserve ore dictionary expansion updates and stack metadata/NBT matching semantics.", "net/minecraftforge/oredict/OreIngredient.html"),
+    d!("OreIngredient", "getMatchingStacks", V_112, "ore_ingredient_matching_stacks", "OreDictionary ingredient stack expansion", "recipes", "Preserve current OreDictionary entries and refresh behavior when ore registrations change.", "net/minecraftforge/oredict/OreIngredient.html"),
+    d!("OreIngredient", "getValidItemStacksPacked", V_112, "ore_ingredient_packed_ids", "OreDictionary ingredient packed item IDs", "recipes", "Preserve packed IDs and recalculate when OreDictionary list size changes.", "net/minecraftforge/oredict/OreIngredient.html"),
+    d!("OreIngredient", "invalidate", V_112, "ore_ingredient_cache_invalidate", "OreDictionary ingredient cache invalidation", "recipes", "Preserve lazy rebuild of ore stack array and packed ID list.", "net/minecraftforge/oredict/OreIngredient.html"),
+    d!("OreIngredient", "isSimple", V_112, "ore_ingredient_is_simple", "OreDictionary ingredient packed matching safety", "recipes", "Preserve ore ingredient simple status and avoid assuming all ore entries are metadata/NBT simple.", "net/minecraftforge/oredict/OreIngredient.html"),
+
+    // IRecipe is the full crafting contract, including remainders and fit.
+    d!("IRecipe", "canFit", V_112, "recipe_fit_predicate", "Crafting grid dimension predicate", "recipes", "Preserve width/height constraints and custom recipe fit rules.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IRecipe", "getGroup", V_112, "recipe_book_group", "Recipe book group string", "recipes", "Preserve namespace/group string used for recipe-book grouping and unlock UI.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IRecipe", "getIngredients", V_112, "recipe_ingredient_list", "Ordered NonNullList<Ingredient> recipe inputs", "recipes", "Preserve ordered input list and empty slots; shapeless recipes have order-independent matching but the declared list remains observable.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IRecipe", "getRemainingItems", V_112, "recipe_remainder_items", "Per-slot crafting remainder ItemStacks", "recipes", "Preserve one remainder result per input slot including buckets, containers and custom remainders.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IRecipe", "isDynamic", V_112, "recipe_dynamic_flag", "Recipe book visibility/dynamic recipe predicate", "recipes", "Preserve dynamic-vs-static behavior for recipe book display and unlock synchronization.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IForgeRegistryEntry", "getRegistryType", V_112, "recipe_registry_entry_type", "IForgeRegistryEntry owning registry type", "registration", "Preserve registry class token separately from the entry ResourceLocation; used for generic registry dispatch.", "net/minecraftforge/registries/IForgeRegistryEntry.html"),
+    d!("IShapedRecipe", "getRecipeHeight", V_112, "shaped_recipe_height", "Shaped recipe pattern height", "recipes", "Preserve pattern height independently from ingredient list length; required for recipe-book shape matching.", "net/minecraftforge/common/crafting/IShapedRecipe.html"),
+    d!("IShapedRecipe", "getRecipeWidth", V_112, "shaped_recipe_width", "Shaped recipe pattern width", "recipes", "Preserve pattern width independently from ingredient list length; name differs from getWidth/getHeight to avoid obfuscation conflicts.", "net/minecraftforge/common/crafting/IShapedRecipe.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3050,6 +3108,13 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         "GetCollisionBoxesEvent" => {
             candidates.insert("WorldEvent".to_owned());
             candidates.insert("Event".to_owned());
+        }
+        "IShapedRecipe" => {
+            candidates.insert("IRecipe".to_owned());
+            candidates.insert("IForgeRegistryEntry".to_owned());
+        }
+        "IngredientNBT" | "CompoundIngredient" | "OreIngredient" => {
+            candidates.insert("Ingredient".to_owned());
         }
         "WorldEvent" | "WorldEvent.Load" | "WorldEvent.Save" | "WorldEvent.Unload"
         | "WorldEvent.PotentialSpawns" | "WorldEvent.CreateSpawnPosition" => {
@@ -3972,6 +4037,33 @@ mod tests {
             ("IEntitySelectorFactory", "createPredicates"),
             ("IBlockColor", "colorMultiplier"),
             ("IItemColor", "colorMultiplier"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn forge_json_crafting_and_ingredient_apis_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("CraftingHelper", "getRecipe"),
+            ("CraftingHelper", "parseShaped"),
+            ("CraftingHelper", "processConditions"),
+            ("CraftingHelper", "register"),
+            ("JsonContext", "appendModId"),
+            ("JsonContext", "getConstant"),
+            ("Ingredient", "fromStacks"),
+            ("Ingredient", "getValidItemStacksPacked"),
+            ("IngredientNBT", "apply"),
+            ("CompoundIngredient", "getChildren"),
+            ("OreIngredient", "getMatchingStacks"),
+            ("IRecipe", "getRemainingItems"),
+            ("IRecipe", "getIngredients"),
+            ("IShapedRecipe", "getRecipeWidth"),
+            ("IForgeRegistryEntry", "getRegistryType"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
         }
