@@ -751,6 +751,7 @@ pub fn export_blocks_to_workspace(
     let template=definition_template(&workspace_root)?;
     let field_registry_map = crate::recipe_bridge::source_field_registered_names(source_roots, source_modid);
     let localization = crate::localization::LocalizationCatalog::load(source_roots, &field_registry_map);
+    let creative_tabs = crate::localization::CreativeTabCatalog::load(source_roots);
 
     let mut report=BlockWorkspaceExportReport{
         workspace_file:workspace_file.clone(),discovered:discovered.len(),exported:0,skipped:0,records:Vec::new(),warnings:Vec::new()
@@ -817,6 +818,9 @@ pub fn export_blocks_to_workspace(
             apply_block_sound_bindings(definition, &source.source_text, &source.registry_name, &workspace);
             if definition.contains_key("name") {
                 definition.insert("name".to_owned(), json!(display));
+            }
+            if let Some(tab) = creative_tabs.resolve(&source.class_name, &source.source_text) {
+                definition.insert("creativeTabs".to_owned(), json!([tab]));
             }
             let information = localization.item_information(&source.source_text, &registry);
             if !information.is_empty() && definition.contains_key("specialInformation") {
