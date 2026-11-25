@@ -715,17 +715,15 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         return None;
     }
 
-    let class_pattern = Regex::new(&format!(
-        r"(?s)\b{}\s*\([^)]*\)\s*\{{(.*?)\}}",
-        regex::escape(&source.class_name)
-    )).expect("static constructor-body regex");
-    let constructor_body = class_pattern.captures(&source.source_text)
-        .and_then(|capture| capture.get(1))
-        .map(|capture| capture.as_str())
-        .unwrap_or(&source.source_text);
+    // Scope the superclass call to this class without constructing a brace-heavy
+    // regex through format!, which can accidentally turn escaped braces into
+    // malformed repetition operators.
+    let class_marker = format!("class {}", source.class_name);
+    let class_start = source.source_text.find(&class_marker).unwrap_or(0);
+    let class_source = &source.source_text[class_start..];
     let super_call = Regex::new(r"(?s)\bsuper\s*\(([^)]*)\)")
         .expect("static food superclass constructor regex");
-    let args = super_call.captures(constructor_body)
+    let args = super_call.captures(class_source)
         .and_then(|capture| capture.get(1))
         .map(|capture| capture.as_str())
         .unwrap_or("");
@@ -745,67 +743,6 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         always_edible: lower.contains("setalwaysedible") || lower.contains("alwaysedible"),
         fast: lower.contains("fastfood") || lower.contains("fast_eating") || lower.contains("fastfood()"),
     })
-}
-
-#[derive(Debug, Clone, Default)]
-struct RecoveredItemProperties {
-    durability: Option<u32>,
-    rarity: Option<String>,
-    fire_resistant: bool,
-    craft_remainder: Option<String>,
-}
-
-fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties {
-    let text = &source.source_text;
-    let durability = Regex::new(r"(?i)(?:setMaxDamage|func_77656_e|\.durability)\s*\(\s*(\d+)")
-        .expect("static item durability regex")
-        .captures(text)
-        .and_then(|capture| capture.get(1))
-        .and_then(|value| value.as_str().parse::<u32>().ok())
-        .filter(|value| *value > 0)
-        .map(|value| value.min(100_000));
-
-    let rarity = Regex::new(
-        r"(?i)(?:setRarity|\.rarity)\s*\(\s*(?:(?:EnumRarity|Rarity)\s*\.\s*)?([A-Z_]+)"
-    ).expect("static item rarity regex")
-        .captures(text)
-        .and_then(|capture| capture.get(1))
-        .map(|value| value.as_str().to_ascii_uppercase())
-        .filter(|value| matches!(value.as_str(), "COMMON" | "UNCOMMON" | "RARE" | "EPIC"));
-
-    let fire_resistant = Regex::new(r"(?i)(?:setFireResistant|fireResistant)\s*\(")
-        .expect("static item fire-resistance regex")
-        .is_match(text);
-
-    let craft_remainder = Regex::new(
-        r"(?i)setContainerItem\s*\(\s*(?:net\.minecraft\.init\.)?Items\s*\.\s*([A-Za-z0-9_]+)"
-    ).expect("static container item regex")
-        .captures(text)
-        .and_then(|capture| capture.get(1))
-        .map(|value| value.as_str().to_ascii_uppercase());
-
-    RecoveredItemProperties { durability, rarity, fire_resistant, craft_remainder }
-}
-
-fn item_properties_java(item: &ItemRecord) -> String {
-    let mut properties = if let Some(durability) = item.durability {
-        format!("new Item.Properties().durability({durability})")
-    } else {
-        format!("new Item.Properties().stacksTo({})", item.stack_size)
-    };
-    if let Some(food) = &item.food {
-        properties.push_str(&format!(".food({})", food_properties_java(food)));
-    }
-    if let Some(rarity) = &item.rarity {
-        properties.push_str(&format!(".rarity(Rarity.{rarity})"));
-    }
-    if item.fire_resistant {
-        properties.push_str(".fireResistant()");
-    }
-    if let Some(remainder) = &item.craft_remainder {
-        properties.push_str(&format!(".craftRemainder(Items.{remainder})"));
-    }
-    properties
 }
 
 fn food_properties_java(food: &FoodRecord) -> String {

@@ -186,7 +186,7 @@ impl LegacyLanguageLoreIndex {
                     let line = line.trim_start_matches('\u{feff}').trim();
                     if line.is_empty() || line.starts_with('#') { continue; }
                     let Some((key, value)) = line.split_once('=') else { continue };
-                    add_description(&mut descriptions, key, value);
+                    add_description(&mut descriptions, key, &decode_java_string(value));
                 }
             }
         }
