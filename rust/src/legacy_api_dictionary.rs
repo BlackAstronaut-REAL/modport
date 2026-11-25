@@ -501,6 +501,30 @@ fn inheritance_regex() -> &'static Regex {
     ).expect("static legacy API inheritance regex"))
 }
 
+fn implemented_interfaces_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\bimplements\s+(?P<owners>[A-Za-z_$][A-Za-z0-9_$.]*(?:\s*,\s*[A-Za-z_$][A-Za-z0-9_$.]*)*)"
+    ).expect("static legacy API interface-list regex"))
+}
+
+fn declared_owner_candidates(source: &str) -> BTreeSet<String> {
+    let mut owners = BTreeSet::new();
+    for capture in inheritance_regex().captures_iter(source) {
+        if let Some(owner) = capture.name("owner") {
+            owners.extend(owner_candidates(owner.as_str()));
+        }
+    }
+    for capture in implemented_interfaces_regex().captures_iter(source) {
+        if let Some(list) = capture.name("owners") {
+            for owner in list.as_str().split(',').map(str::trim) {
+                owners.extend(owner_candidates(owner));
+            }
+        }
+    }
+    owners
+}
+
 fn owner_candidates(owner: &str) -> BTreeSet<String> {
     let short = owner.rsplit('.').next().unwrap_or(owner);
     let mut candidates = BTreeSet::new();
@@ -523,6 +547,27 @@ fn owner_candidates(owner: &str) -> BTreeSet<String> {
         | "EntityWaterMob" | "EntityFlying" => {
             candidates.insert("Entity".to_owned());
             candidates.insert("EntityLivingBase".to_owned());
+            if short == "EntityPlayerMP" {
+                candidates.insert("EntityPlayer".to_owned());
+            }
+        }
+        "EntityArrow" | "EntityThrowable" | "EntityItem" | "EntityXPOrb"
+        | "EntityBoat" | "EntityMinecart" | "EntityFallingBlock" | "EntityFireball"
+        | "EntityFishHook" => {
+            candidates.insert("Entity".to_owned());
+        }
+        "ISidedInventory" => {
+            candidates.insert("IInventory".to_owned());
+        }
+        "BlockFence" | "BlockWall" | "BlockSlab" | "BlockStairs" | "BlockTorch"
+        | "BlockWorkbench" | "BlockFurnace" | "BlockChest" | "BlockDispenser"
+        | "BlockHopper" | "BlockRailBase" | "BlockPressurePlate" | "BlockButton"
+        | "BlockLever" | "BlockTrapDoor" | "BlockLadder" | "BlockVine"
+        | "BlockCactus" | "BlockReed" | "BlockSnow" | "BlockIce" | "BlockGlass"
+        | "BlockPane" | "BlockCarpet" | "BlockBed" | "BlockPortal" | "BlockEndPortal"
+        | "BlockBeacon" | "BlockAnvil" | "BlockDragonEgg" | "BlockLeaves"
+        | "BlockLog" | "BlockSapling" | "BlockRedstoneWire" | "BlockRedstoneDiode" => {
+            candidates.insert("Block".to_owned());
         }
         "WorldServer" | "WorldClient" => {
             candidates.insert("World".to_owned());
@@ -554,12 +599,7 @@ pub fn map_legacy_api_usages(source: &str, version: Option<&str>) -> Vec<LegacyA
         }
     }
 
-    let mut implicit_owners = BTreeSet::new();
-    for capture in inheritance_regex().captures_iter(source) {
-        if let Some(owner) = capture.name("owner") {
-            implicit_owners.extend(owner_candidates(owner.as_str()));
-        }
-    }
+    let implicit_owners = declared_owner_candidates(source);
 
     let mut matched = BTreeMap::<(String, String), LegacyApiMethodMapping>::new();
     for capture in invocation_regex().captures_iter(source) {
@@ -619,10 +659,8 @@ pub fn map_legacy_api_methods(source: &str, version: Option<&str>) -> Vec<Legacy
         .filter_map(|capture| capture.name("name").map(|value| value.as_str().to_owned()))
         .collect();
     let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
-    let owners: BTreeSet<String> = inheritance_regex()
-        .captures_iter(source)
-        .filter_map(|capture| capture.name("owner").map(|value| value.as_str().to_owned()))
-        .flat_map(|owner| owner_candidates(&owner))
+    let owners: BTreeSet<String> = declared_owner_candidates(source)
+        .into_iter()
         .filter(|owner| known_owners.contains(owner.as_str()))
         .collect();
 
