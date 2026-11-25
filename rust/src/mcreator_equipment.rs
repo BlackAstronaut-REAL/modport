@@ -1,3 +1,4 @@
+use crate::bytecode::{decode_instructions, parse_method_descriptor, ClassFile, ConstantValue, Instruction, JvmType, MemberInfo};
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
@@ -7,6 +8,172 @@ pub struct ToolMaterialStats {
     pub efficiency: Option<f64>,
     pub damage: Option<f64>,
     pub enchantability: Option<i64>,
+}
+
+fn bytecode_number_constant(class: &ClassFile, instruction: &Instruction) -> Option<f64> {
+    let opcode = instruction.opcode;
+    match opcode {
+        0x02..=0x08 => Some((opcode as i32 - 0x03) as f64),
+        0x09 => Some(0.0),
+        0x0a => Some(1.0),
+        0x0b..=0x0d => Some((opcode - 0x0b) as f64),
+        0x0e => Some(0.0),
+        0x0f => Some(1.0),
+        0x10 => instruction.operands.first().map(|value| *value as i8 as f64),
+        0x11 => {
+            let bytes = [*instruction.operands.first()?, *instruction.operands.get(1)?];
+            Some(i16::from_be_bytes(bytes) as f64)
+        }
+        0x12..=0x14 => {
+            let index = if opcode == 0x12 {
+                *instruction.operands.first()? as u16
+            } else {
+                u16::from_be_bytes([*instruction.operands.first()?, *instruction.operands.get(1)?])
+            };
+            match class.constant(index)? {
+                ConstantValue::Integer(value) => Some(value as f64),
+                ConstantValue::Float(value) => Some(value as f64),
+                ConstantValue::Long(value) => Some(value as f64),
+                ConstantValue::Double(value) => Some(value),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn bytecode_method_number(class: &ClassFile, method: &MemberInfo) -> Option<f64> {
+    let code = method.code.as_ref()?;
+    let instructions = decode_instructions(&code.code).ok()?;
+    if instructions.iter().any(|instruction| {
+        matches!(instruction.opcode, 0x99..=0xab | 0xc6 | 0xc7)
+    }) {
+        return None;
+    }
+
+    let mut stack = Vec::<Option<f64>>::new();
+    for instruction in &instructions {
+        let opcode = instruction.opcode;
+        if matches!(opcode, 0x01..=0x14) {
+            stack.push(bytecode_number_constant(class, instruction));
+            continue;
+        }
+        match opcode {
+            0x00 => {}
+            0x15..=0x2d => stack.push(None),
+            0x2e..=0x35 => {
+                stack.pop();
+                stack.pop();
+                stack.push(None);
+            }
+            0x36..=0x4e => { stack.pop(); }
+            0x4f..=0x56 => {
+                stack.pop();
+                stack.pop();
+                stack.pop();
+            }
+            0x57 => { stack.pop(); }
+            0x59 => {
+                if let Some(value) = stack.last().copied() {
+                    stack.push(value);
+                }
+            }
+            0x60..=0x73 => {
+                let right = stack.pop().flatten();
+                let left = stack.pop().flatten();
+                let operation = (opcode - 0x60) / 4;
+                let result = match (left, right) {
+                    (Some(left), Some(right)) => match operation {
+                        0 => Some(left + right),
+                        1 => Some(left - right),
+                        2 => Some(left * right),
+                        3 if right != 0.0 => Some(left / right),
+                        4 if right != 0.0 => Some(left % right),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                stack.push(result);
+            }
+            0x74..=0x77 => {
+                let value = stack.pop().flatten().map(|value| -value);
+                stack.push(value);
+            }
+            0x78..=0x83 => {
+                stack.pop();
+                stack.pop();
+                stack.push(None);
+            }
+            0x84 => {}
+            0x85..=0x93 => {}
+            0x94..=0x98 => {
+                stack.pop();
+                stack.pop();
+                stack.push(None);
+            }
+            0xb2 => stack.push(None),
+            0xb3 => { stack.pop(); }
+            0xb4 => {
+                stack.pop();
+                stack.push(None);
+            }
+            0xb5 => {
+                stack.pop();
+                stack.pop();
+            }
+            0xb6..=0xb9 => {
+                let index = u16::from_be_bytes([
+                    *instruction.operands.first()?,
+                    *instruction.operands.get(1)?,
+                ]);
+                let (_, _, descriptor) = class.member_reference(index)?;
+                let descriptor = parse_method_descriptor(&descriptor).ok()?;
+                for _ in 0..descriptor.parameters.len() {
+                    stack.pop();
+                }
+                if opcode != 0xb8 {
+                    stack.pop();
+                }
+                if !matches!(descriptor.return_type, JvmType::Void) {
+                    stack.push(None);
+                }
+            }
+            0xac..=0xaf => return stack.pop().flatten(),
+            0xb0 | 0xb1 => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Synthesize only named numeric getters from compiled classes. This reuses the
+/// source-property parser downstream, without guessing from unrelated constants
+/// or conflating a long use-duration getter with attack damage.
+fn compiled_equipment_getter_stubs(path: &Path) -> String {
+    let Ok(bytes) = fs::read(path) else { return String::new(); };
+    let Ok(class) = ClassFile::parse(&bytes) else { return String::new(); };
+    let getters: &[(&str, &[&str])] = &[
+        ("getMaxDamage", &["getMaxDamage", "func_77612_l"]),
+        ("getItemStackLimit", &["getItemStackLimit", "func_77639_j"]),
+        ("getDamageVsEntity", &["getDamageVsEntity", "func_150931_i", "getAttackDamage"]),
+        ("getItemEnchantability", &["getItemEnchantability", "getEnchantmentValue", "func_77619_b"]),
+        ("getHealAmount", &["getHealAmount", "func_150905_g"]),
+        ("getSaturationModifier", &["getSaturationModifier", "func_150906_h"]),
+    ];
+    let mut output = String::new();
+    for method in &class.methods {
+        let Some((canonical, _aliases)) = getters.iter()
+            .find(|(_, aliases)| aliases.contains(&method.name.as_str()))
+        else {
+            continue;
+        };
+        let Some(value) = bytecode_method_number(&class, method) else { continue; };
+        output.push_str(&format!(
+            "public double {canonical}() {{ return {:.8}; }}\n",
+            value
+        ));
+    }
+    output
 }
 
 fn item_display_name(registry: &str) -> String {
@@ -874,8 +1041,10 @@ pub fn discover_equipment_sources(source_roots: &[PathBuf]) -> Result<Vec<Equipm
         if abstract_classes.contains(&class) {
             continue;
         }
-        let source_text = class_texts.get(&class).cloned().unwrap_or_default();
         let Some(source_path) = class_paths.get(&class) else { continue };
+        let source_text = class_texts.get(&class).cloned()
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or_else(|| compiled_equipment_getter_stubs(source_path));
         let Some(superclass) = class_parents.get(&class) else { continue };
         let Some((element_type, tool_type)) = equipment_kind(&class, superclass, &class_parents) else { continue };
 
@@ -1213,8 +1382,8 @@ pub fn export_equipment_to_workspace(
                 &registry,&texture_name,imported_fv
             )
         };
-        if source.source_text.trim().is_empty() {
-            warnings.push("Registration and content class were recovered from compiled bytecode only; constructor stats, behaviors, and source-declared texture paths may need manual reconstruction.".to_owned());
+        if source.source_path.to_ascii_lowercase().ends_with(".class") {
+            warnings.push("Registration and getter constants were recovered from compiled bytecode only; constructor behaviors and source-declared texture paths may need manual reconstruction.".to_owned());
         }
         if texture_source.is_none() {
             warnings.push("Source texture could not be recovered; verify the generated placeholder before release.".to_owned());
@@ -1403,6 +1572,32 @@ mod equipment_discovery_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovers_compiled_numeric_getters_by_method_identity() {
+        let class = ClassFile {
+            minor_version: 0, major_version: 52, access_flags: 0,
+            this_class: 0, super_class: 0, interfaces: Vec::new(),
+            constant_pool: Vec::new(), fields: Vec::new(), methods: Vec::new(),
+            attributes: Vec::new(), bootstrap_methods: Vec::new(),
+        };
+        let make_method = |name: &str, code: Vec<u8>| MemberInfo {
+            name: name.to_owned(),
+            code: Some(crate::bytecode::CodeAttribute { code, ..Default::default() }),
+            ..Default::default()
+        };
+        let use_duration = make_method("getMaxItemUseDuration", vec![0x11, 0x1c, 0x20, 0xac]);
+        let damage = make_method("getDamageVsEntity", vec![0x10, 15, 0xac]);
+        let durability = make_method("getMaxDamage", vec![0x11, 0x03, 0x84, 0xac]);
+
+        assert_eq!(bytecode_method_number(&class, &use_duration), Some(7200.0));
+        assert_eq!(bytecode_method_number(&class, &damage), Some(15.0));
+        assert_eq!(bytecode_method_number(&class, &durability), Some(900.0));
+        assert_ne!(
+            bytecode_method_number(&class, &use_duration),
+            bytecode_method_number(&class, &damage),
+        );
+    }
 
     #[test]
     fn builds_native_item_schema_with_stack_and_damage_recovery() {
