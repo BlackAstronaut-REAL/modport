@@ -54,6 +54,24 @@ enum Command {
         #[arg(long)]
         docs_root: Option<PathBuf>,
     },
+    /// Export structured API knowledge extracted from the complete documentation set.
+    DocsKnowledge {
+        #[arg(long)]
+        docs_root: Option<PathBuf>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Retrieve NeoForge documentation and API symbols for a conversion domain.
+    DocsGuide {
+        domain: String,
+        query: Option<String>,
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+        #[arg(long)]
+        docs_root: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Convert a decompiled legacy or modern Java model into a Blockbench project.
     ConvertModel {
         source: PathBuf,
@@ -679,6 +697,44 @@ fn main() -> Result<()> {
             println!("{} Markdown pages · {} category metadata files · {} bytes", manifest.page_count, manifest.category_count, manifest.total_source_bytes);
             println!("Source: {} @ {}", manifest.source_repository, manifest.source_commit);
             println!("Local corpus: {}", index.root().display());
+        }
+        Command::DocsKnowledge { docs_root, output } => {
+            let root = docs_root.unwrap_or_else(default_docs_root);
+            let index = NeoForgeDocsIndex::load(&root)?;
+            let knowledge = index.knowledge_entries();
+            let data = serde_json::to_string_pretty(&knowledge)?;
+            if let Some(path) = output {
+                if let Some(parent) = path.parent() {
+                    if !parent.as_os_str().is_empty() { std::fs::create_dir_all(parent)?; }
+                }
+                std::fs::write(&path, format!("{data}\\n"))?;
+                println!("Wrote {} structured NeoForge knowledge page(s) to {}.", knowledge.len(), path.display());
+            } else {
+                println!("{data}");
+            }
+        }
+        Command::DocsGuide { domain, query, limit, docs_root, json } => {
+            let root = docs_root.unwrap_or_else(default_docs_root);
+            let index = NeoForgeDocsIndex::load(&root)?;
+            let results = index.guide(&domain, query.as_deref(), limit);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&results)?);
+            } else if results.is_empty() {
+                println!("No NeoForge {} documentation found for domain '{}'.", index.manifest().minecraft_version, domain);
+                println!("Available domains: {}", index.domains().join(", "));
+            } else {
+                println!("NeoForge {} guidance for '{}' — {} page(s):", index.manifest().minecraft_version, domain, results.len());
+                for (position, result) in results.iter().enumerate() {
+                    println!("\\n{}. {}", position + 1, result.title);
+                    println!("   {} · {}", result.section, result.path);
+                    if query.is_some() { println!("   Match score: {:.2}", result.score); }
+                    println!("   {}", result.snippet);
+                    if !result.api_symbols.is_empty() {
+                        println!("   API: {}", result.api_symbols.iter().take(16).cloned().collect::<Vec<_>>().join(", "));
+                    }
+                    println!("   {}", result.source_url);
+                }
+            }
         }
         Command::Extract { archive, destination } => {
             let path = mojmodelbridge::archive::extract_archive(&archive, &destination)?;

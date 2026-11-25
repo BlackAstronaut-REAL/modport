@@ -16,9 +16,12 @@ The native Rust crate exposes offline, identifier-aware search commands:
 cargo run --manifest-path rust/Cargo.toml -- docs-status
 cargo run --manifest-path rust/Cargo.toml -- docs-search "DeferredRegister registry"
 cargo run --manifest-path rust/Cargo.toml -- docs-search "DataComponentType" --limit 10 --json
+cargo run --manifest-path rust/Cargo.toml -- docs-guide blocks
+cargo run --manifest-path rust/Cargo.toml -- docs-guide items "DataComponentType" --json
+cargo run --manifest-path rust/Cargo.toml -- docs-knowledge --output build/neoforge-1.21.1-knowledge.json
 ```
 
-Set `MODPORT_NEOFORGE_DOCS` or pass `--docs-root` to search another local corpus. Search ranks titles, headings, paths, and body text, and splits Java/PascalCase identifiers while preserving complete identifiers. This is a deterministic retrieval layer; subsequent exporter work can consume its version-specific references rather than relying exclusively on hardcoded assumptions.
+Set `MODPORT_NEOFORGE_DOCS` or pass `--docs-root` to search another local corpus. Search ranks titles, headings, paths, and body text, and splits Java/PascalCase identifiers while preserving complete identifiers. The index also extracts structured API symbols, section headings, and conversion-domain tags. Use docs-guide to retrieve implementation references for a specific conversion domain, or docs-knowledge to emit a machine-readable catalogue. Document frequency is precomputed when the index loads, avoiding repeated full-corpus scans during search.
 
 ## Native stages implemented
 
