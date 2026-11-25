@@ -323,6 +323,10 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             .unwrap_or_else(|| serde_json::json!({}));
         let component_lore = extract_component_lore(&mut components);
         append_unique(&mut lore, &component_lore);
+        let source_properties = mojmodelbridge::mcreator_block::source_block_properties(source);
+        if let Some(object) = components.as_object_mut() {
+            object.insert("source_properties".to_owned(), Value::Object(source_properties));
+        }
         let components_json = serde_json::to_string_pretty(&components)
             .unwrap_or_else(|_| "{}".to_owned());
         add(BrowserEntry {
