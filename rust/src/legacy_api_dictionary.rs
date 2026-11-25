@@ -2776,6 +2776,65 @@ const DEFINITIONS: &[Definition] = &[
     d!("ItemStack", "updateAnimation", V_112, "item_stack_animation_update", "ItemStack inventory/world animation tick", "items_render", "Preserve world/entity/slot/current-hand arguments; updates item pop and use animation state.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "useItemRightClick", V_112, "item_stack_use_right_click", "ItemStack use-on-right-click result", "items_interaction", "Preserve ActionResult<ItemStack>, hand and player/world context including replacement stack semantics.", "net/minecraft/item/ItemStack.html"),
 
+    // Item renderer registration and model override property hooks.
+    d!("Item", "addPropertyOverride", V_112, "item_model_property_override_register", "IItemPropertyGetter registration by ResourceLocation", "items_render", "Preserve namespaced property key and getter identity; model override predicates are evaluated against stack/world/entity context.", "net/minecraft/item/Item.html"),
+
+    // EntityLivingBase combat, movement, potion and equipment methods from the
+    // 1.12.2 public/protected method summary.
+    d!("EntityLivingBase", "collideWithEntity", V_ALL, "living_entity_collision", "Living entity collision response", "entities_physics", "Protected callback for entity-to-entity collision; preserve collided entity and collision ordering.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "collideWithNearbyEntities", V_ALL, "living_entity_nearby_collisions", "Living entity nearby entity collision pass", "entities_physics", "Preserve nearby entity iteration/order and collision side effects during the living tick.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "damageArmor", V_ALL, "living_damage_armor", "Armor durability reduction during incoming damage", "combat", "Protected damage callback; preserve reduced damage amount and equipped armor ordering.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "damageShield", V_ALL, "living_damage_shield", "Shield durability/disable handling", "combat", "Preserve incoming damage amount and active blocking stack; shield disable and damage events are separate effects.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "decreaseAirSupply", V_ALL, "living_air_supply_decrease", "Underwater air supply depletion", "entities_environment", "Preserve current air value and entity-specific breathing override; negative/zero air values affect drowning timing.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "dismountEntity", V_ALL, "living_dismount_entity", "Riding relationship forced dismount", "entities_movement", "Preserve requested vehicle and passenger transition order; differs from the no-argument dismountRidingEntity.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "dismountRidingEntity", V_ALL, "living_dismount_vehicle", "Riding relationship dismount", "entities_movement", "Preserve vehicle/passenger relationship cleanup and entity positioning after dismount.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "dropLoot", V_112, "living_drop_loot", "Living entity loot-table/drop dispatch", "loot", "Protected callback now receives DamageSource; preserve recently-hit and looting context plus loot-table selection.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "entityInit", V_ALL, "living_entity_data_init", "Synched data parameter registration", "entities_sync", "Protected entity construction hook; preserve data parameter IDs, serializer types and registration order.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "fall", V_ALL, "living_fall_processing", "Fall damage and landing behavior", "entities_physics", "Preserve fall distance and multiplier before Forge LivingFallEvent and final damage calculation.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "frostWalk", V_112, "living_frost_walker_effect", "Frost Walker water-to-frost block conversion", "entities_environment", "Protected per-tick effect; preserve target BlockPos, enchantment level and world update order.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getAlwaysRenderNameTagForRender", V_112, "living_name_tag_render_predicate", "Entity name-tag render visibility", "entities_render", "Preserve render-specific name-tag visibility separately from always-render-name-tag and distance checks.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getArmorInventoryList", V_18, "living_armor_inventory_iterable", "Iterable armor ItemStack equipment", "equipment", "Abstract iterable over armor slots; preserve slot order and live equipment view semantics.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getAttackingEntity", V_112, "living_attacking_entity", "Current attacking entity reference", "combat", "Preserve attacker identity independently from revenge target and last attacked target.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getCapability", V_112, "living_capability_lookup", "Entity side-specific capability retrieval", "capabilities", "Preserve capability key and nullable EnumFacing; entity capability instances are attached per entity.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getFallSound", V_ALL, "living_fall_sound", "Fall landing sound selection", "audio", "Protected sound hook with fall height; preserve distance-sensitive sound selection.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getIdleTime", V_112, "living_idle_time", "Living entity idle/wander timer", "entities_ai", "Preserve idle tick count and reset timing because AI/wander abilities may depend on it.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getJumpUpwardsMotion", V_ALL, "living_jump_vertical_motion", "Jump vertical velocity", "entities_movement", "Protected per-entity jump velocity hook; preserve attribute/effect-dependent values.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getWaterSlowDown", V_112, "living_water_movement_slowdown", "Living entity underwater movement friction", "entities_movement", "Protected slowdown factor used by travel; preserve custom water mobility separate from swim speed.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "handleJumpLava", V_112, "living_lava_jump", "Living entity jump input while in lava", "entities_movement", "Protected jump behavior in lava; preserve velocity and fluid movement checks.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "handleJumpWater", V_112, "living_water_jump", "Living entity jump input while in water", "entities_movement", "Protected jump behavior in water; preserve motion and water surface/underwater distinctions.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "handleStatusUpdate", V_ALL, "living_entity_status_update", "Living entity client status byte handling", "entities_sync", "Preserve status-byte dispatch for hurt/death/critical/sweep/particles and client-only visual effects.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "hasCapability", V_112, "living_has_capability", "Entity side-specific capability predicate", "capabilities", "Preserve capability key and facing; false must not be confused with absent entity capability provider.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "hasItemInSlot", V_112, "living_has_item_in_equipment_slot", "Equipment slot non-empty predicate", "equipment", "Preserve EntityEquipmentSlot identity and ItemStack emptiness rules.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "isEntityAlive", V_ALL, "living_entity_alive_predicate", "Living entity life/death predicate", "entities", "Preserve health/death state semantics; may differ from Entity.isDead while death animation is running.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "isServerWorld", V_112, "living_is_server_world", "Logical server-side world predicate", "entities", "Preserve logical-side query rather than physical client/server distribution.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "isPlayer", V_112, "living_entity_is_player", "EntityLivingBase player classification", "entities", "Protected subclass hook used by living damage/XP/loot logic; preserve exact subclass classification.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "markPotionsDirty", V_ALL, "living_potion_metadata_dirty", "Potion effect metadata invalidation", "abilities", "Protected cache invalidation after active potion changes; preserve timing before client/server potion metadata synchronization.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "markVelocityChanged", V_ALL, "living_velocity_sync_dirty", "Entity velocity synchronization flag", "entities_sync", "Protected flag update used to force velocity replication to tracking clients.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "moveRelative", V_ALL, "living_relative_movement", "Strafe/up/forward movement vector calculation", "entities_movement", "Preserve strafe, vertical, forward and friction inputs; travel and movement abilities depend on exact normalization.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "notifyDataManagerChange", V_112, "living_synced_data_changed", "Synched entity data parameter callback", "entities_sync", "Preserve DataParameter identity and client/server notification timing after synchronized value changes.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "onEntityUpdate", V_ALL, "living_entity_update_base", "Per-tick entity base update", "entities", "Preserve inherited entity update call ordering with living-specific potion, equipment and movement processing.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "onItemPickup", V_ALL, "living_item_pickup_callback", "Living entity item pickup event callback", "items_entities", "Preserve picked Entity and quantity for inventory/achievement/equipment side effects.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "onKillCommand", V_112, "living_kill_command", "Command-triggered living entity removal", "entities", "Preserve immediate kill command path separately from damage/death/loot lifecycle.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "onUpdate", V_ALL, "living_entity_tick_entry", "Entity tick entry point", "entities", "Preserve override ordering relative to onLivingUpdate, collision and superclass entity updates.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "outOfWorld", V_ALL, "living_out_of_world_damage", "Void/out-of-world damage handler", "combat", "Protected void damage callback; preserve bypass and death behavior for entities below world bounds.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "playEquipSound", V_112, "living_equipment_change_sound", "Armor/equipment change sound", "audio", "Protected sound callback with equipped ItemStack; preserve sound timing and slot-change trigger.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "playHurtSound", V_ALL, "living_hurt_sound", "Living entity hurt sound", "audio", "Protected callback receives DamageSource; preserve source-specific sound overrides.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "readEntityFromNBT", V_ALL, "living_entity_nbt_read", "Living entity NBT persistence deserialization", "persistence", "Preserve potion effects, attributes, equipment, active item use and combat state load ordering.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "resetPotionEffectMetadata", V_112, "living_reset_potion_metadata", "Potion color/ambient metadata reset", "abilities", "Protected metadata cache reset; preserve color and ambient-particle recalculation after effects change.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "setPartying", V_112, "living_participate_dance", "Living entity dance/party state", "entities_ai", "Preserve target BlockPos and boolean dancing/party state; this is used by newer entity behavior.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "setPositionAndRotationDirect", V_112, "living_network_position_correction", "Network entity position/rotation interpolation", "entities_sync", "Preserve server coordinates, yaw/pitch, interpolation step count and teleport flag.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "setRenderYawOffset", V_ALL, "living_body_render_yaw", "Living entity body render yaw", "entities_render", "Preserve body yaw separately from head yaw and entity rotation yaw.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "setSprinting", V_ALL, "living_sprinting_state_write", "Living entity sprinting state", "entities_movement", "Preserve sprint state transitions and their speed/particle/attribute side effects.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "shouldRiderFaceForward", V_112, "living_rider_forward_facing", "Mounted player facing direction predicate", "entities_movement", "Preserve rider identity and entity-specific forward-facing rule.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "swingArm", V_18, "living_swing_arm", "Main/offhand arm swing animation", "entities_animation", "Preserve EnumHand and synchronized swing status; the arm swing animation is independent from item use.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "travel", V_ALL, "living_travel_movement", "Living entity ground/air/water movement physics", "entities_movement", "Preserve strafe, vertical and forward inputs plus fluid/ladder/elytra branches and custom slowdown.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updateDistance", V_ALL, "living_movement_distance_update", "Living entity movement distance/step sound calculation", "entities_movement", "Protected distance accumulator; preserve previous/current horizontal displacement and step sound thresholds.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updateFallState", V_ALL, "living_fall_state_update", "Entity fall distance and landing state update", "entities_physics", "Preserve vertical movement, onGround, block state and position before the fall method computes damage.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updatePotionMetadata", V_ALL, "living_potion_metadata_update", "Potion color and ambient particle state update", "abilities", "Preserve active effect iteration, color blending and ambient visibility metadata.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "updateRidden", V_ALL, "living_ridden_update", "Living entity mounted passenger update", "entities_movement", "Preserve vehicle/passenger positioning and rider-specific movement rules.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "writeEntityToNBT", V_ALL, "living_entity_nbt_write", "Living entity NBT persistence serialization", "persistence", "Preserve potion effects, attributes, equipment, active item use and combat data serialization.", "net/minecraft/entity/EntityLivingBase.html"),
+
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -4367,6 +4426,27 @@ mod tests {
             ("ItemStack", "useItemRightClick"),
         ] {
             assert!(has(owner, method), "missing {owner}#{method}");
+        }
+    }
+
+
+    #[test]
+    fn entity_living_base_movement_combat_and_persistence_methods_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for method in [
+            "collideWithEntity", "damageArmor", "damageShield", "decreaseAirSupply",
+            "dropLoot", "entityInit", "fall", "frostWalk", "getArmorInventoryList",
+            "getAttackingEntity", "getCapability", "getJumpUpwardsMotion",
+            "getWaterSlowDown", "handleJumpLava", "handleJumpWater",
+            "hasItemInSlot", "isEntityAlive", "isServerWorld", "markPotionsDirty",
+            "moveRelative", "notifyDataManagerChange", "onItemPickup", "onUpdate",
+            "playEquipSound", "resetPotionEffectMetadata", "setPartying",
+            "setPositionAndRotationDirect", "setSprinting", "swingArm", "travel",
+            "updateActiveHand", "updateFallState", "writeEntityToNBT",
+        ] {
+            assert!(has("EntityLivingBase", method), "missing EntityLivingBase#{method}");
         }
     }
 
