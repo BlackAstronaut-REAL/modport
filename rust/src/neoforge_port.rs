@@ -2494,7 +2494,11 @@ mod tests {
         fs::write(source.join("src/main/java/demo/ModBlocks.java"), r#"
             public class ModBlocks {
                 public static final Block RUBY_ORE = new RubyOre();
-                public static void register() { GameRegistry.registerBlock(RUBY_ORE, "ruby_ore"); }
+                public static final Block RUBY_FLOWER = new RubyFlower();
+                public static void register() {
+                    GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
+                    GameRegistry.registerBlock(RUBY_FLOWER, "ruby_flower");
+                }
             }
             public class RubyOre extends Block {
                 public RubyOre() {
@@ -2505,9 +2509,11 @@ mod tests {
                     randomTicks();
                 }
             }
+            public class RubyFlower extends BlockFlower { }
         "#).unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/textures/item/ruby.png"), b"item png").unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/textures/block/ruby_ore.png"), b"block png").unwrap();
+        fs::write(source.join("src/main/resources/assets/oldmod/textures/block/ruby_flower.png"), b"flower png").unwrap();
         fs::write(source.join("src/main/resources/assets/oldmod/lang/en_US.lang"),
             "item.ruby.desc=Translated tooltip from language file\\n").unwrap();
         fs::write(source.join("src/main/resources/data/oldmod/recipes/ruby.json"),
@@ -2520,7 +2526,10 @@ mod tests {
         assert_eq!(report.source_mod_id, "oldmod");
         assert_eq!(report.target_mod_id, "oldmod");
         assert_eq!(report.items.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby"]);
-        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_ore"]);
+        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_flower", "ruby_ore"]);
+        let flower_model: Value = serde_json::from_slice(&fs::read(output.join("src/main/resources/assets/oldmod/models/block/ruby_flower.json")).unwrap()).unwrap();
+        assert_eq!(flower_model["parent"], "minecraft:block/cross");
+        assert_eq!(flower_model["textures"]["cross"], "oldmod:block/ruby_flower");
         assert_eq!(report.items[0].lore, vec!["§6Ruby ", "§lPower", "§oRare", "Translated tooltip from language file"]);
         assert!(report.resource_files_copied >= 3);
         assert!(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java").is_file());
