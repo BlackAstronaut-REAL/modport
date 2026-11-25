@@ -618,9 +618,16 @@ pub fn map_legacy_api_methods(source: &str, version: Option<&str>) -> Vec<Legacy
         .captures_iter(source)
         .filter_map(|capture| capture.name("name").map(|value| value.as_str().to_owned()))
         .collect();
+    let known_owners: BTreeSet<&str> = DEFINITIONS.iter().map(|entry| entry.owner).collect();
+    let owners: BTreeSet<String> = inheritance_regex()
+        .captures_iter(source)
+        .filter_map(|capture| capture.name("owner").map(|value| value.as_str().to_owned()))
+        .flat_map(|owner| owner_candidates(&owner))
+        .filter(|owner| known_owners.contains(owner.as_str()))
+        .collect();
 
     DEFINITIONS.iter()
-        .filter(|entry| declared.contains(entry.method))
+        .filter(|entry| declared.contains(entry.method) && owners.contains(entry.owner))
         .filter(|entry| version.map(|v| entry.versions.contains(&v)).unwrap_or(true))
         .map(to_mapping)
         .collect()
