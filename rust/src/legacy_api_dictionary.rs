@@ -1243,7 +1243,7 @@ pub fn map_legacy_api_usages(source: &str, version: Option<&str>) -> Vec<LegacyA
 fn declaration_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
-        r"(?m)^[ \t]*(?:(?:@[A-Za-z_$][A-Za-z0-9_$.]*(?:\([^)]*\))?)[ \t]*\r?\n[ \t]*)*(?:(?:public|protected|private)\s+)(?:(?:static|final|synchronized|native|abstract)\s+)*(?:<[^>\r\n]+>\s*)?[A-Za-z_$][A-Za-z0-9_$.<>\[\], ?]*[ \t]+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)[ \t]*\("
+        r"(?m)^[ \t]*(?:(?:@[A-Za-z_$][A-Za-z0-9_$.]*(?:\([^)]*\))?)[ \t]*\r?\n[ \t]*)*(?:(?:public|protected|private)\s+)?(?:(?:static|final|synchronized|native|abstract|default)\s+)*(?:<[^>\r\n]+>\s*)?[A-Za-z_$][A-Za-z0-9_$.<>\[\], ?]*[ \t]+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)[ \t]*\("
     ).expect("static legacy API declaration regex"))
 }
 
@@ -1402,6 +1402,19 @@ mod tests {
         assert!(found.iter().any(|entry| entry.source_owner == "World" && entry.source_method == "setBlock"));
         assert!(found.iter().any(|entry| entry.source_owner == "GameRegistry" && entry.source_method == "registerItem"));
         assert!(!found.iter().any(|entry| entry.source_method == "updateTask"));
+    }
+
+    #[test]
+    fn recognizes_package_private_overrides_from_decompiled_sources() {
+        let source = r#"
+            class ExampleItem extends Item {
+                boolean hitEntity(ItemStack stack, EntityLivingBase target, EntityLivingBase attacker) {
+                    return true;
+                }
+            }
+        "#;
+        let found = map_legacy_api_methods(source, Some("1.12.2"));
+        assert!(found.iter().any(|entry| entry.source_owner == "Item" && entry.source_method == "hitEntity"));
     }
 
     #[test]
