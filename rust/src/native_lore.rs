@@ -39,8 +39,7 @@ pub fn extract_legacy_lore(source_text: &str) -> Vec<String> {
             let name = matched.get(1).map(|value| value.as_str()).unwrap_or("");
             let Some(code) = formatting_code(name) else { continue };
             rewritten.push_str(&expression[cursor..full.start()]);
-            rewritten.push('\u{00a7}');
-            rewritten.push(code);
+            rewritten.push_str(&format!("\"§{code}\""));
             cursor = full.end();
         }
         rewritten.push_str(&expression[cursor..]);
