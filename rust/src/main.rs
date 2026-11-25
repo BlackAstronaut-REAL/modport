@@ -21,6 +21,7 @@ use mojmodelbridge::mcreator_pipeline::export_all_to_workspace;
 use mojmodelbridge::gradle_bridge::compile_workspace;
 use mojmodelbridge::neoforge_docs::{default_docs_root, NeoForgeDocsIndex};
 use mojmodelbridge::neoforge_project::{create_neoforge_project, DEFAULT_NEOFORGE_VERSION};
+use mojmodelbridge::neoforge_port::port_to_neoforge;
 
 #[derive(Debug, Parser)]
 #[command(name = "MojModelBridge", version, about = "Native Rust Minecraft mod migration engine")]
@@ -84,6 +85,24 @@ enum Command {
         package: String,
         #[arg(long, default_value = DEFAULT_NEOFORGE_VERSION)]
         neo_version: String,
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Analyze and partially convert a mod folder/JAR/ZIP into a native NeoForge 1.21.1 project.
+    PortNeoForge {
+        output: PathBuf,
+        #[arg(required = true)]
+        source_roots: Vec<PathBuf>,
+        #[arg(long)]
+        mod_id: Option<String>,
+        #[arg(long)]
+        mod_name: Option<String>,
+        #[arg(long)]
+        package: Option<String>,
+        #[arg(long, default_value = DEFAULT_NEOFORGE_VERSION)]
+        neo_version: String,
+        #[arg(long)]
+        docs_root: Option<PathBuf>,
         #[arg(long)]
         overwrite: bool,
     },
@@ -749,6 +768,37 @@ fn main() -> Result<()> {
                     }
                     println!("   {}", result.source_url);
                 }
+            }
+        }
+        Command::PortNeoForge { output, source_roots, mod_id, mod_name, package, neo_version, docs_root, overwrite } => {
+            let report = port_to_neoforge(
+                &source_roots,
+                &output,
+                mod_id.as_deref(),
+                mod_name.as_deref(),
+                package.as_deref(),
+                &neo_version,
+                docs_root.as_deref(),
+                overwrite,
+            )?;
+            println!(
+                "NeoForge {} port created at {}: {} item(s), {} block(s), {} resource file(s).",
+                report.target_project.minecraft_version,
+                report.target_project.output_root.display(),
+                report.items.len(),
+                report.blocks.len(),
+                report.resource_files_copied,
+            );
+            println!(
+                "Recognized but still pending: {} entity class(es), {} armor set(s), {} projectile class(es).",
+                report.entities.len(), report.armor_sets.len(), report.projectiles.len()
+            );
+            println!("Detailed report: {}", report.analysis_file.display());
+            for warning in report.warnings.iter().take(20) {
+                eprintln!("[WARN] {warning}");
+            }
+            if report.warnings.len() > 20 {
+                eprintln!("[WARN] ... and {} more warning(s); see port-analysis.json.", report.warnings.len() - 20);
             }
         }
         Command::CreateNeoForgeProject { output, mod_id, mod_name, package, neo_version, overwrite } => {

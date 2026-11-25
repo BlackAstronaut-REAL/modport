@@ -6,6 +6,17 @@ behavioral reference. The Rust application does not spawn Python, import Python
 modules, or require a Python installation. The Windows release workflow compiles
 the engine into the native executable.
 
+## First source-driven NeoForge conversion pass
+
+The `port-neoforge` command accepts a mod directory, JAR, ZIP, or multiple source roots. It creates the NeoForge 1.21.1 project, analyzes Java and compiled registrations, emits native simple Item/Block registrations (including BlockItems), copies assets and data JSON with namespace remapping, generates missing item/block model JSON and English localization, and saves a conversion report.
+
+```powershell
+cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/legacy-mod.jar
+cargo run --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/decompiled-source --mod-id modern_mod --mod-name "Modern Mod" --package com.example.modern
+```
+
+This is a partial converter, not a full behavior translator. Custom Java methods, entity AI, projectiles, wearable armor, block entities, event logic, networking, capabilities, and custom renderers/models are listed as pending in `modport/port-analysis.json`. Anything not safely reconstructed is not silently claimed as converted.
+
 ## Native NeoForge project generation
 
 Modport can create a clean NeoForge 1.21.1 output project using the NeoGradle userdev plugin and Java 21. The scaffold includes an @Mod entrypoint, empty deferred registries for blocks, items, entities, and block entities, NeoForge metadata, and a machine-readable port status file.
