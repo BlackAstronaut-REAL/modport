@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use walkdir::WalkDir;
 
 use crate::bytecode::classfile::ConstantValue;
@@ -188,6 +189,21 @@ fn read_java(path: &Path) -> Result<String> {
     let text = String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_owned();
     Ok(strip_java_comments(&text))
 }
+
+fn cached_regex(pattern: &str) -> Result<Regex> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Regex>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(regex) = guard.get(pattern) {
+            return Ok(regex.clone());
+        }
+    }
+    let compiled = Regex::new(pattern)?;
+    let mut guard = cache.lock()
+        .map_err(|_| anyhow::anyhow!("shared regex cache lock was poisoned"))?;
+    Ok(guard.entry(pattern.to_owned()).or_insert(compiled).clone())
+}
+
 
 fn list_source_files(roots: &[PathBuf], extension: &str) -> Vec<PathBuf> {
     let mut seen = HashSet::new();
@@ -376,14 +392,15 @@ fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>, java_te
 
     let mut shadow = 0.5;
     if !model.is_empty() {
-        if let Some(found) = Regex::new(r",\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*\)").unwrap()
-            .find(&text)
+        if let Some(found) = cached_regex(r",\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*\)")
+            .expect("fixed renderer shadow regex").find(text)
         {
             let raw = found.as_str().trim_matches(|ch: char| ch == ',' || ch.is_whitespace() || ch == ')');
             shadow = raw.trim_end_matches(|ch: char| matches!(ch, 'f'|'F'|'d'|'D')).parse().unwrap_or(0.5);
         }
     }
-    let scale_regex = Regex::new(r"(?:GlStateManager\.[A-Za-z0-9_$]+|glScalef|scale)\s*\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?").unwrap();
+    let scale_regex = cached_regex(r"(?:GlStateManager\.[A-Za-z0-9_$]+|glScalef|scale)\s*\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?\s*,\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))[fFdD]?")
+        .expect("fixed renderer scale regex");
     let visual_scale = scale_regex.captures(&text).and_then(|captures| captures.get(1))
         .and_then(|value| value.as_str().parse::<f64>().ok()).unwrap_or(1.0);
     (model, args, shadow, visual_scale, source_texture_references(&text))
@@ -429,8 +446,10 @@ fn parse_registration_call(
     };
 
     let factory = args[1].trim();
-    let factory_new = Regex::new(r"(?s)(?:->\s*new\s+|new\s+)([A-Za-z_$][A-Za-z0-9_$.]*)").unwrap();
-    let method_reference = Regex::new(r"([A-Za-z_$][A-Za-z0-9_$.]*)\s*::\s*new").unwrap();
+    let factory_new = cached_regex(r"(?s)(?:->\s*new\s+|new\s+)([A-Za-z_$][A-Za-z0-9_$.]*)")
+        .expect("fixed renderer factory regex");
+    let method_reference = cached_regex(r"([A-Za-z_$][A-Za-z0-9_$.]*)\s*::\s*new")
+        .expect("fixed renderer constructor regex");
     let renderer = factory_new.captures(factory)
         .map(|found| simple_name(&found[1]).to_owned())
         .or_else(|| method_reference.captures(factory).map(|found| simple_name(&found[1]).to_owned()))?;
@@ -441,7 +460,8 @@ fn parse_registration_call(
     let inline_model = referenced_model(factory);
     let (model_class, model_args) = inline_model.unwrap_or((model_class, model_args));
 
-    let numeric = Regex::new(r"(?i)([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)[fFdD]?").unwrap();
+    let numeric = cached_regex(r"(?i)([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)[fFdD]?")
+        .expect("fixed registration numeric regex");
     let numeric_args: Vec<f64> = args.iter().flat_map(|arg| numeric.find_iter(arg))
         .filter_map(|found| found.as_str().trim_end_matches(|ch: char| matches!(ch, 'f'|'F'|'d'|'D')).parse().ok())
         .collect();
@@ -475,7 +495,7 @@ fn source_attribute_number(source: &str, attribute_names: &[&str]) -> Option<f64
     let number = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)[fFdD]?";
 
     // AttributeSupplier.Builder.add(Attributes.MAX_HEALTH, 80.0D)
-    let builder = Regex::new(&format!(
+    let builder = cached_regex(&format!(
         r"(?is)\b(?:add|put)\s*\(\s*(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b\s*,\s*{number}"
     )).ok()?;
     if let Some(value) = builder.captures(source).and_then(|capture| capture.get(1)) {
@@ -485,7 +505,7 @@ fn source_attribute_number(source: &str, attribute_names: &[&str]) -> Option<f64
     }
 
     // getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(120.0D)
-    let setter = Regex::new(&format!(
+    let setter = cached_regex(&format!(
         r"(?is)(?:SharedMonsterAttributes|Attributes|Attribute)\s*\.\s*(?:{names})\b.{{0,240}}?(?:setBaseValue|setValue|set)\s*\(\s*{number}"
     )).ok()?;
     setter.captures(source).and_then(|capture| capture.get(1))
@@ -493,7 +513,7 @@ fn source_attribute_number(source: &str, attribute_names: &[&str]) -> Option<f64
 }
 
 fn source_numeric_value(source: &str, pattern: &str) -> Option<f64> {
-    Regex::new(pattern).ok()?.captures(source)
+    cached_regex(pattern).ok()?.captures(source)
         .and_then(|capture| capture.get(1))
         .and_then(|value| value.as_str().trim_end_matches(|ch: char| matches!(ch, 'f'|'F'|'d'|'D')).parse::<f64>().ok())
 }
@@ -504,7 +524,8 @@ fn parse_entity_source_metadata(path: &Path, registry: Option<&str>) -> Result<E
 }
 
 fn parse_entity_source_metadata_from_text(text: &str, path: &Path, registry: Option<&str>) -> Result<EntityMetadata> {
-    let class_re = Regex::new(r"\bclass\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([A-Za-z_$][\w$.]*))?").unwrap();
+    let class_re = cached_regex(r"\bclass\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([A-Za-z_$][\w$.]*))?")
+        .expect("fixed entity class regex");
     let capture = class_re.captures(&text);
     let class_name = capture.as_ref().map(|v| simple_name(&v[1]).to_owned())
         .unwrap_or_else(|| path.file_stem().and_then(|v| v.to_str()).unwrap_or("").to_owned());
@@ -539,7 +560,7 @@ fn parse_entity_source_metadata_from_text(text: &str, path: &Path, registry: Opt
         (r"\b(?:armor|setArmor)\s*(?:=|\()\s*([-+]?\d+(?:\.\d*)?[fFdD]?)", 5usize),
     ];
     for (pattern, field) in numbers {
-        let regex = Regex::new(pattern).unwrap();
+        let regex = cached_regex(pattern).expect("fixed entity numeric regex");
         if let Some(found) = regex.captures(&text) {
             let values: Vec<f64> = found.iter().skip(1).flatten()
                 .filter_map(|value| value.as_str().trim_end_matches(|ch: char| matches!(ch,'f'|'F'|'d'|'D')).parse().ok()).collect();
