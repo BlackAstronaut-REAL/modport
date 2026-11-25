@@ -268,6 +268,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
                 icon_path,
                 model_source,
                 resource_model_source,
+                additional_resource_model_sources: Vec::new(),
                 texture_paths,
                 render_shape: None,
                 lore,
@@ -317,7 +318,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             icon_path,
             model_source: legacy_model_source,
             resource_model_source,
-            additional_resource_model_sources: Vec::new(),
+            additional_resource_model_sources,
             texture_paths,
             render_shape: Some(render_shape),
             lore,
@@ -361,6 +362,7 @@ pub fn scan_mod(root: &Path) -> Result<BrowserIndex> {
             } else {
                 find_block_model_json(&all_files, &registry).0
             },
+            additional_resource_model_sources: Vec::new(),
             texture_paths: Vec::new(),
             render_shape: if category == "Blocks" { Some("orphan texture".to_owned()) } else { None },
             lore,
