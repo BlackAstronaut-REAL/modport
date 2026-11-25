@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn target_dictionary_has_broad_cross_domain_coverage() {
         let entries = target_api_dictionary();
-        assert!(entries.len() >= 240, "target API reference too small: {}", entries.len());
+        assert!(entries.len() >= 270, "target API reference too small: {}", entries.len());
         for category in [
             "item_interaction", "block_shape", "entity_ai", "world", "block_entity",
             "inventory", "fluids", "networking", "menus", "worldgen",
