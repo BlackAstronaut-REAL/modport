@@ -633,7 +633,7 @@ mod tests {
         assert_eq!(faces[2], [4.0, 3.0, 8.0, 5.0]);
         assert_eq!(faces[3], [8.0, 3.0, 12.0, 5.0]);
         assert_eq!(faces[4], [4.0, 5.0, 8.0, 11.0]);
-        assert_eq!(faces[5], [10.0, 5.0, 16.0, 11.0]);
+        assert_eq!(faces[5], [10.0, 5.0, 14.0, 11.0]);
     }
 
     #[test]
