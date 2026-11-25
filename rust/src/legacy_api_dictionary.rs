@@ -1307,9 +1307,10 @@ mod tests {
     #[test]
     fn dictionary_has_broad_versioned_coverage() {
         let all = legacy_api_dictionary();
-        assert!(all.len() >= 350, "expected broad API coverage, got {}", all.len());
-        for version in ["1.7.10", "1.8.9", "1.12.2"] {
-            assert!(legacy_api_dictionary_for_version(version).len() >= 300, "coverage too small for {version}");
+        assert!(all.len() >= 650, "expected broad API coverage, got {}", all.len());
+        for (version, minimum) in [("1.7.10", 500), ("1.8.9", 610), ("1.12.2", 630)] {
+            assert!(legacy_api_dictionary_for_version(version).len() >= minimum,
+                "coverage too small for {version}: {}", legacy_api_dictionary_for_version(version).len());
         }
         assert!(legacy_api_dictionary_for_version("1.20.1").is_empty());
     }
