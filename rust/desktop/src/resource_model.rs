@@ -1362,6 +1362,26 @@ mod tests {
     }
 
     #[test]
+    fn resource_model_up_and_down_uvs_keep_their_named_face_indices() {
+        let element = serde_json::json!({
+            "faces": {
+                "up": {"uv": [1, 2, 3, 4], "texture": "#top"},
+                "down": {"uv": [5, 6, 7, 8], "texture": "#bottom"}
+            }
+        });
+        let result = face_uvs(
+            &element,
+            &Map::new(),
+            &[],
+            "demo",
+            &[],
+            [16, 16],
+        );
+        assert_eq!(result[2], [1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(result[3], [5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
     fn static_texture_uv_dimensions_keep_the_full_image_size() {
         let temp = tempfile::tempdir().unwrap();
         let texture = temp.path().join("static.png");
@@ -1393,7 +1413,7 @@ mod tests {
         assert_eq!(scene.nodes.len(), 1);
         assert_eq!(scene.nodes[0].cubes.len(), 3);
         assert_eq!(scene.nodes[0].cubes[0].face_uvs, Some([[0.0, 0.0, 1.0, 1.0]; 6]));
-        assert_eq!(scene.nodes[0].cubes[0].face_visibility, Some([false, true, false, true, true, true]));
+        assert_eq!(scene.nodes[0].cubes[0].face_visibility, Some([false, true, true, false, true, true]));
     }
 
 }
