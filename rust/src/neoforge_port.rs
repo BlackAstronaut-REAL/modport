@@ -281,7 +281,7 @@ pub fn port_to_neoforge(
         &item_records,
         &resources_root,
         &target_mod_id,
-    );
+    )?;
     let native_entities = collect_native_entities(&graph.entities);
     let generated_java_files = write_native_registries(
         output_root,
@@ -565,9 +565,18 @@ fn collect_items(
     armor_sources: &[ArmorSetSource],
     warnings: &mut Vec<String>,
 ) -> Vec<ItemRecord> {
+    let armor_classes: BTreeSet<String> = armor_sources.iter()
+        .flat_map(|armor| armor.fields.values())
+        .map(|class| compact(class))
+        .collect();
     let stack_regex = Regex::new(r"(?i)(?:setMaxStackSize|stacksTo)\s*\(\s*(\d+)").expect("static regex");
     let mut items = Vec::new();
     for source in equipment {
+        // Armor is handled by the dedicated ArmorMaterial/ArmorItem path below;
+        // do not accidentally register the same piece as a plain Item too.
+        if armor_classes.contains(&compact(&source.class_name)) {
+            continue;
+        }
         let stack_size = stack_regex.captures(&source.source_text).and_then(|capture| capture.get(1))
             .and_then(|value| value.as_str().parse::<u32>().ok()).unwrap_or(64).clamp(1, 64);
         let mut record_warnings = Vec::new();
@@ -585,27 +594,6 @@ fn collect_items(
             warnings: record_warnings,
         });
     }
-
-    // Keep armor registry IDs visible and loadable as ordinary placeholder
-    // items until the 1.21.1 ArmorMaterial and ArmorItem adapter is added.
-    for armor in armor_sources {
-        for (piece, class) in &armor.fields {
-            let Some(registry) = armor.registered_piece_ids.get(class) else { continue };
-            let id = normalized_id(registry);
-            if id.is_empty() { continue; }
-            items.push(ItemRecord {
-                id,
-                class_name: class.clone(),
-                source_path: armor.source_paths.first().cloned().unwrap_or_default(),
-                source_text: armor.source_text.clone(),
-                stack_size: 1,
-                kind: format!("armor_{piece}_placeholder"),
-                warnings: vec![
-                    "Registered armor item preserved as a basic Item placeholder; it is not wearable until native ArmorMaterial/ArmorItem generation is implemented.".to_owned()
-                ],
-            });
-        }
-    }
     for item in &items {
         if item.id.is_empty() {
             warnings.push(format!("Skipped {} because its registry ID was empty.", item.class_name));
@@ -614,6 +602,210 @@ fn collect_items(
     items.retain(|item| !item.id.is_empty());
     items
 }
+
+fn collect_native_armors(
+    sources: &[ArmorSetSource],
+    stats_index: &BTreeMap<String, BTreeMap<String, f64>>,
+    existing_items: &[ItemRecord],
+    resources_root: &Path,
+    mod_id: &str,
+) -> Result<Vec<ArmorSetRecord>> {
+    let existing_ids: BTreeSet<String> = existing_items.iter().map(|item| item.id.clone()).collect();
+    let mut seen_materials = BTreeSet::new();
+    let mut seen_piece_ids = existing_ids;
+    let mut output = Vec::new();
+
+    for source in sources {
+        let fallback_material = format!("{}_armor", snake_id(&source.prefix));
+        let candidate_material = normalized_id(&source.registry_name);
+        let material_id = if candidate_material.is_empty() {
+            fallback_material
+        } else {
+            candidate_material
+        };
+        if !seen_materials.insert(material_id.clone()) {
+            continue;
+        }
+
+        let mut candidates = vec![
+            compact(&source.prefix),
+            compact(material_id.trim_end_matches("_armor")),
+            compact(&source.registry_name),
+        ];
+        candidates.extend(source.fields.values().map(|field| compact(field)));
+        candidates.sort();
+        candidates.dedup();
+
+        let selected_stats = candidates.iter()
+            .find_map(|key| stats_index.get(key))
+            .cloned()
+            .unwrap_or_default();
+
+        let durability_multiplier = selected_stats.get("durability")
+            .copied().unwrap_or(15.0).round().clamp(1.0, 1000.0) as u32;
+        let enchantability = selected_stats.get("enchantability")
+            .copied().unwrap_or(10.0).round().clamp(1.0, 100.0) as u32;
+
+        let mut defense = BTreeMap::new();
+        for (key, default) in [
+            ("helmet", 2.0),
+            ("body", 5.0),
+            ("leggings", 6.0),
+            ("boots", 2.0),
+        ] {
+            defense.insert(
+                key.to_owned(),
+                selected_stats.get(key).copied().unwrap_or(default).round().clamp(0.0, 30.0) as u32
+            );
+        }
+
+        let toughness = selected_stats.get("toughness").copied().unwrap_or(0.0).clamp(0.0, 20.0) as f32;
+        let knockback_resistance = selected_stats.get("knockback_resistance")
+            .copied().unwrap_or(0.0).clamp(0.0, 1.0) as f32;
+
+        let mut warnings = Vec::new();
+        if selected_stats.is_empty() {
+            warnings.push("Armor defense, durability and enchantability were not recovered; conservative material defaults were used.".to_owned());
+        }
+        warnings.push("Unknown repair items and custom armor effects are not transferred yet; generated armor currently repairs with iron ingots.".to_owned());
+
+        let asset_base = snake_id(&source.prefix);
+        let mut texture_bases = vec![asset_base.clone(), material_id.trim_end_matches("_armor").to_owned()];
+        texture_bases.extend(source.registered_piece_ids.values().map(|value| {
+            let id = normalized_id(value);
+            ["_helmet", "_helm", "_head", "_chestplate", "_chest", "_body", "_leggings", "_boots"]
+                .iter().find_map(|suffix| id.strip_suffix(suffix).map(str::to_owned))
+                .unwrap_or(id)
+        }));
+        texture_bases.sort();
+        texture_bases.dedup();
+
+        let texture_root = resources_root.join("assets").join(mod_id);
+        let layer_one = find_armor_layer(&texture_root, &texture_bases, 1);
+        let layer_two = find_armor_layer(&texture_root, &texture_bases, 2);
+        let texture_asset = asset_base;
+
+        let canonical_armor_dir = texture_root.join("textures/models/armor");
+        fs::create_dir_all(&canonical_armor_dir)?;
+        for (layer, source_path) in [(1usize, layer_one.as_ref()), (2usize, layer_two.as_ref())] {
+            if let Some(source_path) = source_path {
+                let destination = canonical_armor_dir.join(format!("{texture_asset}_layer_{layer}.png"));
+                if source_path != &destination {
+                    fs::copy(source_path, &destination)
+                        .with_context(|| format!("normalizing armor texture {} to {}", source_path.display(), destination.display()))?;
+                }
+            } else {
+                warnings.push(format!("Armor texture layer {layer} for '{}' was not found; the game will use a missing-texture fallback for that layer.", source.prefix));
+            }
+        }
+
+        let mut pieces = Vec::new();
+        for (part, class) in &source.fields {
+            let suffix = match part.as_str() {
+                "helmet" => "helmet",
+                "body" => "chestplate",
+                "leggings" => "leggings",
+                "boots" => "boots",
+                _ => continue,
+            };
+            let raw_id = source.registered_piece_ids.get(class)
+                .map(|value| normalized_id(value))
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| format!("{}_{}", snake_id(&source.prefix), suffix));
+            if !seen_piece_ids.insert(raw_id.clone()) {
+                warnings.push(format!(
+                    "Armor piece registry ID '{}' conflicts with an already registered item or armor piece; skipped that armor slot.",
+                    raw_id
+                ));
+                continue;
+            }
+            pieces.push(ArmorPieceRecord {
+                id: raw_id,
+                class_name: class.clone(),
+                part: part.clone(),
+                durability: ArmorItemTypeDurability::for_part(part, durability_multiplier),
+            });
+        }
+
+        if pieces.is_empty() {
+            continue;
+        }
+        pieces.sort_by(|a, b| a.part.cmp(&b.part).then(a.id.cmp(&b.id)));
+        output.push(ArmorSetRecord {
+            source_prefix: source.prefix.clone(),
+            material_id,
+            texture_asset,
+            durability_multiplier,
+            enchantability,
+            defense,
+            toughness,
+            knockback_resistance,
+            pieces,
+            warnings,
+        });
+    }
+
+    output.sort_by(|a, b| a.material_id.cmp(&b.material_id));
+    Ok(output)
+}
+
+struct ArmorItemTypeDurability;
+impl ArmorItemTypeDurability {
+    fn for_part(part: &str, multiplier: u32) -> u32 {
+        let base = match part {
+            "helmet" => 11,
+            "body" => 16,
+            "leggings" => 15,
+            "boots" => 13,
+            _ => 1,
+        };
+        multiplier.saturating_mul(base).clamp(1, 100_000)
+    }
+}
+
+fn snake_id(value: &str) -> String {
+    let mut out = String::new();
+    let chars: Vec<char> = value.chars().collect();
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if ch.is_ascii_uppercase() && index > 0 {
+            let previous = chars[index - 1];
+            let next_lower = chars.get(index + 1).is_some_and(|next| next.is_ascii_lowercase());
+            if previous.is_ascii_lowercase() || previous.is_ascii_digit()
+                || (previous.is_ascii_uppercase() && next_lower) {
+                out.push('_');
+            }
+        }
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    let out = out.trim_matches('_').to_owned();
+    if out.is_empty() { "converted_armor".to_owned() } else { out }
+}
+
+fn find_armor_layer(namespace_root: &Path, bases: &[String], layer: usize) -> Option<PathBuf> {
+    if !namespace_root.is_dir() { return None; }
+    let mut expected = BTreeSet::new();
+    for base in bases {
+        let base = snake_id(base);
+        expected.insert(format!("{base}_layer_{layer}"));
+        expected.insert(format!("{base}__layer_{layer}"));
+        expected.insert(format!("{base}_{layer}"));
+        expected.insert(format!("{base}layer{layer}"));
+    }
+    let mut paths: Vec<PathBuf> = WalkDir::new(namespace_root).follow_links(false).into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("png")))
+        .filter(|entry| entry.path().to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/armor/"))
+        .filter(|entry| expected.contains(&entry.path().file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase()))
+        .map(|entry| entry.into_path()).collect();
+    paths.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    paths.into_iter().next()
+}
+
 
 fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<BlockRecord> {
     let mut blocks = Vec::new();
