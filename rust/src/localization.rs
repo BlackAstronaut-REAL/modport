@@ -224,21 +224,19 @@ impl CreativeTabCatalog {
                 let Ok(bytes) = fs::read(path) else { continue };
                 let source = String::from_utf8_lossy(&bytes);
                 let Some(class_name) = path.file_stem().and_then(|value| value.to_str()) else { continue };
+                // A source file may contain several package-private classes;
+                // inspect each class body separately to avoid leaking one class's
+                // creative tab into its siblings.
                 for capture in class_header.captures_iter(&source) {
                     let child = capture.get(1).map(|value| value.as_str()).unwrap_or(class_name);
                     let parent = capture.get(2).map(|value| value.as_str()).unwrap_or("");
                     catalog.class_parents.insert(child.to_owned(), simple_java_name(parent));
-                }
-                if let Some(tab) = direct_creative_tab(&source) {
-                    catalog.class_tabs.insert(class_name.to_owned(), tab);
-                }
-                // A source file may contain several package-private classes.
-                for capture in class_header.captures_iter(&source) {
-                    let child = capture.get(1).map(|value| value.as_str()).unwrap_or("");
-                    let body_tab = direct_creative_tab(&source);
-                    if !child.is_empty() {
-                        if let Some(tab) = body_tab {
-                            catalog.class_tabs.entry(child.to_owned()).or_insert(tab);
+                    let header_end = capture.get(0).map(|value| value.end()).unwrap_or(0);
+                    if let Some(open_index) = source[header_end..].find('{').map(|offset| header_end + offset) {
+                        if let Ok((body, _)) = crate::source::java::extract_balanced(&source, open_index, '{', '}') {
+                            if let Some(tab) = direct_creative_tab(&body) {
+                                catalog.class_tabs.entry(child.to_owned()).or_insert(tab);
+                            }
                         }
                     }
                 }
@@ -281,7 +279,150 @@ impl CreativeTabCatalog {
 }
 
 fn simple_java_name(value: &str) -> String {
-    value.rsplit('.').next().unwrap_or(value).trim().to_owned()
+    value.rsplit('.').next().unwrap_or(value).split('
+fn direct_creative_tab(source: &str) -> Option<String> {
+    let pattern = Regex::new(
+        r"\b(?:setCreativeTab|func_77637_a|func_149647_a)\s*\(\s*(?:CreativeTabs|CreativeModeTabs)\.([A-Za-z_$][\w$]*)"
+    ).ok()?;
+    let field = pattern.captures(source)?.get(1)?.as_str();
+    Some(match field {
+        "field_78030_b" | "tabBlock" | "BUILDING_BLOCKS" => "BUILDING_BLOCKS",
+        "field_78031_c" | "tabDecorations" | "NATURAL_BLOCKS" => "DECORATIONS",
+        "field_78028_d" | "tabRedstone" | "REDSTONE_BLOCKS" => "REDSTONE",
+        "field_78029_e" | "tabTransport" | "FUNCTIONAL_BLOCKS" => "TRANSPORTATION",
+        "field_78026_f" | "field_78027_g" | "field_78036_m" | "tabMisc" | "SPAWN_EGGS" => "MISC",
+        "field_78039_h" | "tabFood" | "FOOD_AND_DRINKS" => "FOOD",
+        "field_78040_i" | "tabTools" | "TOOLS_AND_UTILITIES" => "TOOLS",
+        "field_78037_j" | "tabCombat" | "COMBAT" => "COMBAT",
+        "field_78038_k" | "tabBrewing" => "BREWING",
+        "field_78035_l" | "tabMaterials" | "INGREDIENTS" => "MATERIALS",
+        "OP_BLOCKS" => "OP_BLOCKS",
+        _ => return None,
+    }.to_owned())
+}
+
+pub fn compact_registry(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase).collect()
+}
+
+fn decode_java_string(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' { output.push(ch); continue; }
+        let Some(escaped) = chars.next() else { output.push('\\'); break };
+        match escaped {
+            'n' => output.push('\n'), 'r' => output.push('\r'), 't' => output.push('\t'),
+            'b' => output.push('\u{0008}'), 'f' => output.push('\u{000c}'),
+            '\\' => output.push('\\'), '\'' => output.push('\''), '"' => output.push('"'),
+            'u' => {
+                while chars.peek() == Some(&'u') { chars.next(); }
+                let digits: String = chars.by_ref().take(4).collect();
+                if digits.len() == 4 {
+                    if let Ok(codepoint) = u32::from_str_radix(&digits, 16) {
+                        if let Some(decoded) = char::from_u32(codepoint) { output.push(decoded); }
+                    }
+                }
+            }
+            digit @ '0'..='7' => {
+                let mut octal = String::from(digit);
+                for _ in 0..2 {
+                    if chars.peek().is_some_and(|next| matches!(next, '0'..='7')) {
+                        octal.push(chars.next().unwrap_or('0'));
+                    } else { break; }
+                }
+                if let Ok(codepoint) = u32::from_str_radix(&octal, 8) {
+                    if let Some(decoded) = char::from_u32(codepoint) { output.push(decoded); }
+                }
+            }
+            other => output.push(other),
+        }
+    }
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn reads_legacy_lang_and_modern_json_names_and_descriptions() {
+        let temp = tempdir().unwrap();
+        let lang = temp.path().join("assets/demo/lang/en_US.lang");
+        let json_path = temp.path().join("assets/demo/lang/en_us.json");
+        fs::create_dir_all(lang.parent().unwrap()).unwrap();
+        fs::write(&lang, concat!(
+            "# english names\n",
+            "item.ruby_ingot.name=Ruby Ingot\n",
+            "item.ruby_ingot.desc=Shines \\u0026 glows\n"
+        )).unwrap();
+        fs::write(&json_path, r#"{
+            "block.ruby_ore": "Ruby Ore",
+            "block.ruby_ore.tooltip": "Mined deep underground"
+        }"#).unwrap();
+        let catalog = LocalizationCatalog::load(&[temp.path().to_path_buf()], &BTreeMap::new());
+        assert_eq!(catalog.translated_name("ruby_ingot", "Ruby"), "Ruby Ingot");
+        assert_eq!(catalog.descriptions("ruby_ingot"), vec![r"Shines \u0026 glows"]);
+        assert_eq!(catalog.translated_name("ruby_ore", "Ore"), "Ruby Ore");
+        assert_eq!(catalog.descriptions("ruby_ore"), vec!["Mined deep underground"]);
+    }
+
+    #[test]
+    fn resolves_vanilla_creative_tabs_through_java_inheritance() {
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("BaseBlock.java"), r#"
+            class BaseBlock extends Block {
+                BaseBlock() { setCreativeTab(CreativeTabs.tabBlock); }
+            }
+        "#).unwrap();
+        fs::write(temp.path().join("RubyBlock.java"), r#"
+            class RubyBlock extends BaseBlock { }
+        "#).unwrap();
+        fs::write(temp.path().join("RubySword.java"), r#"
+            class RubySword extends Item {
+                RubySword() { this.setCreativeTab(CreativeModeTabs.TOOLS_AND_UTILITIES); }
+            }
+        "#).unwrap();
+
+        let tabs = CreativeTabCatalog::load(&[temp.path().to_path_buf()]);
+        assert_eq!(tabs.resolve("RubyBlock", ""), Some("BUILDING_BLOCKS".to_owned()));
+        assert_eq!(tabs.resolve("RubySword", ""), Some("TOOLS".to_owned()));
+        assert_eq!(
+            tabs.resolve("DirectItem", "setCreativeTab(CreativeTabs.tabCombat);"),
+            Some("COMBAT".to_owned())
+        );
+    }
+
+    #[test]
+    fn reads_java_language_registry_calls_and_formatted_tooltips() {
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("Names.java"), r#"
+            class Names {
+                void init() {
+                    LanguageRegistry.instance().addNameForObject(RUBY, "en_US", "Ruby \u0026 Gold");
+                    LanguageRegistry.instance().addStringLocalization("item.java_ruby.name", "en_US", "Java Ruby");
+                }
+            }
+        "#).unwrap();
+        let fields = BTreeMap::from([(
+            "RUBY".to_owned(), BTreeSet::from(["ruby_gem".to_owned()]),
+        )]);
+        let catalog = LocalizationCatalog::load(&[temp.path().to_path_buf()], &fields);
+        assert_eq!(catalog.translated_name("ruby_gem", "Gem"), "Ruby & Gold");
+        assert_eq!(catalog.translated_name("java_ruby", "Fallback"), "Java Ruby");
+        assert_eq!(
+            LocalizationCatalog::extract_tooltips("tooltip.add(TextFormatting.GOLD + \"A golden blade\");"),
+            vec!["§6A golden blade"]
+        );
+        assert_eq!(
+            LocalizationCatalog::extract_tooltips("par3List.add(EnumChatFormatting.ITALIC + \"Very sharp\");"),
+            vec!["§oVery sharp"]
+        );
+    }
+}
+).next().unwrap_or(value).trim().to_owned()
 }
 
 fn direct_creative_tab(source: &str) -> Option<String> {
