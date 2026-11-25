@@ -306,14 +306,17 @@ mod tests {
         fs::write(root.join("Items.java"), r#"
             public class Items {
                 public static final Item RUBY_DUST = new RubyDust();
+                public static final Item RUBY_SWORD = new RubySword();
                 public static void register() {
                     GameRegistry.registerItem(RUBY_DUST, "ruby_dust");
+                    GameRegistry.registerItem(RUBY_SWORD, "ruby_sword");
                 }
                 public void recipes() {
-                    addShapelessRecipe(cpId("ruby_dust_from_redstone"), 0, RUBY_DUST, Items.REDSTONE);
+                    addShapelessRecipe(cpId("ruby_sword_from_dust"), 0, RUBY_SWORD, RUBY_DUST, Items.REDSTONE);
                 }
             }
             public class RubyDust extends Item {}
+            public class RubySword extends Item {}
         "#).unwrap();
 
         let report = export_native_recipes(
@@ -326,6 +329,6 @@ mod tests {
         assert_eq!(output["type"], "minecraft:crafting_shapeless");
         assert_eq!(output["ingredients"][0]["item"], "converted:ruby_dust");
         assert_eq!(output["ingredients"][1]["item"], "minecraft:redstone");
-        assert_eq!(output["result"]["id"], "converted:ruby_dust");
+        assert_eq!(output["result"]["id"], "converted:ruby_sword");
     }
 }
