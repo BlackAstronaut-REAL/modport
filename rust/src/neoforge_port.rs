@@ -508,7 +508,7 @@ pub fn port_to_neoforge(
             (false, false, true, _) => "native durable Item subclass with formatted legacy tooltip lore".to_owned(),
             (false, false, false, _) => "native Item subclass with formatted legacy tooltip lore".to_owned(),
             (true, false, true, _) => "native durable Item".to_owned(),
-            (true, false, false, true) => "native Item with recovered rarity/fire/remainder properties".to_owned(),
+            (true, false, false, true) => "native Item with recovered rarity/fire/remainder/no-repair properties".to_owned(),
             (true, false, false, false) => "vanilla Item registration".to_owned(),
         },
         warnings: item.warnings.clone(),
@@ -721,6 +721,7 @@ pub fn port_to_neoforge(
             "resource_files": resource_files_copied
         },
         "recognized_but_pending": {
+            "legacy_item_methods": report.detected_item_methods.len(),
             "custom_entity_ai_and_models": report.entities.len(),
             "block_entity_storage_ticking_menus_and_logic": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
