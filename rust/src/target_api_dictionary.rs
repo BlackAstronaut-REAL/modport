@@ -337,6 +337,14 @@ pub fn find_target_api_methods(owner: &str, method: &str) -> Vec<TargetApiMethod
         .collect()
 }
 
+/// Return target contracts that explicitly list a legacy owner/method alias.
+pub fn find_target_api_methods_by_legacy_alias(alias: &str) -> Vec<TargetApiMethod> {
+    DEFINITIONS.iter()
+        .filter(|entry| entry.aliases.split(';').any(|value| value.trim() == alias))
+        .map(to_public)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
