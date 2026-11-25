@@ -250,7 +250,7 @@ fn compiled_class_is_entity(
     false
 }
 
-fn registry_names(java_paths: &[PathBuf]) -> BTreeMap<String, String> {
+fn registry_names(java_paths: &[PathBuf], java_texts: &HashMap<PathBuf, String>) -> BTreeMap<String, String> {
     let mut result = BTreeMap::new();
     let modern = Regex::new(
         r#"(?s)RegistryObject\s*<\s*EntityType\s*<\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*>\s*>\s*[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*[^;]{0,1200}?\.register\s*\(\s*"([^"]+)""#
@@ -262,8 +262,8 @@ fn registry_names(java_paths: &[PathBuf]) -> BTreeMap<String, String> {
         r#"(?i)\b[A-Za-z_$][A-Za-z0-9_$]*(?:Entry|Entity|Projectile|Mob|Eggless|Register)[A-Za-z0-9_$]*\s*\(\s*"([^"]+)"\s*,\s*([A-Za-z_$][A-Za-z0-9_$.]*)\.class"#
     ).unwrap();
     for path in java_paths {
-        let Ok(text) = read_java(path) else { continue; };
-        for found in modern.captures_iter(&text) {
+        let Some(text) = java_texts.get(path) else { continue; };
+        for found in modern.captures_iter(text) {
             let entity = simple_name(&found[1]).to_owned();
             result.entry(entity).or_insert_with(|| found[2].to_owned());
         }
@@ -369,9 +369,9 @@ fn source_texture_references(source: &str) -> Vec<String> {
     references
 }
 
-fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>) -> (String, Vec<Value>, f64, f64, Vec<String>) {
+fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>, java_texts: &HashMap<PathBuf, String>) -> (String, Vec<Value>, f64, f64, Vec<String>) {
     let Some(path) = renderer_sources(renderer, index) else { return (String::new(), Vec::new(), 0.5, 1.0, Vec::new()); };
-    let Ok(text) = read_java(&path) else { return (String::new(), Vec::new(), 0.5, 1.0, Vec::new()); };
+    let Some(text) = java_texts.get(&path) else { return (String::new(), Vec::new(), 0.5, 1.0, Vec::new()); };
     let (model, args) = referenced_model(&text).unwrap_or_default();
 
     let mut shadow = 0.5;
@@ -389,14 +389,14 @@ fn renderer_info(renderer: &str, index: &BTreeMap<String, Vec<PathBuf>>) -> (Str
     (model, args, shadow, visual_scale, source_texture_references(&text))
 }
 
-fn registry_field_entities(java_paths: &[PathBuf]) -> HashMap<String, String> {
+fn registry_field_entities(java_paths: &[PathBuf], java_texts: &HashMap<PathBuf, String>) -> HashMap<String, String> {
     let patterns = [
         Regex::new(r"(?s)RegistryObject\s*<\s*EntityType\s*<\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*>\s*>\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*[^;]{0,1200}?\.register\s*\(").unwrap(),
         Regex::new(r"(?:static\s+final\s+)?EntityType\s*<\s*([A-Za-z_$][A-Za-z0-9_$.]*)\s*>\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*=").unwrap()
     ];
     let mut result = HashMap::new();
     for path in java_paths {
-        let Ok(text) = read_java(path) else { continue; };
+        let Some(text) = java_texts.get(path) else { continue; };
         for pattern in &patterns {
             for captures in pattern.captures_iter(&text) {
                 result.insert(captures[2].to_owned(), simple_name(&captures[1]).to_owned());
@@ -413,6 +413,7 @@ fn parse_registration_call(
     offset: usize,
     field_entities: &HashMap<String, String>,
     index: &BTreeMap<String, Vec<PathBuf>>,
+    java_texts: &HashMap<PathBuf, String>,
 ) -> Option<RendererRegistration> {
     if !matches!(name, "registerEntityRenderingHandler" | "registerRender" | "registerRenderer" | "registerEntityRenderer") { return None; }
     let args = split_top_level(raw_args, ',');
@@ -433,7 +434,7 @@ fn parse_registration_call(
     let renderer = factory_new.captures(factory)
         .map(|found| simple_name(&found[1]).to_owned())
         .or_else(|| method_reference.captures(factory).map(|found| simple_name(&found[1]).to_owned()))?;
-    let (model_class, model_args, mut shadow, mut scale, mut textures) = renderer_info(&renderer, index);
+    let (model_class, model_args, mut shadow, mut scale, mut textures) = renderer_info(&renderer, index, java_texts);
 
     // If the renderer factory explicitly constructs a model, it is a stronger
     // signal than a potentially ambiguous same-name source file.
@@ -499,6 +500,10 @@ fn source_numeric_value(source: &str, pattern: &str) -> Option<f64> {
 
 fn parse_entity_source_metadata(path: &Path, registry: Option<&str>) -> Result<EntityMetadata> {
     let text = read_java(path)?;
+    parse_entity_source_metadata_from_text(&text, path, registry)
+}
+
+fn parse_entity_source_metadata_from_text(text: &str, path: &Path, registry: Option<&str>) -> Result<EntityMetadata> {
     let class_re = Regex::new(r"\bclass\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([A-Za-z_$][\w$.]*))?").unwrap();
     let capture = class_re.captures(&text);
     let class_name = capture.as_ref().map(|v| simple_name(&v[1]).to_owned())
@@ -1253,6 +1258,10 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     };
     let mut class_paths = list_source_files(&roots, "class");
     let java_paths = list_source_files(&roots, "java");
+    let loaded_java: Vec<(PathBuf, String)> = java_paths.par_iter()
+        .filter_map(|path| read_java(path).ok().map(|text| (path.clone(), text)))
+        .collect();
+    let java_texts: HashMap<PathBuf, String> = loaded_java.into_iter().collect();
     let compiled_content = crate::compiled_registry::scan_compiled_registrations(&roots)?;
     for info in compiled_content.classes.values() {
         if !class_paths.contains(&info.path) {
@@ -1279,7 +1288,7 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     let index = source_index(&java_paths);
     // Entity registry IDs are separate from the broader item/block registry map.
     let mut entity_registry = compiled_registry_names(&compiled_content);
-    for (entity, name) in registry_names(&java_paths) {
+    for (entity, name) in registry_names(&java_paths, &java_texts) {
         entity_registry.insert(entity, name);
     }
     // The compiled generic registry scanner also sees modern RegistryObject
@@ -1299,24 +1308,32 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
     for (entity, name) in &entity_registry {
         registry.insert(entity.clone(), name.clone());
     }
-    let field_entities = registry_field_entities(&java_paths);
+    let field_entities = registry_field_entities(&java_paths, &java_texts);
     let mut registrations = Vec::new();
     let mut warnings = compiled_content.warnings.clone();
-    for path in &java_paths {
-        let text = match read_java(path) { Ok(text) => text, Err(error) => {
-            // Keep the scan alive when one source file is unreadable.
-            let _ = error;
-            continue;
-        }};
-        let call_pattern = Regex::new(r"\b(registerEntityRenderingHandler|registerRender|registerRenderer|registerEntityRenderer)\s*\(").unwrap();
-        for found in call_pattern.find_iter(&text) {
-            let open = text[found.start()..found.end()].rfind('(').unwrap() + found.start();
-            let Ok((raw_args, _end)) = extract_balanced(&text, open, '(', ')') else { continue; };
-            let name = call_pattern.captures(&text[found.start()..found.end()]).map(|v| v[1].to_owned()).unwrap_or_default();
-            if let Some(registration) = parse_registration_call(&name, &raw_args, path, found.start(), &field_entities, &index) {
-                registrations.push(registration);
+    let call_pattern = Regex::new(r"\b(registerEntityRenderingHandler|registerRender|registerRenderer|registerEntityRenderer)\s*\(").unwrap();
+    let source_registrations: Vec<(PathBuf, Vec<RendererRegistration>)> = java_paths.par_iter()
+        .map(|path| {
+            let mut found_registrations = Vec::new();
+            let Some(text) = java_texts.get(path) else { return (path.clone(), found_registrations); };
+            for found in call_pattern.find_iter(text) {
+                let open = text[found.start()..found.end()].rfind('(').unwrap() + found.start();
+                let Ok((raw_args, _end)) = extract_balanced(text, open, '(', ')') else { continue; };
+                let name = call_pattern.captures(&text[found.start()..found.end()])
+                    .map(|value| value[1].to_owned()).unwrap_or_default();
+                if let Some(registration) = parse_registration_call(
+                    &name, &raw_args, path, found.start(), &field_entities, &index, &java_texts
+                ) {
+                    found_registrations.push(registration);
+                }
             }
-        }
+            (path.clone(), found_registrations)
+        })
+        .collect();
+    let mut source_registrations = source_registrations;
+    source_registrations.sort_by_key(|(path, _)| path.to_string_lossy().to_ascii_lowercase());
+    for (_, mut found) in source_registrations {
+        registrations.append(&mut found);
     }
 
     // Decompiled source is not always available. Recover legacy class-literal
@@ -1388,7 +1405,9 @@ pub fn scan_mod_graph(root: &Path, source_roots: &[PathBuf]) -> Result<ModGraph>
         let source = java_files.get(&entity_name).or_else(|| java_files.get(simple_name(&entity_name)));
         let compiled = class_files.get(&entity_name).or_else(|| class_files.get(simple_name(&entity_name)));
         let metadata = if let Some(path) = source {
-            parse_entity_source_metadata(path, entity_registry_name.map(String::as_str))
+            java_texts.get(path)
+                .map(|text| parse_entity_source_metadata_from_text(text, path, entity_registry_name.map(String::as_str)))
+                .unwrap_or_else(|| parse_entity_source_metadata(path, entity_registry_name.map(String::as_str)))
                 .unwrap_or_else(|_| EntityMetadata {
                     class_name: entity_name.clone(), display_name: class_display_name(&entity_name),
                     registry_name: entity_registry_name.cloned().unwrap_or_else(|| registry_slug(&entity_name)),
