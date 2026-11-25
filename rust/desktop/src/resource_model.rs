@@ -697,6 +697,68 @@ pub fn load_block_model(path: &Path, roots: &[PathBuf]) -> Result<(ViewerScene, 
     load_resource_model(path, roots, true)
 }
 
+/// Compose the models referenced by one blockstate. Multipart states can add
+/// several independent models (for example a fence post plus connected sides),
+/// each with its own texture table. Their geometry and per-face texture indices
+/// are merged into a single renderer-neutral scene.
+pub fn load_block_models(paths: &[PathBuf], roots: &[PathBuf]) -> Result<(ViewerScene, Vec<PathBuf>)> {
+    let Some((first_path, rest)) = paths.split_first() else {
+        bail!("Cannot compose a block preview without any resource models.");
+    };
+    let (mut scene, first_textures) = load_block_model(first_path, roots)?;
+    let mut textures = first_textures;
+    scene.texture_variants = textures.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    scene.texture = textures.first().map(|path| path.to_string_lossy().to_string()).unwrap_or_default();
+
+    for path in rest {
+        let (mut additional, additional_textures) = load_block_model(path, roots)?;
+        let mut texture_remap = Vec::<usize>::with_capacity(additional_textures.len());
+        for texture in &additional_textures {
+            let index = if let Some(index) = textures.iter().position(|existing| existing == texture) {
+                index
+            } else {
+                textures.push(texture.clone());
+                textures.len() - 1
+            };
+            texture_remap.push(index);
+        }
+
+        let node_offset = scene.nodes.len();
+        let prefix = path.file_stem().and_then(|value| value.to_str()).unwrap_or("multipart");
+        for node in &mut additional.nodes {
+            if let Some(parent) = node.parent.as_mut() {
+                *parent += node_offset;
+            }
+            node.name = format!("{prefix}::{}", node.name);
+            for cube in &mut node.cubes {
+                cube.name = format!("{prefix}::{}", cube.name);
+                if let Some(face_indices) = cube.face_texture_indices.as_mut() {
+                    for index in face_indices {
+                        if let Some(mapped) = texture_remap.get(*index) {
+                            *index = *mapped;
+                        } else if let Some(fallback) = texture_remap.first() {
+                            *index = *fallback;
+                        }
+                    }
+                } else if let Some(fallback) = texture_remap.first() {
+                    // A resource model normally specifies a face texture map.
+                    // If a built-in parent falls back to the scene texture,
+                    // pin it to this model's default so sibling models cannot
+                    // accidentally inherit the first multipart texture.
+                    cube.face_texture_indices = Some([*fallback; 6]);
+                }
+            }
+        }
+        scene.nodes.extend(additional.nodes);
+        scene.animations.extend(additional.animations);
+        scene.warnings.extend(additional.warnings);
+    }
+
+    scene.texture_variants = textures.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    scene.texture = textures.first().map(|path| path.to_string_lossy().to_string()).unwrap_or_default();
+    Ok((scene, textures))
+}
+
 /// Build a preview for legacy blocks that use a vanilla render shape but do not
 /// ship modern blockstate/model JSON resources.
 pub fn synthetic_block_preview(
@@ -729,6 +791,42 @@ pub fn synthetic_block_preview(
 mod tests {
     use super::*;
     use image::RgbaImage;
+
+    #[test]
+    fn composes_multipart_block_models_and_remaps_each_face_texture() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let post = root.join("assets/demo/models/block/post.json");
+        let side = root.join("assets/demo/models/block/side.json");
+        let post_texture = root.join("assets/demo/textures/block/post.png");
+        let side_texture = root.join("assets/demo/textures/block/side.png");
+        fs::create_dir_all(post.parent().unwrap()).unwrap();
+        fs::create_dir_all(post_texture.parent().unwrap()).unwrap();
+        image::RgbaImage::new(16, 16).save(&post_texture).unwrap();
+        image::RgbaImage::new(16, 16).save(&side_texture).unwrap();
+
+        fs::write(&post, r##"{
+            "textures":{"all":"demo:block/post"},
+            "elements":[{"from":[6,0,6],"to":[10,16,10],"faces":{"north":{"texture":"#all"}}}]
+        }"##).unwrap();
+        fs::write(&side, r##"{
+            "textures":{"all":"demo:block/side"},
+            "elements":[{"from":[6,6,0],"to":[10,10,16],"faces":{"south":{"texture":"#all"}}}]
+        }"##).unwrap();
+
+        let (scene, textures) = load_block_models(&[post, side], &[root.to_path_buf()]).unwrap();
+        assert_eq!(scene.nodes.len(), 2);
+        assert_eq!(textures.len(), 2);
+        assert_eq!(scene.texture_variants.len(), 2);
+        assert_eq!(
+            scene.nodes[0].cubes[0].face_texture_indices.unwrap()[4],
+            0
+        );
+        assert_eq!(
+            scene.nodes[1].cubes[0].face_texture_indices.unwrap()[5],
+            1
+        );
+    }
 
     #[test]
     fn explicit_cross_crop_elements_are_rendered_as_planes() {
