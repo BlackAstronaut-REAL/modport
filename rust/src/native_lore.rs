@@ -182,7 +182,7 @@ fn flush_segment(output: &mut Vec<String>, segment: &mut String, style: LoreStyl
     if style.strikethrough { modifiers.push("withStrikethrough(true)".to_owned()); }
     if style.obfuscated { modifiers.push("withObfuscated(true)".to_owned()); }
     if !modifiers.is_empty() {
-        expression.push_str(&format!(".withStyle(style -> style.{})", modifiers.join(".style.")));
+        expression.push_str(&format!(".withStyle(style -> style.{})", modifiers.join(".")));
     }
     output.push(expression);
     segment.clear();
