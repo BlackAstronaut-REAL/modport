@@ -714,7 +714,13 @@ impl MojModelBridgeApp {
             ui.allocate_ui_with_layout(
                 egui::vec2(detail_width, height),
                 egui::Layout::top_down(egui::Align::Min),
-                |ui| self.show_detail(context, ui),
+                |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("content-browser-details")
+                        .max_height(height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| self.show_detail(context, ui));
+                },
             );
         });
     }
@@ -723,11 +729,10 @@ impl MojModelBridgeApp {
         ui.heading("Categories");
         ui.label(RichText::new(format!("{} indexed", self.browser.entries.len())).size(10.0).color(MUTED));
         ui.add_space(7.0);
-        egui::ScrollArea::vertical()
-            .id_salt("content-browser-categories")
-            .max_height(ui.available_height().max(48.0))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        // Eight fixed categories fit in the navigation rail; keeping this list
+        // non-scrollable prevents it from capturing wheel input intended for
+        // the neighboring item and detail panes.
+        ui.vertical(|ui| {
             for category in browser::CATEGORIES {
                 let count = self.browser.in_category(category).len();
                 let label = format!("{category}  ({count})");
@@ -736,8 +741,12 @@ impl MojModelBridgeApp {
                     self.item_search.clear();
                     self.selected_entry = None;
                     self.scene = None;
+                    self.sprite_3d_preview = false;
                     self.texture_paths.clear();
+                    self.texture_images.clear();
                     self.preview_image = None;
+                    self.preview_texture = None;
+                    self.selected_error.clear();
                 }
             }
         });
