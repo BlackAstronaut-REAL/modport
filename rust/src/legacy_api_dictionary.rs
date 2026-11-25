@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
-use crate::target_api_dictionary::{find_target_api_methods, target_api_dictionary, TargetApiMethod};
+use crate::target_api_dictionary::{find_target_api_methods, find_target_api_methods_by_legacy_alias, TargetApiMethod};
 
 const V_ALL: &[&str] = &["1.7.10", "1.8.9", "1.12.2"];
 const V_18: &[&str] = &["1.8.9", "1.12.2"];
@@ -932,7 +932,6 @@ fn target_documentation_urls(target: &str) -> Vec<String> {
 
 fn resolve_target_contracts(definition: &Definition) -> Vec<TargetApiMethod> {
     let mut resolved = BTreeMap::<(String, String, String), TargetApiMethod>::new();
-    let known = target_api_dictionary();
     let source_alias = format!("{}#{}", definition.owner, definition.method);
 
     for part in definition.target.split(" / ").flat_map(|value| value.split(';')) {
@@ -946,7 +945,7 @@ fn resolve_target_contracts(definition: &Definition) -> Vec<TargetApiMethod> {
         }
     }
 
-    for entry in known.into_iter().filter(|entry| entry.legacy_aliases.iter().any(|alias| alias == &source_alias)) {
+    for entry in find_target_api_methods_by_legacy_alias(&source_alias) {
         resolved.entry((entry.owner.clone(), entry.method.clone(), entry.signature.clone())).or_insert(entry);
     }
 
