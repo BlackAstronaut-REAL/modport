@@ -633,6 +633,10 @@ mod tests {
             index.registries.get("EntityRedAnt").and_then(|values| values.iter().next()).map(String::as_str),
             Some("red_ant"),
         );
+        assert!(
+            index.parsed_classes.contains_key("com/example/LegacyEntityRegistry"),
+            "the shared index retains the parsed class for downstream stat exporters"
+        );
         let class = index.classes.get("LegacyEntityRegistry").unwrap();
         assert!(class.path.is_file());
         assert_eq!(index.archive_extractions.len(), 1);
