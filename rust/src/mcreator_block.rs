@@ -370,7 +370,7 @@ fn block_sound_type(source_text: &str) -> Option<&'static str> {
         return Some("WOOD");
     }
     let pattern = Regex::new(
-        r"(?:net\\.minecraft\\.world\\.level\\.block\\.)?SoundType\\.([A-Za-z0-9_]+)",
+        r"(?:net\.minecraft\.world\.level\.block\.)?SoundType\.([A-Za-z0-9_]+)",
     ).ok()?;
     let raw = pattern.captures(source_text)?.get(1)?.as_str().to_ascii_uppercase();
     Some(match raw.as_str() {
