@@ -839,6 +839,22 @@ pub fn source_armor_stats(source_roots: &[PathBuf]) -> BTreeMap<String, BTreeMap
             ] {
                 stats.insert(key.to_owned(), value);
             }
+            if numbers.len() >= 14 {
+                for (key, value) in [
+                    ("enchant_respiration", numbers[6]),
+                    ("enchant_aqua_affinity", numbers[7]),
+                    ("enchant_protection", numbers[8]),
+                    ("enchant_fire_protection", numbers[9]),
+                    ("enchant_blast_protection", numbers[10]),
+                    ("enchant_projectile_protection", numbers[11]),
+                    ("enchant_unbreaking", numbers[12]),
+                    ("enchant_feather_falling", numbers[13]),
+                ] {
+                    if value != 0.0 {
+                        stats.insert(key.to_owned(), value);
+                    }
+                }
+            }
             for key in [&label, field, field.trim_end_matches("_armorstats").trim_end_matches("ArmorStats")] {
                 let key = compact_id(key);
                 if !key.is_empty() {
@@ -1131,6 +1147,25 @@ mod tests {
         let updated:Value=serde_json::from_slice(&fs::read(workspace.join("test.mcreator")).unwrap()).unwrap();
         assert_eq!(updated["mod_elements"][0]["registry_name"],"ruby_armor");
         assert_eq!(updated["mod_elements"][0]["type"],"armor");
+    }
+
+    #[test]
+    fn recovers_source_armor_special_enchantment_levels() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("ArmorRegistry.java");
+        fs::write(&path, r#"
+            class ArmorRegistry {
+                static ArmorStats ruby_armorstats =
+                    get_armorstats(config, "Ruby", 90, 4, 9, 8, 4, 40,
+                        1, 2, 3, 4, 5, 6, 7, 8);
+            }
+        "#).unwrap();
+        let stats = source_armor_stats(&[temp.path().to_path_buf()]);
+        let ruby = stats.get("ruby").unwrap();
+        assert_eq!(ruby["enchant_respiration"], 1.0);
+        assert_eq!(ruby["enchant_protection"], 3.0);
+        assert_eq!(ruby["enchant_feather_falling"], 8.0);
+        assert!(!ruby.contains_key("enchant_aqua_affinity") == false);
     }
 
     #[test]
