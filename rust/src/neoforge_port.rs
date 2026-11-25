@@ -723,7 +723,7 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         .and_then(|capture| capture.get(1))
         .map(|capture| capture.as_str())
         .unwrap_or(&source.source_text);
-    let super_call = Regex::new(r"(?s)\bsuper\s*\(([^)]*)\))
+    let super_call = Regex::new(r"(?s)\bsuper\s*\(([^)]*)\)")
         .expect("static food superclass constructor regex");
     let args = super_call.captures(constructor_body)
         .and_then(|capture| capture.get(1))
@@ -757,7 +757,7 @@ struct RecoveredItemProperties {
 
 fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties {
     let text = &source.source_text;
-    let durability = Regex::new(r"(?i)(?:setMaxDamage|func_77656_e|\\.durability)\\s*\\(\\s*(\\d+)")
+    let durability = Regex::new(r"(?i)(?:setMaxDamage|func_77656_e|\.durability)\s*\(\s*(\d+)")
         .expect("static item durability regex")
         .captures(text)
         .and_then(|capture| capture.get(1))
@@ -766,19 +766,19 @@ fn recover_item_properties(source: &EquipmentSource) -> RecoveredItemProperties 
         .map(|value| value.min(100_000));
 
     let rarity = Regex::new(
-        r"(?i)(?:setRarity|\\.rarity)\\s*\\(\\s*(?:(?:EnumRarity|Rarity)\\s*\\.\\s*)?([A-Z_]+)"
+        r"(?i)(?:setRarity|\.rarity)\s*\(\s*(?:(?:EnumRarity|Rarity)\s*\.\s*)?([A-Z_]+)"
     ).expect("static item rarity regex")
         .captures(text)
         .and_then(|capture| capture.get(1))
         .map(|value| value.as_str().to_ascii_uppercase())
         .filter(|value| matches!(value.as_str(), "COMMON" | "UNCOMMON" | "RARE" | "EPIC"));
 
-    let fire_resistant = Regex::new(r"(?i)(?:setFireResistant|fireResistant)\\s*\\(")
+    let fire_resistant = Regex::new(r"(?i)(?:setFireResistant|fireResistant)\s*\(")
         .expect("static item fire-resistance regex")
         .is_match(text);
 
     let craft_remainder = Regex::new(
-        r"(?i)setContainerItem\\s*\\(\\s*(?:net\\.minecraft\\.init\\.)?Items\\s*\\.\\s*([A-Za-z0-9_]+)"
+        r"(?i)setContainerItem\s*\(\s*(?:net\.minecraft\.init\.)?Items\s*\.\s*([A-Za-z0-9_]+)"
     ).expect("static container item regex")
         .captures(text)
         .and_then(|capture| capture.get(1))
