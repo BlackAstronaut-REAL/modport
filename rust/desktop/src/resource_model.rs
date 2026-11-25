@@ -918,8 +918,8 @@ pub fn sprite_preview_scene(
                 face_visibility: Some([
                     !opaque(x as i32 + 1, y as i32),
                     !opaque(x as i32 - 1, y as i32),
-                    !opaque(x as i32, y as i32 + 1),
                     !opaque(x as i32, y as i32 - 1),
+                    !opaque(x as i32, y as i32 + 1),
                     true,
                     true,
                 ]),
@@ -1381,7 +1381,7 @@ mod tests {
         assert_eq!(scene.nodes.len(), 1);
         assert_eq!(scene.nodes[0].cubes.len(), 3);
         assert_eq!(scene.nodes[0].cubes[0].face_uvs, Some([[0.0, 0.0, 1.0, 1.0]; 6]));
-        assert_eq!(scene.nodes[0].cubes[0].face_visibility, Some([false, true, true, false, true, true]));
+        assert_eq!(scene.nodes[0].cubes[0].face_visibility, Some([false, true, false, true, true, true]));
     }
 
 }
