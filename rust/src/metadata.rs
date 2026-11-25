@@ -116,7 +116,7 @@ fn dependency_version_range(text: &str, dependency_id: &str) -> String {
 }
 
 fn version_from_range(value: &str) -> String {
-    Regex::new(r"(?i)(?:\\[|\\()\\s*(\\d+\\.\\d+(?:\\.\\d+)?)")
+    Regex::new(r"(?i)(?:\[|\()\s*(\d+\.\d+(?:\.\d+)?)")
         .ok()
         .and_then(|regex| regex.captures(value))
         .and_then(|capture| capture.get(1))
