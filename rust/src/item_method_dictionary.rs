@@ -73,6 +73,13 @@ const DEFINITIONS: &[Definition] = &[
     Definition { source: "setContainerItem", target: "Item.Properties#craftRemainder(Item) / IItemExtension#getCraftingRemainingItem(ItemStack)", category: "crafting", status: "automatic_or_dynamic_adapter", notes: "Use a property for fixed vanilla remainder items; dynamic stack-dependent remainder behavior needs the extension hook.", docs: "items/index.md" },
 ];
 
+fn property_call_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(
+        r"\b(?P<name>setMaxDamage|setMaxStackSize|setNoRepair|setContainerItem)\s*\("
+    ).expect("static legacy item property-call regex"))
+}
+
 fn declaration_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(
@@ -90,9 +97,15 @@ pub fn map_legacy_item_methods(source: &str) -> Vec<ItemMethodMapping> {
         .captures_iter(source)
         .filter_map(|capture| capture.name("name").map(|value| value.as_str().to_owned()))
         .collect();
+    // These legacy Item methods are often invoked from constructors rather than
+    // overridden. Track the calls as well so their property migrations are visible.
+    let property_calls: BTreeSet<String> = property_call_regex()
+        .captures_iter(source)
+        .filter_map(|capture| capture.name("name").map(|value| value.as_str().to_owned()))
+        .collect();
 
     DEFINITIONS.iter()
-        .filter(|definition| declared.contains(definition.source))
+        .filter(|definition| declared.contains(definition.source) || property_calls.contains(definition.source))
         .map(to_mapping)
         .collect()
 }
@@ -154,6 +167,22 @@ mod tests {
 
     #[test]
     fn maps_automatic_properties_and_component_backed_features() {
+        let mappings = map_legacy_item_methods(r#"
+            class ExampleItem extends Item {
+                ExampleItem() {
+                    setMaxDamage(32);
+                    setMaxStackSize(16);
+                    setNoRepair();
+                    setContainerItem(Items.BUCKET);
+                }
+            }
+        "#);
+        let called: BTreeSet<String> = mappings.into_iter().map(|entry| entry.source_method).collect();
+        assert!(called.contains("setMaxDamage"));
+        assert!(called.contains("setMaxStackSize"));
+        assert!(called.contains("setNoRepair"));
+        assert!(called.contains("setContainerItem"));
+
         let entries = item_method_dictionary();
         assert!(entries.iter().any(|entry| entry.source_method == "setMaxDamage"
             && entry.target_api.contains("DataComponents#MAX_DAMAGE")));
