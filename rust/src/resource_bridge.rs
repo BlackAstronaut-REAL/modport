@@ -91,6 +91,26 @@ fn rewrite_sound_json(value: Value, source_modid: &str, target_modid: &str) -> V
     }
 }
 
+fn migrate_legacy_recipe_result(value: Value) -> Value {
+    match value {
+        Value::Object(mut object) => {
+            for child in object.values_mut() {
+                *child = migrate_legacy_recipe_result(std::mem::take(child));
+            }
+            if let Some(Value::Object(result)) = object.get_mut("result") {
+                if !result.contains_key("id") {
+                    if let Some(item) = result.remove("item") {
+                        result.insert("id".to_owned(), item);
+                    }
+                }
+            }
+            Value::Object(object)
+        }
+        Value::Array(values) => Value::Array(values.into_iter().map(migrate_legacy_recipe_result).collect()),
+        other => other,
+    }
+}
+
 fn rewrite_biome_modifier_type(value: Value) -> Value {
     match value {
         Value::String(text) if text.eq_ignore_ascii_case("forge:add_features") => Value::String("neoforge:add_features".to_owned()),
@@ -212,7 +232,11 @@ pub fn copy_source_resources(
             if source.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("json"))
                 && !source_modid.is_empty() && !target_modid.is_empty() {
                 if let Some(payload) = read_json(&source) {
-                    let payload = rewrite_biome_modifier_type(rewrite_namespace(payload, source_modid, target_modid));
+                    let mut payload = rewrite_biome_modifier_type(rewrite_namespace(payload, source_modid, target_modid));
+                    let relative_parts = relative_components(&relative);
+                    if relative_parts.len() >= 2 && relative_parts[1].eq_ignore_ascii_case("recipes") {
+                        payload = migrate_legacy_recipe_result(payload);
+                    }
                     write_json(&destination, &payload)?;
                     copied += 1;
                     continue;
@@ -257,6 +281,30 @@ mod tests {
         assert_eq!(model["vanilla"], "minecraft:item/generated");
         let sounds: Value = serde_json::from_slice(&fs::read(output.join("assets/targetmod/sounds.json")).unwrap()).unwrap();
         assert_eq!(sounds["chaospersists.entity.roar"]["sounds"][0]["name"], "targetmod:sounds/entity/roar");
+    }
+
+    #[test]
+    fn migrates_legacy_recipe_result_item_to_modern_id_and_remaps_namespace() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("source");
+        let output = temp.path().join("out");
+        let recipe_dir = source.join("data/oldmod/recipes");
+        fs::create_dir_all(&recipe_dir).unwrap();
+        fs::write(recipe_dir.join("ruby.json"), serde_json::to_vec(&json!({
+            "type": "minecraft:crafting_shaped",
+            "pattern": ["R"],
+            "key": {"R": {"item": "oldmod:ruby_ore"}},
+            "result": {"item": "oldmod:ruby", "count": 2}
+        })).unwrap()).unwrap();
+
+        copy_source_resources(&source, &output, Some("oldmod"), Some("newmod")).unwrap();
+        let migrated: Value = serde_json::from_slice(
+            &fs::read(output.join("data/newmod/recipes/ruby.json")).unwrap()
+        ).unwrap();
+        assert_eq!(migrated["key"]["R"]["item"], "newmod:ruby_ore");
+        assert_eq!(migrated["result"]["id"], "newmod:ruby");
+        assert_eq!(migrated["result"]["count"], 2);
+        assert!(migrated["result"].get("item").is_none());
     }
 
     #[test]
