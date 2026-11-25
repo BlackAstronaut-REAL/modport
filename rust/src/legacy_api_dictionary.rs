@@ -2381,6 +2381,45 @@ const DEFINITIONS: &[Definition] = &[
     d!("IFluidBlock", "getFluid", V_112, "fluid_block_fluid_identity", "Fluid linked to a world-placeable block", "fluids", "automatic_rename_candidate", "Preserve exact Fluid registry identity.", "net/minecraftforge/fluids/IFluidBlock.html"),
     d!("IFluidBlock", "place", V_112, "fluid_block_place", "FluidStack placement into world block", "fluids", "adapter_required", "Preserve partial-volume amount and simulation flag; return amount consumed from stack.", "net/minecraftforge/fluids/IFluidBlock.html"),
 
+    // Forge item handler interfaces. ItemHandler APIs are separate from the
+    // vanilla IInventory contract and use simulate/commit remainder semantics.
+    d!("IItemHandler", "extractItem", V_112, "item_handler_extract", "IItemHandler slot extraction", "inventory", "automatic_rename_candidate", "Preserve slot, max amount and simulate flag; returned stack is independent and never exceeds the requested amount.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandler", "getSlotLimit", V_112, "item_handler_slot_limit", "IItemHandler slot-specific stack limit", "inventory", "automatic_rename_candidate", "Preserve per-slot stack limit rather than assuming ItemStack max stack size.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandler", "getSlots", V_112, "item_handler_slot_count", "IItemHandler inventory slot count", "inventory", "automatic_rename_candidate", "Preserve dynamic slot count and ordering.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandler", "getStackInSlot", V_112, "item_handler_stack_read", "IItemHandler slot ItemStack read", "inventory", "automatic_rename_candidate", "Returned stack must be treated as read-only; do not mutate it to change inventory contents.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandler", "insertItem", V_112, "item_handler_insert", "IItemHandler slot insertion", "inventory", "adapter_required", "Preserve simulation flag and return the uninserted remainder stack; the input stack must not be mutated.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandler", "isItemValid", V_112, "item_handler_item_valid", "IItemHandler slot validity predicate", "inventory", "automatic_rename_candidate", "This checks if the slot could ever accept the item, not whether it can accept it now; do not replace with simulated insertion.", "net/minecraftforge/items/IItemHandler.html"),
+    d!("IItemHandlerModifiable", "setStackInSlot", V_112, "item_handler_direct_slot_set", "IItemHandlerModifiable direct slot replacement", "inventory", "adapter_required", "Direct mutation is for internal/helper code and handlers may reject unexpected external writes; preserve implementation safeguards.", "net/minecraftforge/items/IItemHandlerModifiable.html"),
+
+    // ItemStackHandler subclass hooks and mutable sizing.
+    d!("ItemStackHandler", "getStackLimit", V_112, "item_stack_handler_stack_limit", "ItemStackHandler stack-size decision hook", "inventory", "automatic_rename_candidate", "Protected override hook; preserve slot and candidate stack-sensitive limits.", "net/minecraftforge/items/ItemStackHandler.html"),
+    d!("ItemStackHandler", "onContentsChanged", V_112, "item_stack_handler_contents_changed", "ItemStackHandler per-slot mutation callback", "inventory", "automatic_rename_candidate", "Protected callback fired after slot content changes; preserve timing for dirty marking and block updates.", "net/minecraftforge/items/ItemStackHandler.html"),
+    d!("ItemStackHandler", "onLoad", V_112, "item_stack_handler_on_load", "ItemStackHandler post-NBT load callback", "inventory", "automatic_rename_candidate", "Protected callback after NBT restoration; preserve when derived handlers rebuild caches.", "net/minecraftforge/items/ItemStackHandler.html"),
+    d!("ItemStackHandler", "setSize", V_112, "item_stack_handler_resize", "ItemStackHandler inventory size reset", "inventory", "adapter_required", "Resizing rebuilds slot storage; preserve whether previous contents are discarded or replaced by supplied NonNullList.", "net/minecraftforge/items/ItemStackHandler.html"),
+    d!("ItemStackHandler", "validateSlotIndex", V_112, "item_stack_handler_slot_validation", "ItemStackHandler protected slot bounds check", "inventory", "automatic_rename_candidate", "Preserve exception type and bounds validation for subclass methods.", "net/minecraftforge/items/ItemStackHandler.html"),
+
+    // Helper operations used by automation, comparators and item handoff.
+    d!("ItemHandlerHelper", "calcRedstoneFromInventory", V_112, "item_handler_comparator_signal", "Vanilla inventory comparator fullness signal", "redstone", "automatic_rename_candidate", "Preserve vanilla fullness calculation across all item-handler slots and per-slot stack limits.", "net/minecraftforge/items/ItemHandlerHelper.html"),
+    d!("ItemHandlerHelper", "canItemStacksStackRelaxed", V_112, "item_stack_relaxed_stack_predicate", "ItemStack stackability ignoring metadata for non-subtype items", "inventory", "automatic_rename_candidate", "Preserve relaxed metadata behavior only for items without subtypes; do not use for NBT-sensitive item equality.", "net/minecraftforge/items/ItemHandlerHelper.html"),
+    d!("ItemHandlerHelper", "giveItemToPlayer", V_112, "item_handler_give_player", "Player inventory item insertion/drop fallback", "inventory", "adapter_required", "Overloads accept preferred slot or default insertion; preserve remainder drop behavior and player pickup delay.", "net/minecraftforge/items/ItemHandlerHelper.html"),
+
+    // GUI slot bridge from IItemHandler into vanilla Container menus.
+    d!("SlotItemHandler", "canTakeStack", V_112, "slot_item_handler_can_take", "Slot extraction permission", "inventory_gui", "automatic_rename_candidate", "Preserve player-specific take permission and backing item-handler slot state.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "decrStackSize", V_112, "slot_item_handler_decrement", "Slot stack extraction", "inventory_gui", "automatic_rename_candidate", "Preserve amount, backing handler extraction and vanilla container bookkeeping.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "getItemHandler", V_112, "slot_item_handler_backing", "IItemHandler backing inventory", "inventory_gui", "automatic_rename_candidate", "Preserve handler identity and handler slot index separately.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "getItemStackLimit", V_112, "slot_item_handler_stack_limit", "Slot maximum stack size for a specific ItemStack", "inventory_gui", "automatic_rename_candidate", "Preserve both slot handler limit and item max stack size when calculating the effective limit.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "getSlotStackLimit", V_112, "slot_item_handler_slot_limit", "Slot maximum stack size", "inventory_gui", "automatic_rename_candidate", "Preserve slot limit separately from item stack maximum.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "getStack", V_112, "slot_item_handler_stack_read", "Backing IItemHandler slot stack", "inventory_gui", "automatic_rename_candidate", "Returned stack follows IItemHandler read-only semantics.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "isItemValid", V_112, "slot_item_handler_validity", "Slot item insertion predicate", "inventory_gui", "automatic_rename_candidate", "Preserve handler-specific validity check and current slot state.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "isSameInventory", V_112, "slot_item_handler_same_inventory", "Slot backing inventory identity comparison", "inventory_gui", "automatic_rename_candidate", "Comparison is based on backing inventory reference identity, not value equality.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "onSlotChange", V_112, "slot_item_handler_change_callback", "Slot item-count change bookkeeping", "inventory_gui", "automatic_rename_candidate", "Preserve old/new stack arguments and vanilla pickup/statistics behavior.", "net/minecraftforge/items/SlotItemHandler.html"),
+    d!("SlotItemHandler", "putStack", V_112, "slot_item_handler_put_stack", "Slot stack replacement", "inventory_gui", "adapter_required", "Translate writes through IItemHandlerModifiable and preserve change notification behavior.", "net/minecraftforge/items/SlotItemHandler.html"),
+
+    // Built-in capability identifiers must be registered before injection.
+    d!("CapabilityItemHandler", "register", V_112, "item_handler_capability_register", "Forge item handler capability bootstrap", "capabilities", "registration_adapter_required", "Registers ITEM_HANDLER_CAPABILITY and its IItemHandler storage; preserve bootstrap ordering before @CapabilityInject.", "net/minecraftforge/items/CapabilityItemHandler.html"),
+    d!("CapabilityFluidHandler", "register", V_112, "fluid_handler_capability_register", "Forge fluid handler capability bootstrap", "capabilities", "registration_adapter_required", "Registers fluid and item-fluid handler capability storage; preserve bootstrap ordering before @CapabilityInject.", "net/minecraftforge/fluids/capability/CapabilityFluidHandler.html"),
+    d!("CapabilityEnergy", "register", V_112, "energy_capability_register", "Forge energy capability bootstrap", "capabilities", "registration_adapter_required", "Registers the IEnergyStorage capability and default storage; preserve bootstrap order and injected field availability.", "net/minecraftforge/energy/CapabilityEnergy.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -3796,6 +3835,31 @@ mod tests {
         assert!(!has("FluidStack", "getAmount"));
         assert!(!has("FluidStack", "grow"));
         assert!(!has("FluidStack", "shrink"));
+    }
+
+
+    #[test]
+    fn forge_item_inventory_and_builtin_capability_functions_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("IItemHandler", "extractItem"),
+            ("IItemHandler", "insertItem"),
+            ("IItemHandler", "isItemValid"),
+            ("IItemHandlerModifiable", "setStackInSlot"),
+            ("ItemStackHandler", "onContentsChanged"),
+            ("ItemStackHandler", "setSize"),
+            ("ItemHandlerHelper", "calcRedstoneFromInventory"),
+            ("ItemHandlerHelper", "giveItemToPlayer"),
+            ("SlotItemHandler", "putStack"),
+            ("SlotItemHandler", "getItemHandler"),
+            ("CapabilityItemHandler", "register"),
+            ("CapabilityFluidHandler", "register"),
+            ("CapabilityEnergy", "register"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
+        }
     }
 
     #[test]
