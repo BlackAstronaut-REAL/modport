@@ -159,7 +159,7 @@ fn lowercase_sound_path(relative: &Path) -> PathBuf {
 }
 
 fn contains_generated_data_directory(relative: &Path) -> bool {
-    let generated = ["dimension", "dimension_type", "biome", "biomes", "recipes"];
+    let generated = ["dimension", "dimension_type", "biome", "biomes"];
     relative_components(relative).iter().skip(1)
         .any(|part| generated.contains(&part.to_lowercase().as_str()))
 }

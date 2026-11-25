@@ -496,15 +496,22 @@ fn compact(value: &str) -> String {
 fn java_field_name(value: &str, prefix: &str) -> String {
     let id = normalized_id(value);
     let mut name = String::new();
-    let mut upper = true;
+    let mut word_start = true;
     for ch in id.chars() {
         if ch.is_ascii_alphanumeric() {
-            name.push(if upper { ch.to_ascii_uppercase() } else { ch.to_ascii_uppercase() });
-            upper = false;
-        } else { upper = true; }
+            if word_start && !name.is_empty() {
+                name.push('_');
+            }
+            name.push(ch.to_ascii_uppercase());
+            word_start = false;
+        } else {
+            word_start = true;
+        }
     }
-    if name.is_empty() || name.as_bytes()[0].is_ascii_digit() { name.insert_str(0, "N_"); }
-    format!("{prefix}_{}", name)
+    if name.is_empty() || name.as_bytes()[0].is_ascii_digit() {
+        name.insert_str(0, "N_");
+    }
+    format!("{prefix}_{name}")
 }
 
 fn collect_items(
@@ -1182,6 +1189,13 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::io::Write;
+
+    #[test]
+    fn java_registry_field_names_keep_registry_word_boundaries() {
+        assert_eq!(java_field_name("ruby_beast", "ENTITY"), "ENTITY_RUBY_BEAST");
+        assert_eq!(java_field_name("iron-ore", "BLOCK"), "BLOCK_IRON_ORE");
+        assert_eq!(java_field_name("1st_item", "ITEM"), "ITEM_N_1ST_ITEM");
+    }
 
     #[test]
     fn ports_registered_items_blocks_and_resources_from_java_source() {
