@@ -968,6 +968,7 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
         let mut stat_fields = BTreeMap::<String, ToolMaterialStats>::new();
         let mut material_fields = BTreeMap::<String, ToolMaterialStats>::new();
         let mut class_item_fields = BTreeMap::<String, String>::new();
+        let mut class_item_materials = BTreeMap::<String, ToolMaterialStats>::new();
 
         for method in &class.methods {
             let Some(code) = method.code.as_ref() else { continue; };
@@ -1063,11 +1064,7 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
                     })
                     .find_map(|field| material_fields.get(&field).cloned());
                 if let Some(stats) = stats {
-                    // Keep the item field's stats in the class-local result map.
-                    let item_class = class_item_fields.get(&target).cloned().unwrap_or_default();
-                    if !item_class.is_empty() {
-                        results.entry(compact_name(&target)).or_insert(stats);
-                    }
+                    class_item_materials.insert(target, stats);
                 }
             }
         }
@@ -1075,25 +1072,27 @@ pub fn compiled_tool_materials(source_roots: &[PathBuf]) -> Result<BTreeMap<Stri
         // Registry identifiers are indexed by concrete class in the shared
         // compiled registry pass, so construction and registration can live in
         // separate methods without losing the relationship.
-        for (_field, item_class) in class_item_fields {
-            // Prefer the constructor's material field where possible, while still
-            // allowing a single source class to expose a sole material as fallback.
-            let material_names = material_fields.keys().collect::<Vec<_>>();
-            let mut associated = None;
-            if material_names.len() == 1 {
-                associated = material_fields.values().next().cloned();
-            }
-            if let Some(stats) = associated {
-                if let Some(registries) = compiled.registries.get(&item_class) {
-                    for registry in registries {
-                        let key = compact_name(&normalize_registry(registry));
-                        if !key.is_empty() {
-                            results.insert(key, stats.clone());
-                        }
+        for (item_field, item_class) in class_item_fields {
+            // The constructor's material field is the strongest association. Only
+            // use a single-material fallback when the bytecode lacks that reference.
+            let stats = class_item_materials.get(&item_field).cloned()
+                .or_else(|| {
+                    if material_fields.len() == 1 {
+                        material_fields.values().next().cloned()
+                    } else {
+                        None
+                    }
+                });
+            let Some(stats) = stats else { continue; };
+            if let Some(registries) = compiled.registries.get(&item_class) {
+                for registry in registries {
+                    let key = compact_name(&normalize_registry(registry));
+                    if !key.is_empty() {
+                        results.insert(key, stats.clone());
                     }
                 }
-                results.entry(compact_name(&item_class)).or_insert(stats);
             }
+            results.entry(compact_name(&item_class)).or_insert(stats);
         }
     }
     Ok(results)
