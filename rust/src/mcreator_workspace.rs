@@ -5,9 +5,13 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use rayon::prelude::*;
 
 use crate::mcreator_entity::{build_living_entity_element, find_living_entity_template, write_living_entity_element};
-use crate::mcreator_model::{export_model_sources_with_args, McreatorAnimationRecord, ModelSourceExport};
+use crate::mcreator_model::{
+    export_parsed_model_sources, parse_model_source_with_args, McreatorAnimationRecord, ModelSourceExport,
+};
 use crate::mod_graph::{scan_mod_graph, EntityMetadata, ModGraph, RendererRegistration};
 use crate::source_bridge::{copy_animation_metadata, copy_model_sources};
 use crate::texture::TextureIndex;
@@ -343,6 +347,35 @@ pub fn export_living_entities_to_workspace_with_modid(
         .collect();
 
     let mut model_cache = BTreeMap::<String, CachedModelExport>::new();
+
+    // Discover unique model source + constructor-argument inputs up front and
+    // parse them concurrently. The registration loop below still chooses final
+    // generated class names and performs all workspace writes in deterministic
+    // order, but the expensive Java/class geometry conversion is parallel.
+    let mut model_parse_inputs = BTreeMap::<String, (PathBuf, Vec<Value>)>::new();
+    for registration in &graph.registrations {
+        if registration.entity_class.is_empty() || registration.model_class.is_empty() {
+            continue;
+        }
+        let Some(source_model) = model_source_path(graph, &registration.model_class) else { continue };
+        let parse_key = format!(
+            "{}|{}",
+            source_model.to_string_lossy(),
+            serde_json::to_string(&registration.model_args)?
+        );
+        model_parse_inputs.entry(parse_key)
+            .or_insert_with(|| (source_model, registration.model_args.clone()));
+    }
+    let parsed_model_results: Vec<(String, Result<Arc<crate::model::ParsedModel>, String>)> =
+        model_parse_inputs.par_iter().map(|(parse_key, (source_model, model_args))| {
+            let parsed = parse_model_source_with_args(source_model, model_args)
+                .map(Arc::new)
+                .map_err(|error| format!("{error:#}"));
+            (parse_key.clone(), parsed)
+        }).collect();
+    let parsed_models: BTreeMap<String, Result<Arc<crate::model::ParsedModel>, String>> =
+        parsed_model_results.into_iter().collect();
+
     let mut records = Vec::new();
     let mut warnings = Vec::new();
     let mut skipped = 0usize;
@@ -422,9 +455,21 @@ pub fn export_living_entities_to_workspace_with_modid(
         let cached = if let Some(cached) = model_cache.get(&source_key) {
             cached.clone()
         } else {
-            let generated = export_model_sources_with_args(
-                &source_model, &workspace_root, &modid, Some(&requested_model_class),
-                &generator, overwrite, &registration.model_args
+            let parse_key = format!(
+                "{}|{}",
+                source_model.to_string_lossy(),
+                serde_json::to_string(&registration.model_args)?
+            );
+            let parsed_model = parsed_models.get(&parse_key)
+                .ok_or_else(|| anyhow::anyhow!("Parallel model preparse did not index {}", source_model.display()))?
+                .as_ref()
+                .map_err(|error| anyhow::anyhow!(
+                    "Could not parse model {}: {error}",
+                    source_model.display()
+                ))?;
+            let generated = export_parsed_model_sources(
+                parsed_model.as_ref(), &source_model, &workspace_root, &modid,
+                Some(&requested_model_class), &generator, overwrite
             )?;
             let cache = CachedModelExport { class_name: generated.class_name.clone(), export: generated };
             model_cache.insert(source_key, cache.clone());

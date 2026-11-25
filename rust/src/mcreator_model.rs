@@ -460,15 +460,9 @@ pub fn export_model_sources(
         target_generator, overwrite, &[])
 }
 
-pub fn export_model_sources_with_args(
-    source: &Path,
-    output_root: &Path,
-    modid: &str,
-    requested_class_name: Option<&str>,
-    target_generator: &str,
-    overwrite: bool,
-    constructor_args: &[Value],
-) -> Result<ModelSourceExport> {
+/// Parse and expand model geometry without writing generated files. This is
+/// the CPU-heavy portion and can safely run on independent model inputs in parallel.
+pub fn parse_model_source_with_args(source: &Path, constructor_args: &[Value]) -> Result<ParsedModel> {
     if !source.is_file() {
         bail!("Model source does not exist or is not a file: {}", source.display());
     }
@@ -485,7 +479,20 @@ pub fn export_model_sources_with_args(
     if model.cube_count() == 0 {
         bail!("No model cubes were recovered from {}. {}", source.display(), model.warnings.join(" | "));
     }
+    Ok(model)
+}
 
+/// Generate and write one already-parsed model. File writes remain sequential in
+/// the workspace exporter; parallel callers should parallelize parsing first.
+pub fn export_parsed_model_sources(
+    model: &ParsedModel,
+    source: &Path,
+    output_root: &Path,
+    modid: &str,
+    requested_class_name: Option<&str>,
+    target_generator: &str,
+    overwrite: bool,
+) -> Result<ModelSourceExport> {
     let class_name = java_identifier(
         requested_class_name.unwrap_or(&model.class_name),
         "ConvertedEntityModel",
@@ -500,7 +507,7 @@ pub fn export_model_sources_with_args(
     let models_dir = output_root.join("models").join(generator_folder);
     let animations_dir = output_root.join("models").join("animations");
     let model_path = models_dir.join(format!("{class_name}.java"));
-    let generated_animation = generate_animation_definition_java(&model, &class_name)?;
+    let generated_animation = generate_animation_definition_java(model, &class_name)?;
     let animation_path = generated_animation.as_ref().map(|_| {
         animations_dir.join(format!("{class_name}Animation.java"))
     });
@@ -511,7 +518,7 @@ pub fn export_model_sources_with_args(
         }
     }
 
-    let model_java = generate_mojmap_model_java(&model, &class_name, modid)?;
+    let model_java = generate_mojmap_model_java(model, &class_name, modid)?;
     fs::create_dir_all(&models_dir)?;
     fs::write(&model_path, format!("{model_java}\n"))
         .with_context(|| format!("Writing MCreator model {}", model_path.display()))?;
@@ -531,8 +538,24 @@ pub fn export_model_sources_with_args(
         part_count: model.parts.len(),
         cube_count: model.cube_count(),
         animations: animation_records,
-        warnings: model.warnings,
+        warnings: model.warnings.clone(),
     })
+}
+
+pub fn export_model_sources_with_args(
+    source: &Path,
+    output_root: &Path,
+    modid: &str,
+    requested_class_name: Option<&str>,
+    target_generator: &str,
+    overwrite: bool,
+    constructor_args: &[Value],
+) -> Result<ModelSourceExport> {
+    let model = parse_model_source_with_args(source, constructor_args)?;
+    export_parsed_model_sources(
+        &model, source, output_root, modid, requested_class_name,
+        target_generator, overwrite,
+    )
 }
 
 #[cfg(test)]
