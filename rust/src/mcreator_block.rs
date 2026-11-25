@@ -208,7 +208,7 @@ fn modern_block_registrations(source: &str) -> Vec<(String, String)> {
     let regex = Regex::new(
         r#"(?s)\b(?:BLOCKS|BLOCK_REGISTRY)\s*\.\s*register\s*\(\s*"([^"]+)"\s*,\s*([^;]{0,1600})"#
     ).unwrap();
-    let constructor = Regex::new(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*\(").unwrap();
+    let constructor = Regex::new(r"\bnew\s+ItemStack\s*\(").ok()?;
     let factory = Regex::new(r"\b([A-Za-z_$][A-Za-z0-9_$.]*)\s*::\s*new\b").unwrap();
     let mut result = Vec::new();
     for capture in regex.captures_iter(source) {
