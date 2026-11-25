@@ -411,21 +411,27 @@ fn extract_block_drop(
     source_text: &str,
     field_registry_map: &BTreeMap<String, BTreeSet<String>>,
 ) -> Option<(String, i64)> {
-    if Regex::new(r"(?s)return\s+Collections\.emptyList\s*\(\s*\)")
-        .ok()?.is_match(source_text)
-    {
+    if source_text.contains("Collections.emptyList") {
         return Some((String::new(), 0));
     }
 
-    let pattern = Regex::new(
-        r#"new\s+ItemStack\s*\(\s*([A-Za-z_$][\w$\.]*)\s*(?:,\s*(\d+)\s*)?\)"#,
-    ).ok()?;
-    let capture = pattern.captures(source_text)?;
-    let raw_reference = capture.get(1)?.as_str();
-    let count = capture.get(2)
-        .and_then(|value| value.as_str().parse::<i64>().ok())
-        .unwrap_or(1)
-        .max(0);
+    // Balance the constructor arguments instead of relying on a fragile regex:
+    // ItemStack references in old Java sources often contain qualified fields
+    // or nested count expressions.
+    let constructor = Regex::new(r"\\bnew\\s+ItemStack\\s*\\(").ok()?;
+    let found = constructor.find(source_text)?;
+    let open = source_text[found.start()..found.end()].rfind('(')? + found.start();
+    let (raw_arguments, _) =
+        crate::source::java::extract_balanced(source_text, open, '(', ')').ok()?;
+    let arguments = crate::source::java::split_top_level(&raw_arguments, ',');
+    let raw_reference = arguments.first()?.trim();
+    if raw_reference.is_empty() {
+        return None;
+    }
+    let count = match arguments.get(1) {
+        Some(value) => value.trim().parse::<i64>().ok()?.max(0),
+        None => 1,
+    };
 
     let field = raw_reference.rsplit('.').next().unwrap_or(raw_reference);
     if field.eq_ignore_ascii_case("this") || field.eq_ignore_ascii_case("self") {
@@ -440,15 +446,14 @@ fn extract_block_drop(
         }
     }
 
-    if let Some(registries) = field_registry_map.get(field) {
-        if let Some(registry) = registries.iter().next() {
-            let token = registry.chars()
-                .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' })
-                .collect::<String>();
-            return Some((format!("Items.{token}"), count));
-        }
-    }
-    None
+    let registries = field_registry_map.iter()
+        .find(|(registered_field, _)| registered_field.eq_ignore_ascii_case(field))
+        .map(|(_, registries)| registries)?;
+    let registry = registries.iter().next()?;
+    let token = registry.chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' })
+        .collect::<String>();
+    Some((format!("Items.{token}"), count))
 }
 
 fn apply_block_drop_updates(
