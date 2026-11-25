@@ -640,6 +640,159 @@ fn compact_id(value: &str) -> String {
 /// Recover source get_armorstats / load_armorstats calls. The first six
 /// numeric arguments match the legacy exporter contract:
 /// durability, helmet, chestplate, leggings, boots, enchantability.
+fn compiled_stat_number(class: &crate::bytecode::ClassFile, instruction: &crate::bytecode::Instruction) -> Option<f64> {
+    let opcode = instruction.opcode;
+    match opcode {
+        0x02..=0x08 => Some((opcode as i32 - 0x03) as f64),
+        0x09 => Some(0.0),
+        0x0a => Some(1.0),
+        0x0b..=0x0d => Some((opcode - 0x0b) as f64),
+        0x0e => Some(0.0),
+        0x0f => Some(1.0),
+        0x10 => instruction.operands.first().map(|value| *value as i8 as f64),
+        0x11 => {
+            let bytes = [*instruction.operands.first()?, *instruction.operands.get(1)?];
+            Some(i16::from_be_bytes(bytes) as f64)
+        }
+        0x12..=0x14 => {
+            let index = if opcode == 0x12 {
+                *instruction.operands.first()? as u16
+            } else {
+                u16::from_be_bytes([*instruction.operands.first()?, *instruction.operands.get(1)?])
+            };
+            match class.constant(index)? {
+                crate::bytecode::ConstantValue::Integer(value) => Some(value as f64),
+                crate::bytecode::ConstantValue::Float(value) => Some(value as f64),
+                crate::bytecode::ConstantValue::Long(value) => Some(value as f64),
+                crate::bytecode::ConstantValue::Double(value) => Some(value),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn compiled_stat_string(class: &crate::bytecode::ClassFile, instruction: &crate::bytecode::Instruction) -> Option<String> {
+    if !matches!(instruction.opcode, 0x12..=0x14) { return None; }
+    let index = if instruction.opcode == 0x12 {
+        *instruction.operands.first()? as u16
+    } else {
+        u16::from_be_bytes([*instruction.operands.first()?, *instruction.operands.get(1)?])
+    };
+    class.string_constant(index).map(str::to_owned)
+}
+
+fn compiled_stat_next_field(
+    class: &crate::bytecode::ClassFile,
+    instructions: &[crate::bytecode::Instruction],
+    start: usize,
+    limit: usize,
+) -> Option<String> {
+    instructions.iter().skip(start + 1).take(limit).find_map(|instruction| {
+        if instruction.opcode != 0xb3 { return None; }
+        let index = u16::from_be_bytes([
+            *instruction.operands.first()?,
+            *instruction.operands.get(1)?,
+        ]);
+        class.member_reference(index).map(|(_, name, _)| name)
+    })
+}
+
+fn compiled_stat_arguments(
+    class: &crate::bytecode::ClassFile,
+    instructions: &[crate::bytecode::Instruction],
+    call_index: usize,
+    wanted_numbers: usize,
+) -> (Vec<f64>, String) {
+    let start = call_index.saturating_sub(80);
+    let mut numbers = Vec::new();
+    let mut label = String::new();
+    for instruction in instructions[start..call_index].iter().rev() {
+        if let Some(value) = compiled_stat_number(class, instruction) {
+            if numbers.len() < wanted_numbers {
+                numbers.push(value);
+            }
+        } else if label.is_empty() {
+            if let Some(value) = compiled_stat_string(class, instruction) {
+                label = value;
+            }
+        }
+        if numbers.len() >= wanted_numbers && !label.is_empty() { break; }
+    }
+    numbers.reverse();
+    (numbers, label)
+}
+
+fn armor_stats_from_numbers(numbers: &[f64]) -> Option<BTreeMap<String, f64>> {
+    if numbers.len() < 6 { return None; }
+    let mut stats = BTreeMap::from([
+        ("durability".to_owned(), numbers[0]),
+        ("helmet".to_owned(), numbers[1]),
+        ("body".to_owned(), numbers[2]),
+        ("leggings".to_owned(), numbers[3]),
+        ("boots".to_owned(), numbers[4]),
+        ("enchantability".to_owned(), numbers[5]),
+    ]);
+    if numbers.len() >= 14 {
+        for (key, value) in [
+            ("enchant_respiration", numbers[6]),
+            ("enchant_aqua_affinity", numbers[7]),
+            ("enchant_protection", numbers[8]),
+            ("enchant_fire_protection", numbers[9]),
+            ("enchant_blast_protection", numbers[10]),
+            ("enchant_projectile_protection", numbers[11]),
+            ("enchant_unbreaking", numbers[12]),
+            ("enchant_feather_falling", numbers[13]),
+        ] {
+            if value != 0.0 {
+                stats.insert(key.to_owned(), value);
+            }
+        }
+    }
+    Some(stats)
+}
+
+/// Recover get_armorstats/load_armorstats tables directly from JVM bytecode.
+/// Labels and static assignment names are both indexed for later material matching.
+pub fn compiled_armor_stats(source_roots: &[PathBuf]) -> Result<BTreeMap<String, BTreeMap<String, f64>>> {
+    let compiled = crate::compiled_registry::scan_compiled_registrations(source_roots)?;
+    let mut result = BTreeMap::<String, BTreeMap<String, f64>>::new();
+
+    for info in compiled.classes.values() {
+        let Ok(bytes) = fs::read(&info.path) else { continue; };
+        let Ok(class) = crate::bytecode::ClassFile::parse(&bytes) else { continue; };
+        for method in &class.methods {
+            let Some(code) = method.code.as_ref() else { continue; };
+            let Ok(instructions) = crate::bytecode::decode_instructions(&code.code) else { continue; };
+            for (index, instruction) in instructions.iter().enumerate() {
+                if !matches!(instruction.opcode, 0xb6..=0xb9) { continue; }
+                let Some(operands) = instruction.operands.get(0..2) else { continue; };
+                let cp_index = u16::from_be_bytes([operands[0], operands[1]]);
+                let Some((_, method_name, _)) = class.member_reference(cp_index) else { continue; };
+                if !matches!(
+                    method_name.to_ascii_lowercase().as_str(),
+                    "get_armorstats" | "load_armorstats" | "getarmorstats" | "loadarmorstats"
+                ) {
+                    continue;
+                }
+
+                let (numbers, label) = compiled_stat_arguments(&class, &instructions, index, 14);
+                let Some(stats) = armor_stats_from_numbers(&numbers) else { continue; };
+                let target = compiled_stat_next_field(&class, &instructions, index, 12).unwrap_or_default();
+                let stripped = Regex::new(r"(?i)_?armorstats$").unwrap()
+                    .replace(&target, "").to_string();
+                for key in [&label, &target, &stripped] {
+                    let key = compact_id(key);
+                    if !key.is_empty() {
+                        result.insert(key, stats.clone());
+                    }
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
 pub fn source_armor_stats(source_roots: &[PathBuf]) -> BTreeMap<String, BTreeMap<String, f64>> {
     use crate::source::java::{extract_balanced, split_top_level};
 
@@ -710,7 +863,9 @@ pub fn export_armor_to_workspace(
     let mut workspace: Value = serde_json::from_slice(&bytes)?;
     let target_modid = json_string(workspace.get("workspaceSettings").unwrap_or(&Value::Null),"modid","converted_mod");
     let discovered = discover_armor_sources(source_roots)?;
-    let recovered_armor_stats = source_armor_stats(source_roots);
+    let mut recovered_armor_stats = compiled_armor_stats(source_roots)?;
+    // Readable source has higher fidelity than nearby compiled constants.
+    recovered_armor_stats.extend(source_armor_stats(source_roots));
 
     let mut report = ArmorWorkspaceExportReport {
         workspace_file:workspace_file.clone(),discovered:discovered.len(),exported:0,skipped:0,records:Vec::new(),warnings:Vec::new()
@@ -976,6 +1131,23 @@ mod tests {
         let updated:Value=serde_json::from_slice(&fs::read(workspace.join("test.mcreator")).unwrap()).unwrap();
         assert_eq!(updated["mod_elements"][0]["registry_name"],"ruby_armor");
         assert_eq!(updated["mod_elements"][0]["type"],"armor");
+    }
+
+    #[test]
+    fn maps_compiled_armor_stat_values_and_special_enchantments() {
+        let stats = armor_stats_from_numbers(&[
+            90.0, 4.0, 9.0, 8.0, 4.0, 40.0,
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+        ]).unwrap();
+        assert_eq!(stats["durability"], 90.0);
+        assert_eq!(stats["helmet"], 4.0);
+        assert_eq!(stats["body"], 9.0);
+        assert_eq!(stats["leggings"], 8.0);
+        assert_eq!(stats["boots"], 4.0);
+        assert_eq!(stats["enchantability"], 40.0);
+        assert_eq!(stats["enchant_respiration"], 1.0);
+        assert_eq!(stats["enchant_protection"], 3.0);
+        assert_eq!(stats["enchant_feather_falling"], 8.0);
     }
 
     #[test]
