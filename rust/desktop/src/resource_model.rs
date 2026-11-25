@@ -177,11 +177,12 @@ fn face_uv_rotations(element: &Value) -> [u16; 6] {
     let faces = element.get("faces").and_then(Value::as_object);
     let names = ["east", "west", "up", "down", "north", "south"];
     std::array::from_fn(|index| {
-        let rotation = faces.and_then(|faces| faces.get(names[index]))
+        faces.and_then(|faces| faces.get(names[index]))
             .and_then(|face| face.get("rotation"))
             .and_then(Value::as_u64)
-            .unwrap_or(0) as u16;
-        if matches!(rotation, 0 | 90 | 180 | 270) { rotation } else { 0 }
+            .filter(|rotation| matches!(*rotation, 0 | 90 | 180 | 270))
+            .map(|rotation| rotation as u16)
+            .unwrap_or(0)
     })
 }
 
@@ -649,6 +650,18 @@ mod tests {
         assert_eq!(uvs[3], [2.0, 2.0, 12.0, 12.0]);
         assert_eq!(uvs[4], [4.0, 3.0, 14.0, 13.0]);
         assert_eq!(uvs[5], [2.0, 3.0, 12.0, 13.0]);
+    }
+
+    #[test]
+    fn invalid_uv_rotation_is_rejected_without_integer_wraparound() {
+        let element = serde_json::json!({
+            "faces": {
+                "east": {"rotation": 65536},
+                "west": {"rotation": 45},
+                "north": {"rotation": 270}
+            }
+        });
+        assert_eq!(face_uv_rotations(&element), [0, 0, 0, 0, 0, 270]);
     }
 
     #[test]
