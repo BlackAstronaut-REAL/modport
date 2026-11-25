@@ -22,6 +22,7 @@ use crate::mcreator_block::{discover_block_sources, is_plant_source, source_bloc
 use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sources, source_tool_materials, EquipmentSource, ToolMaterialStats};
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
+use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
 use crate::neoforge_project::{create_neoforge_project, NeoForgeProjectReport, DEFAULT_NEOFORGE_VERSION};
 use crate::resource_bridge::copy_source_resources;
 use crate::scan::scan_project;
@@ -92,6 +93,7 @@ pub struct NeoForgePortReport {
     pub armor_sets: Vec<NativeArmorPlan>,
     pub projectiles: Vec<String>,
     pub resource_files_copied: usize,
+    pub native_recipes: NativeRecipeReport,
     pub generated_java_files: Vec<String>,
     pub generated_resource_files: Vec<String>,
     pub detected_domains: Vec<String>,
@@ -281,6 +283,12 @@ pub fn port_to_neoforge(
         }
     }
 
+    let native_recipes = export_native_recipes(roots, &resources_root, &source_mod_id, &target_mod_id)?;
+    warnings.extend(native_recipes.warnings.iter().cloned());
+    if !native_recipes.generated.is_empty() {
+        warnings.push(format!("{} native datapack recipe(s) were materialized.", native_recipes.generated.len()));
+    }
+
     let mut tool_materials = compiled_tool_materials(roots)?;
     tool_materials.extend(source_tool_materials(roots, &source_mod_id));
     let mut tool_records = collect_native_tools(&equipment, &tool_materials, &mut warnings);
@@ -434,6 +442,7 @@ pub fn port_to_neoforge(
         armor_sets,
         projectiles,
         resource_files_copied,
+        native_recipes: native_recipes.clone(),
         generated_java_files,
         generated_resource_files,
         detected_domains,
@@ -468,6 +477,7 @@ pub fn port_to_neoforge(
             "armor_sets": report.armor_sets.len(),
             "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
+            "recipes": report.native_recipes.generated.len(),
             "resource_files": resource_files_copied
         },
         "recognized_but_pending": {
