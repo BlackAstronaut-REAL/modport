@@ -1845,6 +1845,8 @@ fn write_native_resources(
         }
     }
 
+    write_native_block_data(resources_root, mod_id, blocks, &mut written)?;
+
     for armor in armors {
         for piece in &armor.pieces {
             let key = format!("item.{mod_id}.{}", piece.id);
@@ -1874,6 +1876,115 @@ fn write_native_resources(
     written.dedup();
     Ok(written)
 }
+fn merge_tag_values(path: &Path, new_values: &BTreeSet<String>) -> Result<()> {
+    if new_values.is_empty() { return Ok(()); }
+    let mut root = if path.is_file() {
+        serde_json::from_slice::<Value>(&fs::read(path)?)
+            .ok().and_then(|value| value.as_object().cloned()).unwrap_or_default()
+    } else {
+        Map::new()
+    };
+    let values = root.entry("values".to_owned()).or_insert_with(|| json!([]));
+    if !values.is_array() { *values = json!([]); }
+    let entries = values.as_array_mut().expect("tag values initialized as array");
+    let mut seen: BTreeSet<String> = entries.iter().filter_map(Value::as_str).map(str::to_owned).collect();
+    for value in new_values {
+        if seen.insert(value.clone()) {
+            entries.push(json!(value));
+        }
+    }
+    root.entry("replace".to_owned()).or_insert(json!(false));
+    write_json_file(path, &Value::Object(root))
+}
+
+fn block_loot_table(block: &BlockRecord, mod_id: &str) -> Value {
+    let drop = block.properties.get("custom_drop")
+        .and_then(Value::as_str)
+        .map(|value| {
+            let value = value.trim().trim_matches('"').trim_matches('\'');
+            if value.contains(':') { value.to_owned() } else { format!("{mod_id}:{value}") }
+        })
+        .unwrap_or_else(|| format!("{mod_id}:{}", block.id));
+    let amount = block.properties.get("drop_amount")
+        .and_then(Value::as_f64).unwrap_or(1.0).clamp(1.0, 64.0);
+    let mut entry = json!({"type":"minecraft:item","name":drop});
+    if (amount - 1.0).abs() > 0.001 {
+        entry["functions"] = json!([{
+            "function":"minecraft:set_count",
+            "count":amount
+        }]);
+    }
+    json!({
+        "type":"minecraft:block",
+        "pools":[{
+            "rolls":1.0,
+            "entries":[entry],
+            "conditions":[{"condition":"minecraft:survives_explosion"}]
+        }]
+    })
+}
+
+fn write_native_block_data(
+    resources_root: &Path,
+    mod_id: &str,
+    blocks: &[BlockRecord],
+    written: &mut Vec<String>,
+) -> Result<()> {
+    let mut mineable = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut needs_iron = BTreeSet::new();
+    let mut needs_diamond = BTreeSet::new();
+
+    for block in blocks {
+        let id = format!("{mod_id}:{}", block.id);
+        let requires_tool = block.properties.get("requires_correct_tool")
+            .and_then(Value::as_bool).unwrap_or(false);
+        let destroy_tool = block.properties.get("destroy_tool")
+            .and_then(Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .or_else(|| requires_tool.then(|| "pickaxe".to_owned()));
+
+        if let Some(tool) = destroy_tool {
+            if ["pickaxe", "axe", "shovel", "hoe"].contains(&tool.as_str()) {
+                mineable.entry(tool).or_default().insert(id.clone());
+            }
+        }
+
+        let harvest = block.properties.get("harvest_level").and_then(Value::as_u64).unwrap_or(0);
+        if harvest == 2 {
+            needs_iron.insert(id.clone());
+        } else if harvest >= 3 {
+            needs_diamond.insert(id.clone());
+        }
+
+        let loot_path = resources_root.join("data").join(mod_id)
+            .join("loot_tables/blocks").join(format!("{}.json", block.id));
+        if !loot_path.exists() {
+            write_json_file(&loot_path, &block_loot_table(block, mod_id))?;
+            written.push(relative_to(resources_root, &loot_path));
+        }
+    }
+
+    for (tool, values) in mineable {
+        let path = resources_root.join("data/minecraft/tags/block/mineable")
+            .join(format!("{tool}.json"));
+        merge_tag_values(&path, &values)?;
+        written.push(relative_to(resources_root, &path));
+    }
+    if !needs_iron.is_empty() {
+        let path = resources_root.join("data/minecraft/tags/block/needs_iron_tool.json");
+        merge_tag_values(&path, &needs_iron)?;
+        written.push(relative_to(resources_root, &path));
+    }
+    if !needs_diamond.is_empty() {
+        let path = resources_root.join("data/minecraft/tags/block/needs_diamond_tool.json");
+        merge_tag_values(&path, &needs_diamond)?;
+        written.push(relative_to(resources_root, &path));
+    }
+    written.sort();
+    written.dedup();
+    Ok(())
+}
+
 fn find_texture_reference(textures_root: &Path, mod_id: &str, registry_id: &str, class_name: &str) -> Option<String> {
     if !textures_root.is_dir() { return None; }
     let wanted = BTreeSet::from([compact(registry_id), compact(class_name)]);
