@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rayon::prelude::*;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -22,6 +23,8 @@ pub struct SourceRecord {
     pub path: PathBuf,
     pub texture_refs: Vec<String>,
     pub model_mentions: Vec<String>,
+    canonical_stem: String,
+    canonical_mentions: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -100,9 +103,12 @@ fn is_auxiliary_texture(path: &Path) -> bool {
 }
 
 fn canonical_name(value: &str) -> String {
-    let prefix = Regex::new(r"(?i)^(model|renderer|render|entity)").unwrap();
-    let stripped = prefix.replace(value, "");
-    stripped.to_ascii_lowercase().chars().filter(|ch| ch.is_ascii_alphanumeric()).collect()
+    let lower = value.to_ascii_lowercase();
+    let stripped = ["model", "renderer", "render", "entity"]
+        .iter()
+        .find_map(|prefix| lower.strip_prefix(prefix))
+        .unwrap_or(&lower);
+    stripped.chars().filter(|ch| ch.is_ascii_alphanumeric()).collect()
 }
 
 fn normalize_reference(value: &str) -> String {
@@ -202,6 +208,12 @@ pub struct TextureIndex {
     png_by_resource: HashMap<String, Vec<PathBuf>>,
     /// Lowercase PNG basename -> candidate files for namespace/layout fallbacks.
     png_by_basename: HashMap<String, Vec<PathBuf>>,
+    records_by_model_mention: HashMap<String, Vec<usize>>,
+    records_by_canonical_stem: HashMap<String, Vec<usize>>,
+    records_by_path: HashMap<PathBuf, usize>,
+    renderer_records: Vec<usize>,
+    png_by_canonical_stem: HashMap<String, Vec<PathBuf>>,
+    png_by_family_alias: HashMap<String, Vec<PathBuf>>,
     pub references: Vec<TextureReference>,
     pub records: Vec<SourceRecord>,
 }
@@ -216,6 +228,12 @@ impl TextureIndex {
             png_files: Vec::new(),
             png_by_resource: HashMap::new(),
             png_by_basename: HashMap::new(),
+            records_by_model_mention: HashMap::new(),
+            records_by_canonical_stem: HashMap::new(),
+            records_by_path: HashMap::new(),
+            renderer_records: Vec::new(),
+            png_by_canonical_stem: HashMap::new(),
+            png_by_family_alias: HashMap::new(),
             references: Vec::new(),
             records: Vec::new(),
         };
@@ -239,27 +257,72 @@ impl TextureIndex {
                 self.png_by_basename.entry(name.to_ascii_lowercase())
                     .or_default().push(png.clone());
             }
+            let stem = png.file_stem().and_then(|value| value.to_str()).unwrap_or("");
+            let canonical_stem = canonical_name(stem);
+            if !canonical_stem.is_empty() {
+                self.png_by_canonical_stem.entry(canonical_stem).or_default().push(png.clone());
+            }
+            let lower_stem = stem.to_ascii_lowercase();
+            for (offset, ch) in lower_stem.char_indices() {
+                if !matches!(ch, '_' | '-' | '.') || lower_stem.len() - offset <= 1 {
+                    continue;
+                }
+                let left = &lower_stem[..offset];
+                for prefix in ["", "model", "render", "renderer", "entity"] {
+                    if let Some(alias) = left.strip_prefix(prefix).filter(|alias| !alias.is_empty()) {
+                        self.png_by_family_alias.entry(alias.to_owned()).or_default().push(png.clone());
+                    }
+                }
+            }
         }
 
         let files = iter_files(&self.roots, &self.shallow_roots, is_source);
-        for path in files {
-            let bytes = match fs::read(&path) {
-                Ok(bytes) => bytes,
-                Err(_) => continue,
-            };
-            let text = if path.extension().and_then(|v| v.to_str()).map(|v| v.eq_ignore_ascii_case("java")).unwrap_or(false) {
-                String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_owned()
-            } else {
-                bytes.iter().map(|byte| char::from(*byte)).collect()
-            };
-            let refs = extract_text_references(&text);
-            let mentions = extract_model_mentions(&text);
-            for reference in &refs {
-                self.references.push(TextureReference { value: reference.clone(), source: path.clone() });
+        let mut parsed_records: Vec<SourceRecord> = files.par_iter()
+            .filter_map(|path| {
+                let bytes = fs::read(path).ok()?;
+                let text = if path.extension().and_then(|v| v.to_str())
+                    .map(|v| v.eq_ignore_ascii_case("java")).unwrap_or(false)
+                {
+                    String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_owned()
+                } else {
+                    bytes.iter().map(|byte| char::from(*byte)).collect()
+                };
+                let refs = extract_text_references(&text);
+                let mentions = extract_model_mentions(&text);
+                let canonical_mentions = mentions.iter().map(|name| canonical_name(name)).collect();
+                let canonical_stem = canonical_name(
+                    path.file_stem().and_then(|value| value.to_str()).unwrap_or("")
+                );
+                Some(SourceRecord {
+                    path: path.clone(),
+                    texture_refs: refs,
+                    model_mentions: mentions,
+                    canonical_stem,
+                    canonical_mentions,
+                })
+            })
+            .collect();
+        parsed_records.sort_by_key(|record| record.path.to_string_lossy().to_ascii_lowercase());
+        self.records = parsed_records;
+
+        for (index, record) in self.records.iter().enumerate() {
+            self.records_by_path.insert(record.path.clone(), index);
+            if !record.canonical_stem.is_empty() {
+                self.records_by_canonical_stem.entry(record.canonical_stem.clone()).or_default().push(index);
             }
-            self.records.push(SourceRecord { path, texture_refs: refs, model_mentions: mentions });
+            for mention in &record.canonical_mentions {
+                if !mention.is_empty() {
+                    self.records_by_model_mention.entry(mention.clone()).or_default().push(index);
+                }
+            }
+            let filename = record.path.file_stem().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+            if filename.starts_with("render") {
+                self.renderer_records.push(index);
+            }
+            for reference in &record.texture_refs {
+                self.references.push(TextureReference { value: reference.clone(), source: record.path.clone() });
+            }
         }
-        self.records.sort_by_key(|record| record.path.to_string_lossy().to_ascii_lowercase());
         self.references.sort_by_key(|reference| {
             (reference.source.to_string_lossy().to_ascii_lowercase(), reference.value.to_ascii_lowercase())
         });
@@ -269,33 +332,40 @@ impl TextureIndex {
     fn associated_records(&self, source: &Path, model_name: &str) -> Vec<(usize, f64, String)> {
         let source = fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
         let model_canon = canonical_name(model_name);
-        let mut result = Vec::new();
-        for (index, record) in self.records.iter().enumerate() {
-            let mut score: f64 = 0.0;
-            let mut reason = String::new();
-            let mentions_exact = record.model_mentions.iter().any(|name| canonical_name(name) == model_canon);
-            let stem_canon = canonical_name(record.path.file_stem().and_then(|v| v.to_str()).unwrap_or(""));
-            if record.path == source {
-                score = 100_000.0;
-                reason = "texture reference in model source".to_owned();
-            } else if !model_canon.is_empty() && mentions_exact {
-                score = 60_000.0;
-                reason = format!("companion {} references exact model class", record.path.file_name().and_then(|value| value.to_str()).unwrap_or(""));
-            } else if stem_canon == model_canon {
-                score = 30_000.0;
-                reason = "companion name exactly matches model".to_owned();
-            } else if !model_canon.is_empty() && stem_canon.ends_with(&model_canon)
-                && record.path.file_stem().and_then(|v| v.to_str())
-                    .map(|stem| stem.to_ascii_lowercase().starts_with("render") || stem.to_ascii_lowercase().starts_with("renderer"))
-                    .unwrap_or(false)
-            {
-                score = 20_000.0;
-                reason = "renderer name matches model".to_owned();
+        let mut matches = HashMap::<usize, (f64, String)>::new();
+        if let Some(index) = self.records_by_path.get(&source).copied() {
+            matches.insert(index, (100_000.0, "texture reference in model source".to_owned()));
+        }
+        if !model_canon.is_empty() {
+            if let Some(indices) = self.records_by_model_mention.get(&model_canon) {
+                for index in indices {
+                    let record = &self.records[*index];
+                    matches.entry(*index).or_insert_with(|| (
+                        60_000.0,
+                        format!("companion {} references exact model class",
+                            record.path.file_name().and_then(|value| value.to_str()).unwrap_or(""))
+                    ));
+                }
             }
-            if score > 0.0 {
-                result.push((index, score, reason));
+            if let Some(indices) = self.records_by_canonical_stem.get(&model_canon) {
+                for index in indices {
+                    matches.entry(*index).or_insert_with(|| (
+                        30_000.0, "companion name exactly matches model".to_owned()
+                    ));
+                }
+            }
+            for index in &self.renderer_records {
+                let record = &self.records[*index];
+                if record.canonical_stem.ends_with(&model_canon) {
+                    matches.entry(*index).or_insert_with(|| (
+                        20_000.0, "renderer name matches model".to_owned()
+                    ));
+                }
             }
         }
+        let mut result: Vec<_> = matches.into_iter()
+            .map(|(index, (score, reason))| (index, score, reason))
+            .collect();
         result.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| {
             self.records[a.0].path.to_string_lossy().to_ascii_lowercase()
                 .cmp(&self.records[b.0].path.to_string_lossy().to_ascii_lowercase())
@@ -389,18 +459,21 @@ impl TextureIndex {
         }
 
         aliases.retain(|alias| !alias.is_empty());
-        for png in &self.png_files {
-            let stem_canon = canonical_name(png.file_stem().and_then(|v| v.to_str()).unwrap_or(""));
-            let exact_model_skin = !model_canon.is_empty() && stem_canon == model_canon;
-            if (exact_model_skin || Self::family_match(png, &aliases)) && !candidates.contains_key(png) {
-                let mut score = 1_000.0 + if exact_model_skin { 5_000.0 } else { 0.0 };
+        if let Some(paths) = self.png_by_canonical_stem.get(&model_canon) {
+            for png in paths {
+                if candidates.contains_key(png) { continue; }
+                let mut score = 6_000.0;
                 if is_auxiliary_texture(png) { score -= 90_000.0; }
-                let reason = if exact_model_skin {
-                    "exact model-name texture fallback"
-                } else {
-                    "conservative model/renderer texture-family match"
-                };
-                candidates.insert(png.clone(), (score, reason.to_owned()));
+                candidates.insert(png.clone(), (score, "exact model-name texture fallback".to_owned()));
+            }
+        }
+        for alias in &aliases {
+            let Some(paths) = self.png_by_family_alias.get(alias) else { continue };
+            for png in paths {
+                if candidates.contains_key(png) { continue; }
+                let mut score = 1_000.0;
+                if is_auxiliary_texture(png) { score -= 90_000.0; }
+                candidates.insert(png.clone(), (score, "conservative model/renderer texture-family match".to_owned()));
             }
         }
 
@@ -496,6 +569,23 @@ mod tests {
         assert!(exact.iter().any(|(path, score, _)| path == &texture && *score == 100_000.0));
         let basename = index.match_reference("other:entity/creature/creature.png");
         assert!(basename.iter().any(|(path, score, _)| path == &texture && *score == 50_000.0));
+    }
+
+    #[test]
+    fn indexed_model_family_fallback_finds_exact_and_variant_skins() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let source = root.join("ModelPig.java");
+        touch(&source);
+        let exact = root.join("ModelPig.png");
+        let variant = root.join("ModelPig_blue.png");
+        touch(&exact);
+        touch(&variant);
+
+        let index = TextureIndex::new(&[root.to_path_buf()], &[]).unwrap();
+        let resolved = index.resolve_set(&source, "ModelPig", None, 8).unwrap();
+        assert_eq!(resolved.primary, Some(fs::canonicalize(exact).unwrap()));
+        assert!(resolved.variants.contains(&fs::canonicalize(variant).unwrap()));
     }
 
     #[test]
