@@ -3262,6 +3262,65 @@ const DEFINITIONS: &[Definition] = &[
     d!("TileEntity", "writeToNBTInternal", V_112, "tile_entity_write_nbt_internal", "Tile entity base persistent NBT fields", "block_entities_persistence", "Protected serialization helper; preserve id/x/y/z and Forge capability/tile-data payload ordering.", "net/minecraft/tileentity/TileEntity.html"),
 
 
+    // WorldProvider custom dimension behavior and lifecycle methods.
+    d!("WorldProvider", "canCoordinateBeSpawn", V_ALL, "dimension_spawn_coordinate_predicate", "WorldProvider spawn coordinate validity", "dimensions_worldgen", "Preserve x/z surface spawn checks and dimension-specific spawn safety.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canDoLightning", V_ALL, "dimension_lightning_enabled", "Dimension lightning weather capability", "dimensions_weather", "Preserve whether lightning can occur independently from rain/snow precipitation.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canDoRainSnowIce", V_ALL, "dimension_precipitation_enabled", "Dimension precipitation capability", "dimensions_weather", "Preserve rain/snow/ice behavior independently from lightning and sky visibility.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canMineBlock", V_112, "dimension_block_mining_permission", "Dimension block mining permission", "dimensions", "Preserve player and BlockPos checks for dimensions that restrict mining.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "createChunkGenerator", V_112, "dimension_chunk_generator_factory", "IChunkGenerator creation", "dimensions_worldgen", "Preserve world seed, WorldType, generator options and dimension-specific generator identity.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "createWorldBorder", V_112, "dimension_world_border_factory", "WorldBorder creation", "dimensions", "Preserve custom world border bounds and warning settings for this dimension.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "doesWaterVaporize", V_112, "dimension_water_vaporization", "Water evaporation/vaporization predicate", "dimensions_fluids", "Preserve dimension-specific water vaporization and sound/particle effects.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getBiomeForCoords", V_112, "dimension_biome_at_position", "Biome lookup by BlockPos", "dimensions_worldgen", "Preserve biome provider and exact BlockPos lookup, especially custom dimension biome mappings.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getBiomeProvider", V_112, "dimension_biome_provider", "BiomeProvider instance", "dimensions_worldgen", "Preserve biome provider identity and world-type/configuration state.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getDimension", V_ALL, "dimension_numeric_id", "Dimension numeric ID", "dimensions", "Preserve runtime numeric dimension ID for old APIs; modern code should use dimension type/resource key.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getEntrancePortalLocation", V_112, "dimension_entrance_portal_location", "Dimension portal entrance/return position", "dimensions", "Preserve provider's destination portal coordinate and null/no-portal behavior.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getHeight", V_ALL, "dimension_height_value", "Dimension build height", "dimensions", "Preserve provider height separately from actual world height and sea level.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getHorizon", V_ALL, "dimension_horizon_height", "Dimension horizon Y position", "dimensions_render", "Preserve horizon height used for sky/fog rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getMovementFactor", V_112, "dimension_movement_factor", "Dimension coordinate travel scale", "dimensions", "Preserve coordinate scaling when traveling between dimensions (e.g. nether-like ratios).", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSaveFolder", V_ALL, "dimension_save_folder", "Dimension save directory name", "dimensions_persistence", "Preserve nullable custom dimension subfolder and world save layout.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSkyColor", V_112, "dimension_sky_color", "Dimension sky color calculation", "dimensions_render", "Preserve entity and partial ticks for custom dimension sky tint.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSpawnCoordinate", V_112, "dimension_spawn_coordinate", "Dimension default spawn coordinate", "dimensions", "Preserve provider-specific spawn coordinate and null result.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSunBrightness", V_112, "dimension_sun_brightness", "Dimension-adjusted sun brightness", "dimensions_render", "Preserve partial tick and provider sunlight curve.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWorldTime", V_112, "dimension_world_time", "WorldProvider-specific time", "dimensions_time", "Preserve provider override of world day/night time.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "hasSkyLight", V_ALL, "dimension_has_skylight", "Dimension skylight capability", "dimensions_lighting", "Preserve whether skylight is available; differs from hasSkyDimension/sky rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isDaytime", V_112, "dimension_daytime_predicate", "Dimension local daytime", "dimensions_time", "Preserve provider-specific day/night state and time curve.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isNether", V_ALL, "dimension_nether_classification", "Nether-like dimension predicate", "dimensions", "Preserve Nether classification independently from water vaporization and movement factor.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isSkyColored", V_ALL, "dimension_sky_color_predicate", "Sky rendering capability", "dimensions_render", "Preserve sky visibility/sky color rendering behavior independently from skylight.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isValidSpawn", V_112, "dimension_valid_spawn_predicate", "Dimension spawn location validity", "dimensions_worldgen", "Preserve BlockPos validation for player spawn and portal/respawn selection.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "onWorldSave", V_112, "dimension_world_save_callback", "WorldProvider persistence save callback", "dimensions_persistence", "Preserve WorldSavedData/provider-specific save timing before chunk/world save completion.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "onWorldUpdateEntities", V_112, "dimension_world_entity_tick_callback", "Dimension entity tick lifecycle callback", "dimensions", "Preserve world and server tick ordering for provider-specific entity updates.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "resetRainAndThunder", V_112, "dimension_weather_reset", "Dimension rain/thunder state reset", "dimensions_weather", "Preserve independent weather timer reset and client state synchronization.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setDimension", V_112, "dimension_id_write", "WorldProvider numeric dimension ID assignment", "dimensions", "Preserve ID assignment before world registration and provider initialization.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setWorld", V_ALL, "dimension_world_reference_write", "WorldProvider owning World assignment", "dimensions", "Preserve initialization ordering before biome provider/generator/weather methods are called.", "net/minecraft/world/WorldProvider.html"),
+
+    // BiomeGenBase public gameplay, color, spawn and feature hooks.
+    d!("BiomeGenBase", "addDefaultFlowers", V_112, "biome_default_flower_registration", "Biome default flower feature registration", "biomes_worldgen", "Preserve weighted flower state/weight list and decoration order.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "addDefaultExtraVegetation", V_112, "biome_extra_vegetation_registration", "Biome extra vegetation feature registration", "biomes_worldgen", "Preserve vegetation feature list and decorator priority.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "addDefaultCarvers", V_112, "biome_default_carver_registration", "Biome cave/ravine carver registration", "biomes_worldgen", "Preserve carver configuration and generation stage order.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "addSpawn", V_ALL, "biome_spawn_entry_add", "Biome creature spawn list entry", "biomes_worldgen", "Preserve EntityEntry, weight and min/max group size and creature category.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "addStructure", V_112, "biome_structure_feature_add", "Biome structure feature registration", "biomes_worldgen", "Preserve StructureFeature identity and biome generation-stage ordering.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "canRain", V_ALL, "biome_precipitation_rain_predicate", "Biome rain precipitation check", "biomes_weather", "Preserve temperature/biome precipitation logic independently from rainfall strength.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "canSpawnLightningBolt", V_112, "biome_lightning_predicate", "Biome lightning generation eligibility", "biomes_weather", "Preserve temperature and precipitation type logic for thunder generation.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "doesWaterFreeze", V_ALL, "biome_water_freeze_predicate", "Water freezing at biome/position", "biomes_weather", "Preserve world, position and check-neighbor flag for ice generation.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getBiomeClass", V_112, "biome_runtime_class", "Biome implementation class", "biomes", "Preserve exact subclass identity for custom biome dispatch.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getBiomeProvider", V_112, "biome_provider", "BiomeProvider associated with world biome", "biomes_worldgen", "Preserve provider identity and exact world-specific biome mapping.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getBiomeSize", V_112, "biome_size_setting", "Biome size generation parameter", "biomes_worldgen", "Preserve biome generator size separate from base weight and biome edge blending.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getDefaultTemperature", V_112, "biome_default_temperature", "Base biome temperature value", "biomes_weather", "Preserve raw temperature independently from position-adjusted getTemperature.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getModdedBiomeSize", V_112, "biome_modded_size", "Forge biome size event-adjusted value", "biomes_worldgen", "Preserve biome and original size through Forge biome size modification hooks.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getRandomTreeFeature", V_112, "biome_random_tree_feature", "Biome random tree WorldGenerator", "biomes_worldgen", "Preserve Random input and selected tree feature; random state consumption affects worldgen parity.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getRegistryName", V_112, "biome_registry_name", "Biome ResourceLocation registry identity", "biomes", "Preserve stable namespaced biome identifier for world save and registry lookups.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getSpawns", V_112, "biome_spawn_list", "Biome creature category spawn list", "biomes_worldgen", "Preserve EnumCreatureType, current mutable list and category-specific spawn entries.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getTempCategory", V_ALL, "biome_temperature_category", "Biome TempCategory classification", "biomes_weather", "Preserve COLD/MEDIUM/WARM threshold classification used by precipitation and snow.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getWaterColorMultiplier", V_112, "biome_water_color_multiplier", "Biome water tint color", "biomes_render", "Preserve packed RGB water color multiplier used by water models.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getWaterfallSound", V_112, "biome_waterfall_sound", "Biome waterfall ambient sound", "audio", "Preserve biome-specific ambient waterfall event selection.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "isHighHumidity", V_ALL, "biome_high_humidity_predicate", "Biome high humidity classification", "biomes_weather", "Preserve explicit humidity flag separately from rainfall amount.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "isSnowyBiome", V_ALL, "biome_snowy_predicate", "Biome snow precipitation classification", "biomes_weather", "Preserve temperature and precipitation type behavior for snowfall.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "isValidBiome", V_112, "biome_validity_predicate", "Biome registry/generation validity", "biomes_worldgen", "Preserve world generation validity check for a position and biome provider.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "plantFlower", V_112, "biome_plant_flower", "Biome flower placement feature", "biomes_worldgen", "Preserve Random, BlockPos and flower list selection.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "plantGrass", V_112, "biome_plant_grass", "Biome grass/vegetation placement feature", "biomes_worldgen", "Preserve Random and BlockPos placement calls including tall-grass variants.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "registerBiome", V_112, "biome_registry_register", "Biome registry registration", "registration", "Preserve ResourceLocation identity and duplicate registration failure behavior.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "setRegistryName", V_112, "biome_registry_name_write", "Biome registry key registration", "registration", "Preserve namespace/path and registry entry naming constraints.", "net/minecraft/world/biome/Biome.html"),
+
 ];
 
 fn canonical_version(version: &str) -> Option<&'static str> {
@@ -4967,6 +5026,34 @@ mod tests {
             "writeToNBTInternal",
         ] {
             assert!(has("TileEntity", method), "missing TileEntity#{method}");
+        }
+    }
+
+
+    #[test]
+    fn world_provider_and_biome_generation_methods_are_indexed() {
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |owner: &str, method: &str| v112.iter()
+            .any(|entry| entry.source_owner == owner && entry.source_method == method);
+        for (owner, method) in [
+            ("WorldProvider", "createChunkGenerator"),
+            ("WorldProvider", "doesWaterVaporize"),
+            ("WorldProvider", "getDimensionType"),
+            ("WorldProvider", "getMovementFactor"),
+            ("WorldProvider", "hasSkyLight"),
+            ("WorldProvider", "isValidSpawn"),
+            ("BiomeGenBase", "decorate"),
+            ("BiomeGenBase", "doesWaterFreeze"),
+            ("BiomeGenBase", "getFoliageColorAtPos"),
+            ("BiomeGenBase", "getGrassColorAtPos"),
+            ("BiomeGenBase", "getRandomTreeFeature"),
+            ("BiomeGenBase", "getSpawns"),
+            ("BiomeGenBase", "getTemperature"),
+            ("BiomeGenBase", "isSnowyBiome"),
+            ("BiomeGenBase", "plantFlower"),
+            ("BiomeGenBase", "plantGrass"),
+        ] {
+            assert!(has(owner, method), "missing {owner}#{method}");
         }
     }
 
