@@ -169,7 +169,7 @@ fn field_axis(name: &str) -> Option<(&'static str, &'static str)> {
 fn is_dynamic(expression: &str) -> bool {
     ["limbSwing", "limbSwingAmount", "ageInTicks", "netHeadYaw", "headPitch"]
         .iter().any(|name| expression.contains(name))
-        || ["sin(", "cos(", ".get", ".is", ".has"]
+        || ["sin(", "cos(", "abs(", "sqrt(", ".get", ".is", ".has"]
             .iter().any(|marker| expression.contains(marker))
 }
 
@@ -398,9 +398,46 @@ impl<'a> AnimationContext<'a> {
                 stack.push(Symbol::Expr(format!("cos({arg})")));
                 return Ok(());
             }
-            if name == "abs" {
+            if matches!(name.as_str(), "abs" | "func_76135_e")
+                && (simple.contains("MathHelper") || simple == "Math")
+            {
                 let arg = args.first().map(|v| v.text(self.parts)).unwrap_or_else(|| "0".into());
                 stack.push(Symbol::Expr(format!("abs({arg})")));
+                return Ok(());
+            }
+            if matches!(name.as_str(), "sqrt" | "func_76133_a")
+                && (simple.contains("MathHelper") || simple == "Math")
+            {
+                let arg = args.first().map(|v| v.text(self.parts)).unwrap_or_else(|| "0".into());
+                stack.push(Symbol::Expr(format!("sqrt({arg})")));
+                return Ok(());
+            }
+        }
+
+        // Generated legacy models often route poses through a tiny
+        // setRotateAngle(ModelRenderer, x, y, z) helper. Recover that call
+        // directly instead of relying on helper bytecode being available.
+        if matches!(name.as_str(), "setRotateAngle" | "setRotationAngle" | "setRotation" | "setAngles")
+            && args.len() >= 4
+        {
+            if let Symbol::Part(index) = &args[0] {
+                let index = *index;
+                if let Some(part) = self.parts.get(index) {
+                    let bone = part.name.clone();
+                    for (axis, value) in ["x", "y", "z"].iter().zip(args.iter().skip(1).take(3)) {
+                        let expression = value.text(self.parts);
+                        let key = (bone.clone(), "rotation".to_owned(), (*axis).to_owned());
+                        self.part_state.insert(key, expression.clone());
+                        self.formulas.push(Formula {
+                            bone: bone.clone(),
+                            channel: "rotation".to_owned(),
+                            axis: (*axis).to_owned(),
+                            expression,
+                            offset: instruction.offset,
+                            animation_class: String::new(),
+                        });
+                    }
+                }
                 return Ok(());
             }
         }
@@ -421,11 +458,17 @@ impl<'a> AnimationContext<'a> {
             // Helper return expressions are uncommon in model pose code. Preserve
             // exact expression and continue with the normal descriptor behavior.
         }
-        if owner_matches && receiver == Symbol::This && depth < 3 {
+        let static_call = instruction.opcode == 0xb8;
+        if owner_matches && depth < 3 && (static_call || receiver == Symbol::This) {
             if let Some(index) = self.method_indexes.get(&(name.clone(), descriptor.clone())).copied() {
-                self.run_method(index, &args, depth + 1)?;
-                if !returns_void { stack.push(Symbol::Expr(format!("{name}()"))); }
-                return Ok(());
+                let method_is_static = self.class.methods.get(index)
+                    .map(|method| method.access_flags & 0x0008 != 0)
+                    .unwrap_or(false);
+                if method_is_static == static_call {
+                    self.run_method(index, &args, depth + 1)?;
+                    if !returns_void { stack.push(Symbol::Expr(format!("{name}()"))); }
+                    return Ok(());
+                }
             }
         }
 
@@ -461,6 +504,7 @@ fn java_expression(expression: &str) -> String {
     expression.replace("sin(", "Mth.sin(")
         .replace("cos(", "Mth.cos(")
         .replace("abs(", "Math.abs(")
+        .replace("sqrt(", "Mth.sqrt(")
 }
 
 /// Reconstruct legacy ModelBase animation assignments directly from JVM Code

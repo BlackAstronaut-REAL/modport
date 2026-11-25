@@ -423,6 +423,29 @@ fn run_constructor(
                 let args = pop_n(&mut stack, parameters.len());
                 let receiver = if op == 0xb8 { Value::Null } else { pop(&mut stack) };
 
+                // ModelBase / ModelBiped constructors may provide explicit
+                // atlas dimensions as their final two integer parameters.
+                if name == "<init>"
+                    && matches!(&receiver, Value::This)
+                    && (owner_name.ends_with("ModelBase") || owner_name.ends_with("ModelBiped") || owner_name.ends_with("ModelPlayer"))
+                {
+                    if parameters.len() >= 2
+                        && matches!(parameters.get(parameters.len()-2), Some(JvmType::Int))
+                        && matches!(parameters.last(), Some(JvmType::Int))
+                    {
+                        if let (Some(width), Some(height)) = (
+                            args.get(args.len().saturating_sub(2)).and_then(Value::number),
+                            args.last().and_then(Value::number),
+                        ) {
+                            texture_width = (width as i64).max(1) as u32;
+                            texture_height = (height as i64).max(1) as u32;
+                            explicit_width = true;
+                            explicit_height = true;
+                        }
+                    }
+                    continue;
+                }
+
                 if name == "<init>" && owner_name.ends_with("ModelRenderer") {
                     if let Value::Object(index) = receiver {
                         let numeric: Vec<f64> = args.iter().filter_map(Value::number).collect();
@@ -472,7 +495,7 @@ fn run_constructor(
                     continue;
                 }
 
-                if name == "setTextureOffset" || name == "func_78784_a" {
+                if name == "setTextureOffset" || name == "func_78784_a" || name == "func_78085_a" {
                     if let (Value::Object(index),Some(u),Some(v))=(receiver.clone(),args.first().and_then(Value::number),args.get(1).and_then(Value::number)) {
                         if let Some(part)=parts.get_mut(index) {part.texture_u=u as i32;part.texture_v=v as i32;}
                         stack.push(receiver);
@@ -514,10 +537,21 @@ fn run_constructor(
                         let raw_name=if has_name { args.first().and_then(|v| if let Value::String(s)=v {Some(s.clone())} else {None}) } else {None};
                         let numbers:Vec<f64>=args.iter().skip(usize::from(has_name)).filter_map(Value::number).collect();
                         if numbers.len()>=6 {
+                            let renderer_uv = parts.get(index).map(|part|(part.texture_u,part.texture_v)).unwrap_or((0,0));
+                            let named_uv = raw_name.as_deref().and_then(|box_name| {
+                                let prefix = parts.get(index).map(|part|part.texture_prefix.as_str()).unwrap_or("");
+                                let prefixed = if prefix.is_empty() {
+                                    box_name.to_owned()
+                                } else {
+                                    format!("{}.{}", prefix.trim_end_matches('.'), box_name)
+                                };
+                                texture_offsets.get(&prefixed).or_else(||texture_offsets.get(box_name)).copied()
+                            });
+                            let (uv_x,uv_y)=named_uv.unwrap_or(renderer_uv);
                             if let Some(part)=parts.get_mut(index) {
                                 part.cubes.push(Cube {
                                     x:numbers[0],y:numbers[1],z:numbers[2],dx:numbers[3],dy:numbers[4],dz:numbers[5],
-                                    uv_x:part.texture_u,uv_y:part.texture_v,mirror:part.mirror,
+                                    uv_x,uv_y,mirror:part.mirror,
                                     inflate:numbers.get(6).copied().unwrap_or(0.0),
                                     name:raw_name.unwrap_or_else(|| format!("{}_cube_{}",part.name,part.cubes.len()+1)),
                                 });
@@ -669,4 +703,19 @@ mod position_field_tests {
         assert_eq!(model_renderer_position_axis("rotationPointY"), Some(1));
         assert_eq!(model_renderer_position_axis("rotationPointZ"), Some(2));
     }
+    #[test]
+    fn recovers_animation_from_legacy_modelbase_class_fixture() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("ModelTheKing.class");
+        fs::write(
+            &source,
+            include_bytes!("../../../oldVer/tests/fixtures/ModelTheKing.class"),
+        ).unwrap();
+
+        let model = parse_legacy_class_file(&source, &[]).unwrap();
+        let formula_count = model.animation_analysis["formula_count"].as_u64().unwrap_or(0);
+        assert!(formula_count > 0, "legacy model animation formulas were not recovered");
+        assert!(!model.blockbench_animations.is_empty(), "legacy model produced no baked clips");
+    }
+
 }

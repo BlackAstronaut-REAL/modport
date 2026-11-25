@@ -37,6 +37,8 @@ struct ModelBuilder {
     by_variable: HashMap<String, usize>,
     uv_by_variable: HashMap<String, (i32, i32)>,
     mirror_by_variable: HashMap<String, bool>,
+    texture_prefix_by_variable: HashMap<String, String>,
+    model_texture_offsets: HashMap<String, (i32, i32)>,
     aliases: HashMap<String, String>,
     biped_inflate: f64,
 }
@@ -46,6 +48,7 @@ impl ModelBuilder {
         Self {
             parts: Vec::new(), by_variable: HashMap::new(),
             uv_by_variable: HashMap::new(), mirror_by_variable: HashMap::new(),
+            texture_prefix_by_variable: HashMap::new(), model_texture_offsets: HashMap::new(),
             aliases: HashMap::new(), biped_inflate,
         }
     }
@@ -274,6 +277,17 @@ pub fn parse_legacy_java_model(
         }
     }
 
+    // ModelBase's named UV table is distinct from ModelRenderer's per-part UV
+    // cursor. Older models combine setTextureOffset / func_78085_a("prefix.box", u, v)
+    // with ModelRenderer(this, "prefix") and addBox("box", ...).
+    let model_uv_re = regex(r"(?:\bthis\s*\.\s*)?(?:func_78085_a|setTextureOffset)\s*\(")?;
+    for capture in model_uv_re.captures_iter(&body) {
+        let full = capture.get(0).unwrap();
+        if let Ok((args, _)) = extract_balanced(&body, full.end()-1, '(', ')') {
+            events.push(Event { position:full.start(), kind:"model_uv", variable:String::new(), raw_args:args });
+        }
+    }
+
     let assignment_specs: &[(&str, &[&str])] = &[
         ("rotation_x", &["field_78795_f", "rotateAngleX", "xRot"]),
         ("rotation_y", &["field_78796_g", "rotateAngleY", "yRot"]),
@@ -335,6 +349,24 @@ pub fn parse_legacy_java_model(
     events.sort_by(|a,b| a.position.cmp(&b.position).then_with(|| a.kind.cmp(b.kind)));
 
     for event in events {
+        if event.kind == "model_uv" {
+            let args = split_top_level(&event.raw_args, ',');
+            if args.len() >= 3 {
+                let raw_key = args[0].trim();
+                let key = if raw_key.starts_with('"') {
+                    unquote_java_string(raw_key)
+                } else {
+                    raw_key.strip_prefix("this.").unwrap_or(raw_key).to_owned()
+                };
+                if !key.is_empty() {
+                    match (eval_int(&args[1], &constants), eval_int(&args[2], &constants)) {
+                        (Ok(u), Ok(v)) => { builder.model_texture_offsets.insert(key, (u, v)); }
+                        (Err(error), _) | (_, Err(error)) => warnings.push(format!("Skipped model texture offset: {error}")),
+                    }
+                }
+            }
+            continue;
+        }
         if event.kind == "alias" {
             let rhs = event.raw_args.strip_prefix("this.").unwrap_or(&event.raw_args).to_owned();
             let resolved = builder.aliases.get(&rhs).cloned().unwrap_or(rhs);
@@ -353,6 +385,11 @@ pub fn parse_legacy_java_model(
                             eval_int(&args[args.len()-2], &constants)?,
                             eval_int(&args[args.len()-1], &constants)?,
                         ));
+                    } else if args.len() >= 2 && args[1].trim().starts_with('"') {
+                        builder.texture_prefix_by_variable.insert(
+                            variable.clone(),
+                            unquote_java_string(&args[1]),
+                        );
                     }
                 }
                 "set_uv" if args.len() >= 2 => {
@@ -397,9 +434,12 @@ pub fn parse_legacy_java_model(
                 }
                 "add_box" => {
                     let mut values = args.clone();
+                    let mut named_box = None::<String>;
                     let mut cube_name = format!("{}_cube{}", builder.parts[index].name, builder.parts[index].cubes.len()+1);
                     if values.first().map(|v| v.trim().starts_with('"')).unwrap_or(false) {
-                        cube_name = unquote_java_string(&values.remove(0));
+                        let name = unquote_java_string(&values.remove(0));
+                        cube_name = name.clone();
+                        named_box = Some(name);
                     }
                     if values.len() >= 6 {
                         let x = eval_number(&values[0], &constants)?;
@@ -409,7 +449,19 @@ pub fn parse_legacy_java_model(
                         let dy = eval_number(&values[4], &constants)?;
                         let dz = eval_number(&values[5], &constants)?;
                         let inflate = if values.len() >= 7 { eval_number(&values[6], &constants)? } else { 0.0 };
-                        let (uv_x, uv_y) = builder.uv_by_variable.get(&variable).copied().unwrap_or((0,0));
+                        let renderer_uv = builder.uv_by_variable.get(&variable).copied().unwrap_or((0,0));
+                        let named_uv = named_box.as_deref().and_then(|box_name| {
+                            let prefix = builder.texture_prefix_by_variable.get(&variable).map(String::as_str).unwrap_or("");
+                            let prefixed = if prefix.is_empty() {
+                                box_name.to_owned()
+                            } else {
+                                format!("{}.{}", prefix.trim_end_matches('.'), box_name)
+                            };
+                            builder.model_texture_offsets.get(&prefixed)
+                                .or_else(|| builder.model_texture_offsets.get(box_name))
+                                .copied()
+                        });
+                        let (uv_x, uv_y) = named_uv.unwrap_or(renderer_uv);
                         let mirror = builder.mirror_by_variable.get(&variable).copied().unwrap_or(false);
                         builder.parts[index].cubes.push(Cube { x,y,z,dx,dy,dz,uv_x,uv_y,mirror,inflate,name:cube_name });
                     }
@@ -567,4 +619,24 @@ mod tests {
         let head = model.parts.iter().find(|p| p.name == "head").unwrap();
         assert_eq!(head.offset[1], 6.0);
     }
+    #[test]
+    fn applies_modelbase_named_texture_offsets_to_prefixed_renderer_boxes() {
+        let source = r#"
+            public class ModelNamedUV extends ModelBase {
+                public ModelRenderer head;
+                public ModelNamedUV() {
+                    this.textureWidth = 128;
+                    this.textureHeight = 64;
+                    this.setTextureOffset("head.face", 40, 16);
+                    this.head = new ModelRenderer(this, "head");
+                    this.head.addBox("face", -1, -1, -1, 2, 2, 2);
+                }
+            }
+        "#;
+        let model = parse_legacy_java_model(source, "ModelNamedUV.java", &[]).unwrap();
+        assert_eq!((model.texture_width, model.texture_height), (128, 64));
+        let cube = &model.parts.iter().find(|part| part.name == "head").unwrap().cubes[0];
+        assert_eq!((cube.uv_x, cube.uv_y), (40, 16));
+    }
+
 }
