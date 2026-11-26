@@ -132,6 +132,11 @@ pub fn compile_workspace(
         bail!("No build.gradle or build.gradle.kts exists in {}", root.display());
     }
 
+    // Older generated projects did not include a Gradle launcher. Install the
+    // self-bootstrapping platform launcher before trying to build so users do
+    // not need a global gradle.bat/gradle installation.
+    crate::neoforge_project::ensure_gradle_launcher(&root)?;
+
     let validation: Option<WorkspaceValidationReport> = if skip_validation {
         None
     } else {
@@ -271,6 +276,28 @@ mod tests {
         assert!(report.report_file.is_file());
         assert!(fs::read_to_string(&report.log_file).unwrap().contains("Gradle wrapper test output"));
         assert!(report.command.first().unwrap().to_ascii_lowercase().contains("gradlew"));
+    }
+
+    #[test]
+    fn installs_a_self_bootstrapping_launcher_for_existing_gradle_projects() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("older-generated-project");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("build.gradle"), "plugins { }\n").unwrap();
+
+        crate::neoforge_project::ensure_gradle_launcher(&root).unwrap();
+
+        #[cfg(windows)]
+        assert!(root.join("gradlew.bat").is_file());
+        #[cfg(not(windows))]
+        {
+            let launcher = root.join("gradlew");
+            assert!(launcher.is_file());
+            use std::os::unix::fs::PermissionsExt;
+            assert_ne!(fs::metadata(launcher).unwrap().permissions().mode() & 0o111, 0);
+        }
+        let properties = fs::read_to_string(root.join("gradle/wrapper/gradle-wrapper.properties")).unwrap();
+        assert!(properties.contains("gradle-9.2.1-bin.zip"));
     }
 
     #[test]
