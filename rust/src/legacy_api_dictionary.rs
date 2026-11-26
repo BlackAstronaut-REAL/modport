@@ -2900,6 +2900,36 @@ const DEFINITIONS: &[Definition] = &[
     d!("ForgeChunkManager", "getMaxTicketLengthFor", V_112, "forge_chunk_max_ticket_length", "Forge chunk loading configuration", "chunk_loading", "automatic_rename_candidate", "Preserve per-mod maximum ticket length.", "net/minecraftforge/common/ForgeChunkManager.html"),
     d!("ForgeChunkManager", "getTicketCountFor", V_112, "forge_chunk_ticket_count", "Forge chunk ticket accounting", "chunk_loading", "automatic_rename_candidate", "Preserve per-mod ticket count including player tickets.", "net/minecraftforge/common/ForgeChunkManager.html"),
 
+    d!("ForgeEventFactory", "onLivingAttack", V_ALL, "forge_event_living_attack", "LivingAttackEvent", "forge_events", "event_adapter_required", "Preserve damage source, incoming amount and cancellation before hurt processing.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingHurt", V_ALL, "forge_event_living_hurt", "LivingHurtEvent", "forge_events", "event_adapter_required", "Preserve mutable damage amount and cancellation before armor/resistance.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingDamage", V_ALL, "forge_event_living_damage", "LivingDamageEvent", "forge_events", "event_adapter_required", "Preserve post-mitigation damage amount separately from LivingHurtEvent.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingDeath", V_ALL, "forge_event_living_death", "LivingDeathEvent", "forge_events", "event_adapter_required", "Preserve death cancellation and damage-source attribution.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingDrops", V_ALL, "forge_event_living_drops", "LivingDropsEvent", "forge_events", "event_adapter_required", "Preserve mutable drops, looting, recently-hit and player-kill context.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingFall", V_ALL, "forge_event_living_fall", "LivingFallEvent", "forge_events", "event_adapter_required", "Preserve mutable fall distance/damage multiplier and cancellation.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingJump", V_ALL, "forge_event_living_jump", "LivingJumpEvent", "forge_events", "event_adapter_required", "Preserve jump callback order and velocity changes.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingKnockBack", V_ALL, "forge_event_living_knockback", "LivingKnockBackEvent", "forge_events", "event_adapter_required", "Preserve strength and horizontal ratio mutation before motion is applied.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingConvert", V_18, "forge_event_living_convert", "LivingConversionEvent", "forge_events", "event_adapter_required", "Preserve source entity, replacement entity, conversion reason and cancellation.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingSetAttackTarget", V_18, "forge_event_living_target_change", "LivingSetAttackTargetEvent", "forge_events", "event_adapter_required", "Preserve old/new target and cancellation when mob AI changes target.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onLivingExperienceDrop", V_18, "forge_event_living_xp_drop", "LivingExperienceDropEvent", "forge_events", "event_adapter_required", "Preserve attacker, recently-hit flag and mutable XP amount.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onPlayerTossEvent", V_18, "forge_event_player_toss", "ItemTossEvent", "forge_events", "event_adapter_required", "Preserve dropped EntityItem and cancellation before world insertion.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onPlayerAttackTarget", V_18, "forge_event_player_attack_target", "AttackEntityEvent", "forge_events", "event_adapter_required", "Preserve target and cancellation before attack logic.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onPlayerWakeUp", V_18, "forge_event_player_wake", "PlayerWakeUpEvent", "forge_events", "event_adapter_required", "Preserve wake flags and world-time update order.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onPlayerInteract", V_ALL, "forge_event_player_interact", "PlayerInteractEvent", "forge_events", "event_adapter_required", "Preserve action subtype, hand, clicked position, face and cancellation/result state.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onTravelToDimension", V_18, "forge_event_dimension_travel", "EntityTravelToDimensionEvent", "forge_events", "event_adapter_required", "Preserve source entity, target dimension and cancellation before transfer.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onAnvilChange", V_18, "forge_event_anvil_change", "AnvilUpdateEvent", "forge_events", "event_adapter_required", "Preserve input stacks, output, XP cost and material cost overrides.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onAnvilRepair", V_18, "forge_event_anvil_repair", "AnvilRepairEvent", "forge_events", "event_adapter_required", "Preserve repair inputs, repaired stack and break chance.", "net/minecraftforge/event/ForgeEventFactory.html"),
+    d!("ForgeEventFactory", "onItemUseStop", V_ALL, "forge_event_item_use_stop", "LivingEntityUseItemEvent.Stop", "forge_events", "event_adapter_required", "Preserve interrupted-use callback and remaining duration.", "net/minecraftforge/event/ForgeEventFactory.html"),
+
+
+
+    d!("WorldGenerator", "setDecorationDefaults", V_112, "world_generator_decoration_defaults", "ConfiguredFeature placement settings", "world_generation", "adapter_required", "Preserve decorator default settings and initialization order.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
+
+
+
+
+
+
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7207,6 +7237,49 @@ mod tests {
             assert!(!has(&v17, method));
             assert!(!has(&v18, method));
         }
+    }
+
+
+    #[test]
+    fn forge_event_factory_maps_event_creation_and_cancellation() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeEventFactory" && e.source_method == method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["onLivingAttack","onLivingHurt","onLivingDamage","onLivingDeath","onLivingDrops","onLivingFall","onLivingJump","onLivingHeal","onLivingKnockBack","onPlayerDestroyItem","onPlayerInteract","onItemUseStart","onItemUseTick","onItemUseFinish","onItemUseStop"] {
+                assert!(has(version,method), "missing ForgeEventFactory#{method}");
+            }
+        }
+        for method in ["onLivingConvert","onLivingSetAttackTarget","onLivingExperienceDrop","onPlayerTossEvent","onPlayerAttackTarget","onPlayerSleepInBed","onPlayerWakeUp","onTravelToDimension","onAnvilChange","onAnvilRepair"] {
+            assert!(has(&v18,method), "missing 1.8.9 ForgeEventFactory#{method}");
+            assert!(has(&v112,method), "missing 1.12.2 ForgeEventFactory#{method}");
+            assert!(!has(&v17,method), "unexpected 1.7.10 ForgeEventFactory#{method}");
+        }
+    }
+
+    #[test]
+    fn world_generation_and_fml_lifecycle_callbacks_are_indexed() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
+        for version in [&v17,&v18,&v112] {
+            assert!(has(version,"IWorldGenerator","generate"));
+            assert!(has(version,"WorldGenerator","generate"));
+            assert!(has(version,"EventBus","register"));
+            assert!(has(version,"EventBus","unregister"));
+            assert!(has(version,"EventBus","post"));
+            assert!(has(version,"FMLCommonHandler","instance"));
+            assert!(has(version,"FMLCommonHandler","bus"));
+            assert!(has(version,"Loader","instance"));
+            assert!(has(version,"Loader","isModLoaded"));
+        }
+        assert!(has(&v17,"WorldGenerator","setScale"));
+        assert!(has(&v18,"WorldGenerator","setScale"));
+        assert!(!has(&v112,"WorldGenerator","setScale"));
+        assert!(has(&v112,"WorldGenerator","setDecorationDefaults"));
+        assert!(has(&v112,"EventBus","shutdown"));
     }
 
     #[test]
