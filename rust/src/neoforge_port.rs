@@ -401,7 +401,15 @@ pub fn port_to_neoforge(
     let mut item_records = collect_items(
         &equipment, &armor_sources, &language_lore, &mut warnings
     );
-    let mut block_records = collect_blocks(&block_sources, &mut warnings);
+    let mut all_block_sources = block_sources.clone();
+    let registered_block_ids: BTreeSet<String> = all_block_sources.iter()
+        .map(|source| normalized_id(&source.registry_name))
+        .collect();
+    let resource_fallbacks = discover_blockstate_fallbacks(roots, &source_mod_id, &mut warnings);
+    all_block_sources.extend(resource_fallbacks.into_iter().filter(|source| {
+        !registered_block_ids.contains(&normalized_id(&source.registry_name))
+    }));
+    let mut block_records = collect_blocks(&all_block_sources, &mut warnings);
     for item in &mut item_records {
         item.source_path = prepared.display_source_path(&item.source_path);
     }
@@ -457,6 +465,22 @@ pub fn port_to_neoforge(
             .find(|projectile| projectile.bound_item.as_deref() == Some(item.id.as_str()))
             .map(|projectile| projectile.id.clone());
     }
+    let creative_tab_catalog = CreativeTabCatalog::load(roots);
+    let creative_tab_assignments = native_creative_tab_assignments(
+        &creative_tab_catalog,
+        &item_records,
+        &tool_records,
+        &block_records,
+        &native_armors,
+        &equipment,
+        &block_sources,
+    );
+    if !creative_tab_assignments.is_empty() {
+        warnings.push(format!(
+            "Assigned {} generated item(s) to recovered legacy/modern vanilla creative tabs.",
+            creative_tab_assignments.values().map(BTreeSet::len).sum::<usize>()
+        ));
+    }
     let native_projectiles: Vec<NativeProjectilePlan> = native_projectile_records.iter().map(|projectile| {
         let mut warnings = vec![
             "The source projectile is emitted as a generic ThrowableItemProjectile. Original impact effects, damage, explosions, pickup rules, custom gravity, and specialized physics are not ported.".to_owned()
@@ -484,6 +508,7 @@ pub fn port_to_neoforge(
         &native_entities,
         &native_block_entities,
         &native_projectile_records,
+        &creative_tab_assignments,
     )?;
     let generated_resource_files = write_native_resources(
         &resources_root, &target_mod_id, &item_records, &tool_records, &block_records, &native_armors
@@ -1777,6 +1802,7 @@ fn write_native_registries(
     entities: &[EntityMetadata],
     block_entities: &[NativeBlockEntityPlan],
     projectiles: &[ProjectileRecord],
+    creative_tabs: &BTreeMap<String, BTreeSet<String>>,
 ) -> Result<Vec<String>> {
     let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
     let registry_root = java_base.join("registry");
@@ -1791,6 +1817,17 @@ fn write_native_registries(
         format!("src/main/java/{}/registry/ModBlocks.java", package.replace('.', "/")),
         format!("src/main/java/{}/registry/ModItems.java", package.replace('.', "/")),
     ];
+
+    if !creative_tabs.is_empty() {
+        fs::write(
+            registry_root.join("ModCreativeTabs.java"),
+            generate_creative_tabs_java(package, creative_tabs),
+        )?;
+        generated.push(format!(
+            "src/main/java/{}/registry/ModCreativeTabs.java",
+            package.replace('.', "/")
+        ));
+    }
 
     if tools.iter().any(|tool| matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe")) {
         fs::write(registry_root.join("ModToolTiers.java"), generate_tool_tiers_java(package, tools))?;
