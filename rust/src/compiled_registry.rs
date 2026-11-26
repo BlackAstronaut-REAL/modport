@@ -723,7 +723,7 @@ mod tests {
                 Some(ConstantPoolEntry::String { string_index: 15 }),
             ],
             fields: Vec::new(),
-            methods: vec![MemberInfo {
+            methods: vec![crate::bytecode::classfile::MemberInfo {
                 access_flags: 0x0008,
                 name: "register".to_owned(),
                 descriptor: "()V".to_owned(),
