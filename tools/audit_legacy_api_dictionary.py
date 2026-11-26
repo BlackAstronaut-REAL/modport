@@ -295,7 +295,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
         "automatically portable; conversion status and semantic adapters remain separate.",
         "",
         "| Forge version | Documented API methods | Dictionary records | Validated mappings | Coverage | Stale mappings | Link mismatches | Ambiguous | Duplicate pairs |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for report in reports:
         lines.append(
@@ -328,7 +328,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
             lines.extend(["", "### Mappings not found in the JavaDocs", ""])
             for item in report["stale_or_undocumented_mappings"][:40]:
                 lines.append(f"- {item['owner']}#{item['method']}")
-            if len(report["stale_or_undocumented_mappings']) > 40:
+            if len(report["stale_or_undocumented_mappings"]) > 40:
                 lines.append(
                     f"- ...and {len(report['stale_or_undocumented_mappings']) - 40} more (see JSON output)"
                 )
