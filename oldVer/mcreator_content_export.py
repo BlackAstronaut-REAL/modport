@@ -1085,6 +1085,59 @@ def _extract_source_constructor_records(source_text: str) -> dict[str, list[dict
         result.setdefault(cls,[]).append({"args": args, "desc": "source"})
     return result
 
+def _source_registered_constructor_records(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
+    """Bind source constructor arguments to each registered item ID, not just its class."""
+    root = Path(root).expanduser().resolve()
+    registered = _source_registered_names(root)
+    field_registries = _source_field_registered_names(root)
+    classes_by_registry: dict[str, set[str]] = {}
+    for simple, names in registered.items():
+        for name in names:
+            classes_by_registry.setdefault(_registry_path(name), set()).add(simple)
+
+    result: dict[str, dict[str, dict[str, Any]]] = {}
+    for path in sorted(root.rglob("*.java"), key=lambda item: str(item).lower()):
+        try:
+            source_text = _strip_java_comments(path.read_text(encoding="utf-8-sig", errors="replace"))
+        except OSError:
+            continue
+
+        # Legacy field-based registrations map a source field to an exact registry ID.
+        for field_name, simple, raw_args in _source_constructor_assignments(source_text):
+            for registry_name in field_registries.get(field_name, set()):
+                registry = _registry_path(registry_name)
+                result.setdefault(simple, {})[registry] = {
+                    "args": _split_java_arguments(raw_args),
+                    "desc": "source-field-registration",
+                }
+
+        # DeferredRegister and GameRegistry calls keep constructor literals beside their ID.
+        for call_name, raw_args, _offset in _iter_java_calls(
+            source_text, {"register", "registerItem", "registerBlock"}
+        ):
+            arguments = _split_java_arguments(raw_args)
+            raw_registry = ""
+            if call_name == "register" and arguments:
+                first = re.fullmatch(r"\s*[\"']([^\"']+)[\"']\s*", arguments[0], re.DOTALL)
+                if first:
+                    raw_registry = first.group(1)
+            if not raw_registry:
+                raw_registry = _quoted_registry_argument(arguments)
+            registry = _registry_path(raw_registry)
+            expected_classes = classes_by_registry.get(registry, set())
+            if not expected_classes:
+                continue
+            for constructor_name, constructor_args, _constructor_offset in _iter_java_calls(raw_args):
+                simple = _simple(constructor_name)
+                if simple not in expected_classes:
+                    continue
+                result.setdefault(simple, {})[registry] = {
+                    "args": _split_java_arguments(constructor_args),
+                    "desc": "source-registry-registration",
+                }
+    return result
+
+
 def _extract_constructor_records(javap_text: str) -> dict[str, list[dict[str, Any]]]:
     records: dict[str, list[dict[str, Any]]] = {}
     lines = javap_text.splitlines()
@@ -4928,6 +4981,7 @@ def export_mcreator_content(
             result.warnings.append(f"Could not inspect registry source {registry_source.name}: {exc}")
     registry_name_map: dict[str, set[str]] = {}
     constructor_records_by_class: dict[str, list[dict[str, Any]]] = {}
+    source_instance_records: dict[str, dict[str, dict[str, Any]]] = {}
     source_registry_map: dict[str, set[str]] = {}
     source_field_registry_map: dict[str, set[str]] = {}
     source_instantiated_classes: set[str] = set()
@@ -4937,6 +4991,8 @@ def export_mcreator_content(
     for source_root in graph.roots:
         for name, values in _source_registered_names(source_root).items():
             source_registry_map.setdefault(name, set()).update(values)
+        for simple, instances in _source_registered_constructor_records(source_root).items():
+            source_instance_records.setdefault(simple, {}).update(instances)
         for name, values in _source_field_registered_names(source_root).items():
             source_field_registry_map.setdefault(name, set()).update(values)
         source_instantiated_classes.update(_source_instantiated_classes(source_root))
@@ -5231,7 +5287,11 @@ def export_mcreator_content(
                     base_fv,
                     base_template,
                     texture,
-                    constructor_records_by_class.get(actual_simple, []),
+                    (
+                        [source_instance_records[actual_simple][_registry_path(registry)]]
+                        if _registry_path(registry) in source_instance_records.get(actual_simple, {})
+                        else constructor_records_by_class.get(actual_simple, [])
+                    ),
                 )
                 if element.get("definition", {}).get("isFood"):
                     if "nutritionalValue" not in element.get("definition", {}):

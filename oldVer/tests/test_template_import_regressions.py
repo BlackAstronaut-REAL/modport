@@ -388,3 +388,41 @@ def test_compiled_only_custom_armor_model_override_is_linked(tmp_path, monkeypat
     monkeypatch.setattr(mcreator_content_export, "_run_javap", lambda _path: javap)
     links = mcreator_content_export._custom_armor_model_links([root])
     assert links["crystal"] == "ModelCrystalArmor"
+
+
+
+def test_generic_food_constructor_values_are_bound_to_each_registry_id(tmp_path) -> None:
+    from mcreator_content_export import _extract_food_info, _source_registered_constructor_records
+
+    root = tmp_path / "food"
+    root.mkdir()
+    source = root / "Foods.java"
+    source.write_text(
+        """
+class Foods {
+  static Object ITEMS;
+  static void register() {
+    ITEMS.register("sweet_berry_food", () -> new GenericFood(6, 0.5F, true));
+    ITEMS.register("cooked_fish_food", () -> new GenericFood(8, 0.8F, false));
+  }
+}
+class GenericFood extends Item {
+  public GenericFood(int nutrition, float saturation, boolean alwaysEdible) {
+    super(new Item.Properties().food(new FoodProperties.Builder()
+        .nutrition(nutrition).saturationMod(saturation)));
+    if (alwaysEdible) { this.builder.alwaysEat(); }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    instances = _source_registered_constructor_records(root)["GenericFood"]
+    source_text = source.read_text(encoding="utf-8")
+    berry = _extract_food_info(source_text, "Item", [instances["sweet_berry_food"]])
+    fish = _extract_food_info(source_text, "Item", [instances["cooked_fish_food"]])
+    assert berry["nutritionalValue"] == 6
+    assert berry["saturation"] == 0.5
+    assert berry["isAlwaysEdible"] is True
+    assert fish["nutritionalValue"] == 8
+    assert fish["saturation"] == 0.8
+    assert fish["isAlwaysEdible"] is False
