@@ -426,3 +426,87 @@ class GenericFood extends Item {
     assert fish["nutritionalValue"] == 8
     assert fish["saturation"] == 0.8
     assert fish["isAlwaysEdible"] is False
+
+
+
+def test_registered_generic_items_keep_their_own_stack_durability_rarity_and_fire_properties(tmp_path) -> None:
+    from mcreator_content_export import _item_element, _source_registered_constructor_records
+
+    root = tmp_path / "items"
+    root.mkdir()
+    source = root / "Relics.java"
+    source.write_text(
+        """
+class Relics {
+  static Object ITEMS;
+  static void register() {
+    ITEMS.register("small_relic", () -> new GenericRelic(16, 600));
+    ITEMS.register("single_relic", () -> new GenericRelic(1, 1200));
+  }
+}
+class GenericRelic extends Item {
+  public GenericRelic(int stack, int durability) {
+    super(new Item.Properties().stacksTo(stack).durability(durability)
+        .rarity(Rarity.EPIC).fireResistant());
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    records = _source_registered_constructor_records(root)["GenericRelic"]
+    source_text = source.read_text(encoding="utf-8")
+    schema = json.loads((ROOT / "mcreator_templates" / "ItemSchema.mod.json").read_text(encoding="utf-8"))["definition"]
+    small = _item_element(
+        source, "GenericRelic", "Item", source_text, "small_relic", 89, schema, "small",
+        [records["small_relic"]],
+    )["definition"]
+    single = _item_element(
+        source, "GenericRelic", "Item", source_text, "single_relic", 89, schema, "single",
+        [records["single_relic"]],
+    )["definition"]
+    assert (small["stackSize"], small["damageCount"]) == (16, 600)
+    assert (single["stackSize"], single["damageCount"]) == (1, 1200)
+    assert small["rarity"] == single["rarity"] == "EPIC"
+    assert small["immuneToFire"] is single["immuneToFire"] is True
+
+
+def test_registered_generic_weapons_keep_their_own_durability_damage_and_enchantability(tmp_path) -> None:
+    from mcreator_content_export import _source_registered_constructor_records, _tool_element
+
+    root = tmp_path / "weapons"
+    root.mkdir()
+    source = root / "Weapons.java"
+    source.write_text(
+        """
+class Weapons {
+  static Object ITEMS;
+  static void register() {
+    ITEMS.register("bronze_blade", () -> new GenericBlade(640, 11, 20));
+    ITEMS.register("royal_blade", () -> new GenericBlade(1800, 17, 50));
+  }
+}
+class GenericBlade extends Item {
+  int weaponDamage;
+  int enchantability;
+  public GenericBlade(int durability, int damage, int enchant) {
+    super(new Item.Properties().durability(durability));
+    this.weaponDamage = damage;
+    this.enchantability = enchant;
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    records = _source_registered_constructor_records(root)["GenericBlade"]
+    source_text = source.read_text(encoding="utf-8")
+    schema = json.loads((ROOT / "mcreator_templates" / "ToolSchema.mod.json").read_text(encoding="utf-8"))["definition"]
+    bronze = _tool_element(
+        "GenericBlade", source_text, "bronze_blade", 89, schema, "bronze", "Sword",
+        constructor_records=[records["bronze_blade"]],
+    )[0]["definition"]
+    royal = _tool_element(
+        "GenericBlade", source_text, "royal_blade", 89, schema, "royal", "Sword",
+        constructor_records=[records["royal_blade"]],
+    )[0]["definition"]
+    assert (bronze["usageCount"], bronze["damageVsEntity"], bronze["enchantability"]) == (640, 11, 20)
+    assert (royal["usageCount"], royal["damageVsEntity"], royal["enchantability"]) == (1800, 17, 50)

@@ -463,6 +463,108 @@ def _extract_food_info(text: str, superclass: str, constructor_records: list[dic
     if "func_77848_i" in text or "setAlwaysEdible" in text:
         info["isAlwaysEdible"] = True
     return info
+def _apply_source_constructor_values(
+    text: str,
+    simple: str,
+    constructor_records: list[dict[str, Any]] | None,
+) -> str:
+    """Resolve literal arguments for one registered use of a reusable content class."""
+    records = constructor_records or []
+    if not records:
+        return text
+    wanted_args = [str(value).strip() for value in (records[0].get("args") or [])]
+    if not wanted_args:
+        return text
+
+    pattern = re.compile(
+        rf"(?<![\w$.])(?:(?:public|protected|private)\s+)?{re.escape(simple)}\s*"
+        rf"\(([^()]*)\)\s*(?:throws\s+[^{{]+)?\{{",
+        re.DOTALL,
+    )
+    for match in pattern.finditer(text):
+        prefix = text[max(0, match.start() - 12):match.start()]
+        if re.search(r"\bnew\s*$", prefix):
+            continue
+        parameters = _split_java_arguments(match.group(1))
+        if len(parameters) != len(wanted_args):
+            continue
+        substitutions: dict[str, str] = {}
+        for parameter, argument in zip(parameters, wanted_args):
+            name_match = re.search(r"([A-Za-z_$][\w$]*)\s*(?:\[\])?\s*$", parameter.strip())
+            if not name_match:
+                continue
+            argument = argument.strip()
+            if re.fullmatch(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?[fFdDlL]?", argument):
+                substitutions[name_match.group(1)] = argument
+            elif argument.lower() in {"true", "false"}:
+                substitutions[name_match.group(1)] = argument.lower()
+            elif re.fullmatch(r'"(?:\\.|[^"\\])*"', argument, re.DOTALL):
+                substitutions[name_match.group(1)] = argument
+            elif re.fullmatch(r"(?:[A-Za-z_$][\w$]*\.)*[A-Za-z_$][\w$]*", argument):
+                substitutions[name_match.group(1)] = argument
+        if not substitutions:
+            continue
+
+        brace = match.end() - 1
+        depth, quote, escaped = 1, "", False
+        end = brace + 1
+        while end < len(text) and depth:
+            char = text[end]
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = ""
+            elif char in {'"', "'"}:
+                quote = char
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+            end += 1
+        if depth:
+            continue
+        body = text[brace + 1:end - 1]
+        for name, value in substitutions.items():
+            body = re.sub(rf"\b{re.escape(name)}\b", lambda _match, v=value: v, body)
+        return text + "\n\n// Resolved registered constructor instance\n" + body
+    return text
+
+
+def _source_item_property_updates(text: str) -> dict[str, Any]:
+    """Recover native item properties that are directly declared in source."""
+    updates: dict[str, Any] = {}
+    rarity = re.search(
+        r"\.rarity\s*\(\s*(?:[A-Za-z_$][\w$]*\.)?([A-Z][A-Z0-9_]*)\s*\)",
+        text,
+    )
+    if rarity and rarity.group(1) in {"COMMON", "UNCOMMON", "RARE", "EPIC"}:
+        updates["rarity"] = rarity.group(1)
+    fire_resistant = bool(re.search(r"\.fireResistant\s*\(\s*\)", text))
+    if not fire_resistant:
+        fire_resistant = bool(re.search(
+            r"\b(?:isImmuneToFire|isFireImmune)\s*\([^)]*\)\s*\{[^{}]*?return\s+true\s*;",
+            text,
+            re.DOTALL,
+        ))
+    if fire_resistant:
+        updates["immuneToFire"] = True
+    if re.search(r"\.piglinCurrency\s*\(\s*\)", text):
+        updates["isPiglinCurrency"] = True
+    enchantability = _extract_field_int(
+        text, ("enchantability", "enchantmentValue", "enchantValue", "itemEnchantability")
+    )
+    if enchantability is None:
+        returned = _extract_method_return_number(text, ("getEnchantmentValue", "getItemEnchantability"))
+        if returned is not None:
+            enchantability = int(returned)
+    if enchantability is not None:
+        updates["enchantability"] = max(0, int(enchantability))
+    return updates
+
+
 def _class_info(source: Path) -> tuple[str, str, str]:
     text = _run_javap(source)
     header = next((line.strip() for line in text.splitlines() if line.strip().startswith(("public ", "protected ", "private ", "class ", "abstract "))), "")
@@ -559,6 +661,7 @@ def _recover_tool_stats(
         if ctor:
             durability = int(ctor.group(1))
     damage_value = _extract_field_int(text, ("weaponDamage", "WEAPON_DAMAGE", "attackDamage", "ATTACK_DAMAGE", "damageVsEntity", "DAMAGE", "damage"))
+    enchantability_field = _extract_field_int(text, ("enchantability", "enchantmentValue", "enchantValue", "itemEnchantability"))
     if damage_value is None:
         returned = _extract_method_return_number(text, ("getDamageVsEntity", "getAttackDamage", "func_150931_i"))
         damage_value = int(returned) if returned is not None else None
@@ -581,13 +684,19 @@ def _recover_tool_stats(
         efficiency = float(material_stats.get("efficiency", efficiency))
         # A class-level getEnchantmentValue() is authoritative for custom items/bows/rods.
         ench_method = _extract_method_return_number(text, ("getEnchantmentValue", "getItemEnchantability"))
-        enchantability = int(ench_method) if ench_method is not None else int(material_stats.get("enchantability", enchantability))
+        enchantability = (
+            int(enchantability_field) if enchantability_field is not None
+            else int(ench_method) if ench_method is not None
+            else int(material_stats.get("enchantability", enchantability))
+        )
         if damage_value is None and material_stats.get("damage") is not None:
             offsets = {"Sword": 4.0, "Axe": 3.0, "Pickaxe": 2.0, "Shovel": 1.0, "Hoe": 0.0}
             damage_value = float(material_stats["damage"]) + offsets.get(tool_type, 0.0)
     else:
         ench_method = _extract_method_return_number(text, ("getEnchantmentValue", "getItemEnchantability"))
-        if ench_method is not None:
+        if enchantability_field is not None:
+            enchantability = int(enchantability_field)
+        elif ench_method is not None:
             enchantability = int(ench_method)
     if damage_value is None:
         damage_value = default_damage
@@ -4288,15 +4397,27 @@ def _ranged_behavior_updates(text: str, registry: str, template: dict[str, Any])
     return updates
 
 def _item_element(source: Path, simple: str, superclass: str, text: str, registry: str, fv: int, template: dict[str, Any], texture: str, constructor_records: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    stack = _find_int_after(text, ("func_77625_d", "setMaxStackSize")) or 64
-    max_damage = _find_int_after(text, ("func_77656_e", "setMaxDamage")) or 0
+    instance_text = _apply_source_constructor_values(text, simple, constructor_records)
+    stack = _find_int_after(instance_text, ("func_77625_d", "setMaxStackSize"))
+    if stack is None:
+        stacks_to = re.search(r"\.stacksTo\s*\(\s*(-?\d+)\s*\)", instance_text)
+        stack = int(stacks_to.group(1)) if stacks_to else None
+    if stack is None:
+        stack = _extract_field_int(instance_text, ("maxStackSize", "maxStack", "stackSize")) or 64
+    max_damage = _find_int_after(instance_text, ("func_77656_e", "setMaxDamage"))
+    if max_damage is None:
+        durability = re.search(r"\.durability\s*\(\s*(-?\d+)\s*\)", instance_text)
+        max_damage = int(durability.group(1)) if durability else None
+    if max_damage is None:
+        max_damage = _extract_field_int(instance_text, ("maxDamage", "maxDurability", "durability")) or 0
     updates = {
         "name": _display_name(registry),
         "texture": texture,
-        "stackSize": max(1, min(stack, 64)),
-        "damageCount": max(0, max_damage),
+        "stackSize": max(1, min(int(stack or 64), 64)),
+        "damageCount": max(0, int(max_damage or 0)),
         "creativeTabs": ["MISC"],
     }
+    updates.update(_source_item_property_updates(instance_text))
     if "guiTexture" in template:
         updates["guiTexture"] = texture
     if "customModelName" in template:
@@ -4307,9 +4428,9 @@ def _item_element(source: Path, simple: str, superclass: str, text: str, registr
         updates.update(_extract_food_info(text, superclass, constructor_records))
         if updates.get("isFood"):
             updates["creativeTabs"] = ["FOOD"]
-    updates.update(_ranged_behavior_updates(text, registry, template))
+    updates.update(_ranged_behavior_updates(instance_text, registry, template))
     return _new_element(fv, template, _element_name_from_class(simple, registry), registry, "item", updates)
-def _tool_element(simple: str, text: str, registry: str, fv: int, template: dict[str, Any], texture: str, tool_type: str, material_stats: Optional[dict[str, float]] = None, material_table: Optional[dict[str, dict[str, float]]] = None) -> tuple[dict[str, Any], list[str]]:
+def _tool_element(simple: str, text: str, registry: str, fv: int, template: dict[str, Any], texture: str, tool_type: str, material_stats: Optional[dict[str, float]] = None, material_table: Optional[dict[str, dict[str, float]]] = None, constructor_records: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], list[str]]:
     if material_stats is None and material_table:
         target = _compact_registry(registry)
         ranked = []
@@ -4321,19 +4442,20 @@ def _tool_element(simple: str, text: str, registry: str, fv: int, template: dict
                 ranked.append((len(k), value))
         if ranked:
             material_stats = dict(max(ranked, key=lambda item: item[0])[1])
-    usage, damage, efficiency, enchantability, warnings = _recover_tool_stats(text, tool_type, material_stats)
+    instance_text = _apply_source_constructor_values(text, simple, constructor_records)
+    usage, damage, efficiency, enchantability, warnings = _recover_tool_stats(instance_text, tool_type, material_stats)
     # MCreator's native Bow/Fishing Rod types carry the correct vanilla interaction
     # behavior. Detect both true legacy superclasses and modern custom Items that
     # implement the corresponding use animation/behavior themselves.
     if tool_type not in {"Bow", "Fishing Rod"}:
-        if re.search(r"\bUseAnim\.BOW\b|\bgetUseAnimation\s*\([^)]*\)\s*\{[^{}]*UseAnim\.BOW", text, re.DOTALL):
+        if re.search(r"\bUseAnim\.BOW\b|\bgetUseAnimation\s*\([^)]*\)\s*\{[^{}]*UseAnim\.BOW", instance_text, re.DOTALL):
             tool_type = "Bow"
-        elif re.search(r"extends\s+FishingRodItem\b", text) or "FishingRodItem" in text:
+        elif re.search(r"extends\s+FishingRodItem\b", instance_text) or "FishingRodItem" in instance_text:
             tool_type = "Fishing Rod"
     attack_speed = 1.0
     # SwordItem/Tier constructors encode the final attack-speed modifier as a
     # negative literal (e.g. -2.4 => 1.6 actual attack speed). Recover it.
-    m_speed = re.search(r"super\s*\([^;]*?,\s*-?(\d+(?:\.\d+)?)f?\s*,\s*new\s+Properties", text, re.DOTALL)
+    m_speed = re.search(r"super\s*\([^;]*?,\s*-?(\d+(?:\.\d+)?)f?\s*,\s*new\s+Properties", instance_text, re.DOTALL)
     if m_speed and tool_type in {"Sword", "Axe", "Pickaxe", "Shovel", "Hoe"}:
         raw = float(m_speed.group(1))
         # The common Mojmap Item constructor stores an attack-speed modifier;
@@ -4354,6 +4476,7 @@ def _tool_element(simple: str, text: str, registry: str, fv: int, template: dict
         "enchantability": enchantability,
         "repairItems": [],
     }
+    updates.update(_source_item_property_updates(instance_text))
     if "guiTexture" in template:
         updates["guiTexture"] = texture
     if "customModelName" in template:
@@ -5277,6 +5400,9 @@ def export_mcreator_content(
                 )
             warnings.extend(tex_warnings)
             sound_updates, sound_bindings = infer_sound_bindings(text, registry, kind, workspace)
+            instance_record = source_instance_records.get(actual_simple, {}).get(_registry_path(source_registry))
+            instance_records = [instance_record] if instance_record else constructor_records_by_class.get(actual_simple, [])
+            instance_text = _apply_source_constructor_values(text, actual_simple, instance_records)
             if kind == "item":
                 element = _item_element(
                     source,
@@ -5287,18 +5413,14 @@ def export_mcreator_content(
                     base_fv,
                     base_template,
                     texture,
-                    (
-                        [source_instance_records[actual_simple][_registry_path(registry)]]
-                        if _registry_path(registry) in source_instance_records.get(actual_simple, {})
-                        else constructor_records_by_class.get(actual_simple, [])
-                    ),
+                    instance_records,
                 )
                 if element.get("definition", {}).get("isFood"):
                     if "nutritionalValue" not in element.get("definition", {}):
                         warnings.append("Food was detected but exact nutrition/saturation values could not be recovered; verify the generated food properties.")
             elif kind == "tool":
                 tool_type = _classify_tool(_class_header_info_any(source)[1], actual_simple) or "Sword"
-                material_for_tool = source_tool_materials.get(_compact_registry(registry))
+                material_for_tool = source_tool_materials.get(_compact_registry(source_registry)) or source_tool_materials.get(_compact_registry(registry))
                 # Do not attach unrelated material stats to custom Bow/FishingRod Items;
                 # these source classes often have their own durability/enchantability and
                 # are intentionally not Tier-backed. Sword/Axe/Pickaxe/etc. retain Tier data.
@@ -5315,6 +5437,7 @@ def export_mcreator_content(
                     tool_type,
                     material_for_tool,
                     source_tool_materials if tier_backed else None,
+                    instance_records,
                 )
                 warnings.extend(tool_warnings)
             # Source callbacks such as onCraftedBy(ItemStack, ...) are executable
@@ -5484,8 +5607,8 @@ def export_mcreator_content(
                 if "name" in element["definition"]:
                     element["definition"]["name"] = display_name
                 if "specialInformation" in element["definition"]:
-                    tooltip_lines = _extract_tooltip_strings(text)
-                    for line in _language_descriptions(graph.roots, registry):
+                    tooltip_lines = _extract_tooltip_strings(instance_text if kind in {"item", "tool"} else text)
+                    for line in _language_descriptions(graph.roots, source_registry):
                         if line not in tooltip_lines:
                             tooltip_lines.append(line)
                     if tooltip_lines:
