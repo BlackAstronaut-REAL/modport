@@ -4355,29 +4355,59 @@ def _find_model_source(source_roots: list[Path], model_class: str) -> Optional[P
     candidates.sort(key=lambda p: (0 if p.suffix.lower() == ".java" else 1, str(p).lower()))
     return candidates[0]
 def _custom_armor_model_links(source_roots: list[Path]) -> dict[str, str]:
-    """Return armor-prefix -> legacy custom model class names from getArmorModel overrides."""
+    """Return armor-prefix -> legacy custom model links from source or bytecode overrides."""
     result: dict[str, str] = {}
     for root in source_roots:
-        for path in root.rglob("*.java"):
+        candidates = [*root.rglob("*.java"), *root.rglob("*.class")]
+        candidates.sort(key=lambda path: (0 if path.suffix.lower() == ".java" else 1, str(path).lower()))
+        for path in candidates:
             try:
-                text = path.read_text(encoding="utf-8-sig", errors="replace")
-            except OSError:
+                text = (
+                    path.read_text(encoding="utf-8-sig", errors="replace")
+                    if path.suffix.lower() == ".java"
+                    else _run_javap(path)
+                )
+            except Exception:
                 continue
             if "getArmorModel" not in text:
                 continue
-            method = re.search(r"\bgetArmorModel\s*\([^)]*\)\s*\{", text, re.DOTALL)
-            if not method:
-                continue
-            try:
-                from model_bridge import extract_balanced
-                body, _ = extract_balanced(text, text.find("{", method.start()))
-            except Exception:
-                body = text[method.end():]
-            models = re.findall(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(", body)
-            if not models:
-                # Some decompilers use a variable constructed outside the method;
-                # inspect the whole class as a conservative fallback.
-                models = re.findall(r"\bnew\s+((?:Model|model)[A-Za-z0-9_$]+)\s*\(", text)
+
+            models: list[str] = []
+            if path.suffix.lower() == ".java":
+                method = re.search(r"\bgetArmorModel\s*\([^)]*\)\s*\{", text, re.DOTALL)
+                if not method:
+                    continue
+                try:
+                    from model_bridge import extract_balanced
+                    body, _ = extract_balanced(text, text.find("{", method.start()))
+                except Exception:
+                    body = text[method.end():]
+                models = re.findall(r"\bnew\s+([A-Za-z_$][\w$]*(?:Model[A-Za-z0-9_$]*)?)\s*\(", body)
+                models = [name for name in models if "model" in name.lower()]
+                if not models:
+                    models = re.findall(r"\bnew\s+([A-Za-z_$][\w$]*(?:Model[A-Za-z0-9_$]*)?)\s*\(", text)
+                    models = [name for name in models if "model" in name.lower()]
+            else:
+                parsed_methods = _parse_methods(text)
+                armor_methods = [
+                    parsed for parsed in parsed_methods
+                    if re.search(r"\bgetArmorModel\s*\(", parsed.header)
+                ]
+                for parsed in armor_methods:
+                    for _offset, operation, comment in parsed.instructions:
+                        if operation.split()[0] != "new":
+                            continue
+                        model_name = _simple(_class_from_comment(comment))
+                        if model_name and "model" in model_name.lower():
+                            models.append(model_name)
+                if not models:
+                    for parsed in parsed_methods:
+                        for _offset, operation, comment in parsed.instructions:
+                            if operation.split()[0] != "new":
+                                continue
+                            model_name = _simple(_class_from_comment(comment))
+                            if model_name and "model" in model_name.lower():
+                                models.append(model_name)
             if not models:
                 continue
             model_class = _simple(models[0])
@@ -4388,7 +4418,7 @@ def _custom_armor_model_links(source_roots: list[Path]) -> dict[str, str]:
             stem = re.sub(r"(?i)(?:helmet|chestplate|leggings|boots)$", "", stem)
             key = _compact_registry(stem)
             if key:
-                result[key] = model_class
+                result.setdefault(key, model_class)
     return result
 def _write_custom_armor_model(
     source_root_candidates: list[Path],
@@ -4434,7 +4464,15 @@ def _write_custom_armor_model(
         java = model_to_mojmap_java(model, model_class, modid)
         # Armor.java.ftl accesses the selected ModelPart fields directly.
         java = java.replace("\tprivate final ModelPart ", "\tpublic final ModelPart ")
-        target = workspace_root / "models" / "mojmap-1.20.x" / f"{model_class}.java"
+        model_root = workspace_root / "models"
+        # Use the active generator directory created by export_mcreator_workspace.
+        if (model_root / "mojmap-1.21.x").is_dir():
+            generator_dir = "mojmap-1.21.x"
+        elif (model_root / "mojmap-1.20.x").is_dir():
+            generator_dir = "mojmap-1.20.x"
+        else:
+            generator_dir = "mojmap-1.20.x"
+        target = model_root / generator_dir / f"{model_class}.java"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(java, encoding="utf-8")
         return True, model_class, warnings

@@ -55,6 +55,8 @@ class EntityMetadata:
     water_mob: bool = False
     flying_mob: bool = False
     ai_classes: list[str] = field(default_factory=list)
+    ai_priorities: dict[str, int] = field(default_factory=dict)
+    evidence_fields: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -381,7 +383,7 @@ def _parse_entity_metadata(path: Path, registry_hint: str = "") -> EntityMetadat
         superclass=superclass,
     )
     lower_super = superclass.lower()
-    meta.water_mob = any(token in lower_super for token in ("watermob", "squid", "fish"))
+    meta.water_mob = any(token in lower_super for token in ("watermob", "wateranimal", "squid", "fish"))
     meta.flying_mob = any(token in lower_super for token in ("flying", "ambient", "bat"))
     meta.fire_immune = "field_70178_ae" in text
 
@@ -413,7 +415,7 @@ def _parse_entity_metadata(path: Path, registry_hint: str = "") -> EntityMetadat
                 continue
             if base == "new":
                 cls = _simple(_class_from_comment(comment))
-                if cls.startswith("EntityAI"):
+                if cls.startswith("EntityAI") or cls.endswith("Goal"):
                     ai_classes.append(cls)
                 stack.append(ConstructedObject(cls))
                 continue
@@ -445,7 +447,14 @@ def _parse_entity_metadata(path: Path, registry_hint: str = "") -> EntityMetadat
 
     if size_values:
         meta.width, meta.height = max(size_values, key=lambda pair: pair[0] * pair[1])
+        found_attributes.update(("width", "height"))
     meta.ai_classes = sorted(set(ai_classes))
+    if meta.fire_immune:
+        found_attributes.add("fire_immune")
+    if meta.water_mob:
+        found_attributes.add("water_mob")
+    if meta.flying_mob:
+        found_attributes.add("flying_mob")
     for attribute, label in (
         ("health", "maximum health"),
         ("attack_damage", "attack damage"),
@@ -471,8 +480,187 @@ def _parse_entity_metadata(path: Path, registry_hint: str = "") -> EntityMetadat
                     previous_value = value
             elif base == "putfield" and "field_70728_aV:I" in comment and isinstance(previous_value, (int, float)):
                 meta.xp = int(previous_value)
+                found_attributes.add("xp")
+    meta.evidence_fields = sorted(found_attributes)
     return meta
 
+
+def _source_entity_metadata(path: Path, registry_hint: str = "") -> EntityMetadata:
+    """Recover entity properties and goal classes from decompiled Java source."""
+    try:
+        raw = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as exc:
+        raise OSError(f"Could not read entity source {path}: {exc}") from exc
+    text = re.sub(r"/\*.*?\*/", " ", raw, flags=re.DOTALL)
+    text = re.sub(r"(?m)//[^\r\n]*", " ", text)
+    header = re.search(
+        r"\b(?:class|record)\s+([A-Za-z_$][\w$]*)"
+        r"(?:\s*<[^>{}]*>)?\s+extends\s+([A-Za-z_$][\w.$]*)",
+        text,
+    )
+    if not header:
+        header = re.search(r"\b(?:class|record)\s+([A-Za-z_$][\w$]*)", text)
+    class_name = _simple(header.group(1)) if header else Path(path).stem
+    superclass = _simple(header.group(2)) if header and header.lastindex and header.lastindex >= 2 else ""
+    meta = EntityMetadata(
+        class_name=class_name,
+        display_name=_display_name(registry_hint or class_name),
+        registry_name=_registry_name(registry_hint or class_name),
+        superclass=superclass,
+    )
+    lower_super = superclass.lower()
+    meta.water_mob = any(token in lower_super for token in ("watermob", "wateranimal", "squid", "fish"))
+    meta.flying_mob = any(token in lower_super for token in ("flying", "ambient", "bat"))
+    evidence: set[str] = set()
+    if meta.water_mob:
+        evidence.add("water_mob")
+    if meta.flying_mob:
+        evidence.add("flying_mob")
+
+    number = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?\s*[fFdDlL]?)"
+    attribute_aliases = {
+        "health": ("MAX_HEALTH", "maxHealth", "field_111267_a"),
+        "movement_speed": ("MOVEMENT_SPEED", "movementSpeed", "field_111263_d"),
+        "attack_damage": ("ATTACK_DAMAGE", "attackDamage", "field_111264_e"),
+        "follow_range": ("FOLLOW_RANGE", "followRange", "field_111265_b"),
+        "armor": ("ARMOR", "armor"),
+    }
+    for field_name, aliases in attribute_aliases.items():
+        alias_expr = "|".join(re.escape(alias) for alias in aliases)
+        attribute_expr = rf"(?:Attributes|SharedMonsterAttributes)\s*\.\s*(?:{alias_expr})\s*(?:\.\s*get\s*\(\s*\))?"
+        patterns = (
+            rf"\.add\s*\(\s*{attribute_expr}\s*,\s*{number}\s*\)",
+            rf"(?:getAttribute|getEntityAttribute)\s*\(\s*{attribute_expr}\s*\)\s*\.\s*setBaseValue\s*\(\s*{number}\s*\)",
+        )
+        value_match = None
+        for pattern in patterns:
+            value_match = re.search(pattern, text, re.DOTALL)
+            if value_match:
+                break
+        if value_match:
+            raw_value = re.sub(r"\s+", "", value_match.group(1)).rstrip("fFdDlL")
+            try:
+                setattr(meta, field_name, float(raw_value))
+                evidence.add(field_name)
+            except ValueError:
+                pass
+
+    size_patterns = (
+        rf"\b(?:setSize|func_70105_a)\s*\(\s*{number}\s*,\s*{number}\s*\)",
+        rf"EntityDimensions\s*\.\s*(?:scalable|fixed)\s*\(\s*{number}\s*,\s*{number}\s*\)",
+    )
+    for pattern in size_patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if not match:
+            continue
+        try:
+            width = float(re.sub(r"\s+", "", match.group(1)).rstrip("fFdDlL"))
+            height = float(re.sub(r"\s+", "", match.group(2)).rstrip("fFdDlL"))
+        except ValueError:
+            continue
+        if width > 0 and height > 0:
+            meta.width, meta.height = width, height
+            evidence.update(("width", "height"))
+            break
+    for field_name in ("width", "height"):
+        match = re.search(rf"(?:this\s*\.\s*)?{field_name}\s*=\s*{number}\s*;", text)
+        if match and field_name not in evidence:
+            try:
+                setattr(meta, field_name, float(re.sub(r"\s+", "", match.group(1)).rstrip("fFdDlL")))
+                evidence.add(field_name)
+            except ValueError:
+                pass
+
+    xp_match = re.search(
+        rf"\b(?:experienceReward|experienceValue|xpReward|experiencePoints)\s*=\s*{number}\s*;",
+        text,
+    )
+    if not xp_match:
+        xp_match = re.search(
+            rf"\b(?:getExperienceReward|getExperiencePoints|getExperienceValue)\s*\([^)]*\)\s*\{{[^{{}}]*?return\s+{number}\s*;",
+            text,
+            re.DOTALL,
+        )
+    if xp_match:
+        raw_xp = re.search(number, xp_match.group(0))
+        if raw_xp:
+            try:
+                meta.xp = max(0, int(float(re.sub(r"\s+", "", raw_xp.group(1)).rstrip("fFdDlL"))))
+                evidence.add("xp")
+            except ValueError:
+                pass
+
+    for method_name in ("isFireImmune", "isImmuneToFire", "fireImmune"):
+        method = re.search(
+            rf"\b{method_name}\s*\([^)]*\)\s*\{{[^{{}}]*?return\s+(true|false)\s*;",
+            text,
+            re.DOTALL,
+        )
+        if method:
+            meta.fire_immune = method.group(1) == "true"
+            evidence.add("fire_immune")
+            break
+
+    priorities: dict[str, int] = {}
+    goals = re.compile(
+        r"\b(?:goalSelector|targetSelector|tasks|targetTasks)\s*\.\s*"
+        r"(?:addGoal|addTask)\s*\(\s*(?:(\d+)\s*,\s*)?"
+        r"new\s+([A-Za-z_$][\w.$]*)(?:\s*<[^>]*>)?\s*\(",
+        re.DOTALL,
+    )
+    for match in goals.finditer(text):
+        goal_name = _simple(match.group(2))
+        if goal_name:
+            meta.ai_classes.append(goal_name)
+            if match.group(1) is not None:
+                priorities[goal_name] = int(match.group(1))
+    meta.ai_classes = sorted(set(meta.ai_classes))
+    meta.ai_priorities = priorities
+    meta.evidence_fields = sorted(evidence)
+    for field_name, label in (
+        ("health", "maximum health"),
+        ("attack_damage", "attack damage"),
+        ("movement_speed", "movement speed"),
+    ):
+        if field_name not in evidence:
+            meta.warnings.append(
+                f"{label.capitalize()} was not assigned directly in this entity class; the MCreator value is a safe fallback and may come from a superclass or custom stats helper."
+            )
+    return meta
+
+
+def _merge_entity_metadata(
+    target: EntityMetadata,
+    incoming: EntityMetadata,
+    *,
+    prefer_incoming: bool = False,
+) -> EntityMetadata:
+    """Merge metadata while preferring compiled evidence unless explicitly requested otherwise."""
+    incoming_fields = set(incoming.evidence_fields)
+    target_fields = set(target.evidence_fields)
+    for field_name in incoming_fields:
+        if prefer_incoming or field_name not in target_fields:
+            setattr(target, field_name, getattr(incoming, field_name))
+    target.evidence_fields = sorted(target_fields | incoming_fields)
+    target.ai_classes = sorted(set(target.ai_classes) | set(incoming.ai_classes))
+    priorities = dict(target.ai_priorities)
+    for goal_name, priority in incoming.ai_priorities.items():
+        if prefer_incoming or goal_name not in priorities:
+            priorities[goal_name] = priority
+    target.ai_priorities = priorities
+    labels = {
+        "health": "maximum health",
+        "attack_damage": "attack damage",
+        "movement_speed": "movement speed",
+    }
+    for field_name, label in labels.items():
+        if field_name in target.evidence_fields:
+            target.warnings = [warning for warning in target.warnings if label not in warning.lower()]
+    for warning in incoming.warnings:
+        is_resolved = any(label in warning.lower() and field_name in target.evidence_fields for field_name, label in labels.items())
+        if warning not in target.warnings and not is_resolved:
+            target.warnings.append(warning)
+    return target
 
 
 def _split_java_arguments(raw: str) -> list[str]:
@@ -969,17 +1157,55 @@ def scan_legacy_mod(root: Path, log=None, source_roots: Optional[Iterable[Path]]
     graph.registry_names.update(source_registry_names)
     for reg in graph.registrations:
         entity_path = class_files.get(reg.entity_class)
-        if not entity_path:
+        source_path = java_files.get(reg.entity_class)
+        if not entity_path and not source_path:
             continue
-        try:
-            meta = _parse_entity_metadata(entity_path, graph.registry_names.get(reg.entity_class, ""))
-        except Exception as exc:
-            meta = EntityMetadata(
-                class_name=reg.entity_class,
-                display_name=_display_name(reg.entity_class),
-                registry_name=_registry_name(graph.registry_names.get(reg.entity_class, reg.entity_class)),
-                warnings=[f"Entity metadata parser failed: {exc}"],
-            )
+        registry_hint = graph.registry_names.get(reg.entity_class, "")
+        if entity_path:
+            try:
+                meta = _parse_entity_metadata(entity_path, registry_hint)
+            except Exception as exc:
+                if source_path is None:
+                    meta = EntityMetadata(
+                        class_name=reg.entity_class,
+                        display_name=_display_name(registry_hint or reg.entity_class),
+                        registry_name=_registry_name(registry_hint or reg.entity_class),
+                        warnings=[f"Entity metadata parser failed: {exc}"],
+                    )
+                else:
+                    meta = _source_entity_metadata(source_path, registry_hint)
+                    meta.warnings.append(f"Compiled entity metadata parser failed; recovered from Java source: {exc}")
+        else:
+            try:
+                meta = _source_entity_metadata(source_path, registry_hint)
+            except Exception as exc:
+                graph.warnings.append(f"Source entity metadata parser failed for {reg.entity_class}: {exc}")
+                continue
+
+        if source_path:
+            try:
+                source_chain: list[EntityMetadata] = []
+                visited_sources: set[str] = set()
+                current_path: Optional[Path] = source_path
+                while current_path is not None:
+                    key = str(current_path.resolve()).lower()
+                    if key in visited_sources:
+                        break
+                    visited_sources.add(key)
+                    source_meta = _source_entity_metadata(
+                        current_path,
+                        registry_hint if current_path == source_path else "",
+                    )
+                    source_chain.append(source_meta)
+                    parent = source_meta.superclass
+                    current_path = java_files.get(parent) if parent and parent != source_meta.class_name else None
+                if source_chain:
+                    merged_source = source_chain[-1]
+                    for source_meta in reversed(source_chain[:-1]):
+                        merged_source = _merge_entity_metadata(merged_source, source_meta, prefer_incoming=True)
+                    meta = _merge_entity_metadata(meta, merged_source, prefer_incoming=False)
+            except Exception as exc:
+                meta.warnings.append(f"Could not merge inherited source metadata: {exc}")
         graph.entities[reg.entity_class] = meta
 
     # De-duplicate exact registrations that bridge methods may expose twice.

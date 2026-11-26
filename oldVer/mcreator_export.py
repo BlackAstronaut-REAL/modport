@@ -703,15 +703,15 @@ def _find_living_template(workspace_root: Path) -> Optional[dict[str, Any]]:
 def _ai_xml(ai_classes: Iterable[str]) -> str:
     classes = {name.lower() for name in ai_classes}
     blocks: list[tuple[str, list[tuple[str, str]]]] = []
-    if any("swimming" in name for name in classes):
+    if any(token in name for name in classes for token in ("swimming", "floatgoal", "wateravoidingswim")):
         blocks.append(("swim_in_water", [("condition", "null,null")]))
-    if any(token in name for name in classes for token in ("attackoncollide", "meleeattack")):
+    if any(token in name for name in classes for token in ("attackoncollide", "meleeattack", "meleeattackgoal")):
         blocks.append(("attack_on_collide", [("speed", "1.2"), ("longmemory", "FALSE"), ("condition", "null,null")]))
-    if any("wander" in name for name in classes):
+    if any(token in name for name in classes for token in ("wander", "randomstroll", "wateravoidingrandomstroll", "panicgoal")):
         blocks.append(("wander", [("speed", "1"), ("condition", "null,null")]))
     if any(token in name for name in classes for token in ("hurtbytarget", "nearestattackabletarget")):
         blocks.append(("attack_action", [("callhelp", "TRUE"), ("condition", "null,null")]))
-    if any(token in name for name in classes for token in ("lookidle", "watchclosest")):
+    if any(token in name for name in classes for token in ("lookidle", "watchclosest", "randomlookaround", "lookatplayer", "lookatentity")):
         blocks.append(("look_around", [("condition", "null,null")]))
     if not blocks:
         blocks = [("wander", [("speed", "1"), ("condition", "null,null")]), ("look_around", [("condition", "null,null")])]
@@ -2053,7 +2053,7 @@ def export_mcreator_workspace(
         record.warnings.extend(meta.warnings)
         # Keep unsupported AI/state information explicit.
         if meta.ai_classes:
-            known_tokens = ("swimming", "attackoncollide", "meleeattack", "wander", "hurtbytarget", "nearestattackabletarget", "lookidle", "watchclosest")
+            known_tokens = ("swimming", "floatgoal", "wateravoidingswim", "attackoncollide", "meleeattack", "meleeattackgoal", "wander", "randomstroll", "wateravoidingrandomstroll", "panicgoal", "hurtbytarget", "nearestattackabletarget", "lookidle", "watchclosest", "randomlookaround", "lookatplayer", "lookatentity")
             unsupported = [name for name in meta.ai_classes if not any(token in name.lower() for token in known_tokens)]
             if unsupported:
                 record.warnings.append(f"Custom/unsupported AI goals retained in report only: {unsupported}")

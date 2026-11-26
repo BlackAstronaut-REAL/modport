@@ -297,3 +297,94 @@ def test_plant_models_use_mcreator_cross_model_type(tmp_path):
     info = _mcreator_block_model_info([src], "demo", "flower")
     assert info["renderType"] == 12
     assert info["customModelName"] == "Cross model"
+
+
+
+def test_source_only_entity_metadata_and_modern_goals_are_recovered() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "Main.java").write_text(
+            """
+class Main {
+  static Object ENTITY_TYPES;
+  static final RegistryObject<EntityType<AlphaMob>> ENTITY_TYPE_ALPHA =
+      ENTITY_TYPES.register("alpha_mob", () -> EntityType.Builder.<AlphaMob>of(AlphaMob::new, MobCategory.CREATURE).build("alpha_mob"));
+  void renderers(EntityRenderersEvent.RegisterRenderers event) {
+    event.registerEntityRenderer(ENTITY_TYPE_ALPHA.get(), ctx -> new RenderAlpha(ctx, new ModelAlpha(), 0.4f, 1.0f));
+  }
+}
+class RenderAlpha {}
+class ModelAlpha {}
+""",
+            encoding="utf-8",
+        )
+        (root / "AlphaMob.java").write_text(
+            """
+class AlphaMob extends PathfinderMob {
+  public static AttributeSupplier.Builder createAttributes() {
+    return Mob.createMobAttributes()
+        .add(Attributes.MAX_HEALTH, 48.0D)
+        .add(Attributes.MOVEMENT_SPEED, 0.28D)
+        .add(Attributes.ATTACK_DAMAGE, 9.0D)
+        .add(Attributes.FOLLOW_RANGE, 32.0D)
+        .add(Attributes.ARMOR, 4.0D);
+  }
+  protected void registerGoals() {
+    this.goalSelector.addGoal(0, new FloatGoal(this));
+    this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.2D, true));
+    this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+    this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, true));
+  }
+  protected void setDimensions() { this.setSize(1.2F, 2.4F); }
+  public boolean isFireImmune() { return true; }
+  public int getExperienceReward() { return 30; }
+}
+""",
+            encoding="utf-8",
+        )
+        graph = scan_legacy_mod(root)
+        meta = graph.entities["AlphaMob"]
+        assert meta.registry_name == "alpha_mob"
+        assert (meta.width, meta.height) == (1.2, 2.4)
+        assert meta.health == 48.0
+        assert meta.movement_speed == 0.28
+        assert meta.attack_damage == 9.0
+        assert meta.follow_range == 32.0
+        assert meta.armor == 4.0
+        assert meta.xp == 30
+        assert meta.fire_immune is True
+        assert set(meta.ai_classes) == {
+            "FloatGoal", "MeleeAttackGoal", "RandomLookAroundGoal", "NearestAttackableTargetGoal"
+        }
+        assert meta.ai_priorities["MeleeAttackGoal"] == 2
+
+
+def test_modern_vanilla_goal_classes_produce_native_mcreator_ai_blocks() -> None:
+    from mcreator_export import _ai_xml
+    xml = _ai_xml([
+        "FloatGoal", "MeleeAttackGoal", "WaterAvoidingRandomStrollGoal",
+        "RandomLookAroundGoal", "NearestAttackableTargetGoal",
+    ])
+    for block in ("swim_in_water", "attack_on_collide", "wander", "look_around", "attack_action"):
+        assert f'<block type="{block}">' in xml
+
+
+def test_compiled_only_custom_armor_model_override_is_linked(tmp_path, monkeypatch) -> None:
+    import mcreator_content_export
+
+    root = tmp_path / "compiled"
+    root.mkdir()
+    compiled = root / "ItemCrystalArmor.class"
+    compiled.write_bytes(b"compiled fixture")
+    javap = '''public class ItemCrystalArmor extends ItemArmor {
+  public ModelBiped getArmorModel(EntityLivingBase, ItemStack, int, EntityPlayer);
+    Code:
+       0: new           #7                  // class net/example/ModelCrystalArmor
+       3: dup
+       4: invokespecial #9                  // Method net/example/ModelCrystalArmor."<init>":()V
+       7: areturn
+}
+'''
+    monkeypatch.setattr(mcreator_content_export, "_run_javap", lambda _path: javap)
+    links = mcreator_content_export._custom_armor_model_links([root])
+    assert links["crystal"] == "ModelCrystalArmor"
