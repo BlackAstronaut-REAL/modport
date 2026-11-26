@@ -269,7 +269,7 @@ fn is_block_class(superclass: &str, parents: &BTreeMap<String, String>, depth: u
 /// of a legacy registerBlock call. Some mods register inline instances, while
 /// others wrap them in helper expressions or pass name/instance in reverse order.
 fn registered_block_class(expression: &str, field_classes: &BTreeMap<String, String>) -> Option<String> {
-    let constructor = Regex::new(r"\\bnew\\s+([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\(").ok()?;
+    let constructor = Regex::new(r"\bnew\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*\(").ok()?;
     if let Some(class) = constructor.captures(expression)
         .and_then(|capture| capture.get(1))
         .map(|value| simple_name(value.as_str()))
@@ -277,7 +277,7 @@ fn registered_block_class(expression: &str, field_classes: &BTreeMap<String, Str
         return Some(class);
     }
 
-    let class_literal = Regex::new(r"\\b([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\.\\s*class\\b").ok()?;
+    let class_literal = Regex::new(r"\b([A-Za-z_$][A-Za-z0-9_$.]*)\s*\.\s*class\b").ok()?;
     if let Some(class) = class_literal.captures(expression)
         .and_then(|capture| capture.get(1))
         .map(|value| simple_name(value.as_str()))
@@ -317,7 +317,6 @@ fn legacy_block_registrations(
 }
 
 /// Discover registered Java Block subclasses from legacy GameRegistry and modern BLOCKS.register calls.
-pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSource>> {/// Discover registered Java Block subclasses from legacy GameRegistry and modern BLOCKS.register calls.
 pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSource>> {
     let files = files_java(source_roots);
     let mut texts = Vec::<String>::new();
