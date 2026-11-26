@@ -72,6 +72,20 @@ jobs:
           }
           '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/ModBlocks.java")
 
+          @'
+          class EntityRubyBeast extends EntityMob {
+              public EntityRubyBeast() { }
+          }
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/EntityRubyBeast.java")
+
+          @'
+          class EntityRegistry {
+              public static void register() {
+                  GameRegistry.registerModEntity(EntityRubyBeast.class, "ruby_beast", 1, null, 64, 3, true);
+              }
+          }
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/EntityRegistry.java")
+
           .\rust\target\release\mojmodelbridge.exe port-neoforge "$output" "$source"
           if ($LASTEXITCODE -ne 0) { throw "The Rust port-neoforge command failed." }
 
@@ -80,6 +94,18 @@ jobs:
           $status = Get-Content -Raw $statusPath | ConvertFrom-Json
           if ($status.converted.items -lt 1) { throw "Smoke port did not register its sample item." }
           if ($status.converted.blocks -lt 1) { throw "Smoke port did not register its sample block." }
+          if ($status.converted.entity_placeholders -lt 1) { throw "Smoke port did not register its sample entity." }
+          $entityClass = Join-Path $output "src/main/java/com/modport/smoke_mod/entity/ConvertedEntityRubyBeast.java"
+          if (!(Test-Path $entityClass)) { throw "Smoke port did not generate the sample entity class." }
+          $rendererFile = Join-Path $output "src/main/java/com/modport/smoke_mod/client/ModEntityRenderers.java"
+          if (!(Test-Path $rendererFile)) { throw "Smoke port did not generate the entity renderer class." }
+          $rendererSource = Get-Content -Raw $rendererFile
+          if ($rendererSource -notmatch 'import com\.modport\.smoke_mod\.entity\.\*;') {
+              throw "Generated entity renderer is missing its generated entity package import."
+          }
+          if ($rendererSource -notmatch 'MobRenderer<ConvertedEntityRubyBeast') {
+              throw "Generated entity renderer does not reference the sample entity type."
+          }
           if (!(Test-Path (Join-Path $output "src/main/java/com/modport/smoke_mod/NeoForgeMod.java"))) {
               throw "Smoke port did not produce its NeoForge @Mod entrypoint."
           }
