@@ -321,6 +321,12 @@ def audit_version(
         "documentation_link_mismatches": doc_link_mismatches,
         "ambiguous_owner_method_mappings": ambiguous,
         "duplicate_dictionary_pairs": duplicate_pairs,
+        # Complete release-specific JavaDoc catalogue. This makes the audit
+        # output the reproducible source for adding still-unmapped API methods.
+        "documented_methods": [
+            {"class_page": page, "owner": Path(page).stem, "method": method}
+            for page, method in sorted(documented, key=lambda pair: (pair[0].casefold(), pair[1].casefold()))
+        ],
         "unmapped_methods": [
             {"class_page": page, "owner": Path(page).stem, "method": method}
             for page, method in unmapped
