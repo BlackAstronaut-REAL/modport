@@ -448,6 +448,141 @@ pub fn generate_animation_definition_java(model: &ParsedModel, class_name: &str)
 
 /// Parse a Java or compiled class model, expand repeated render instances, and
 /// write MCreator staging Java files under models/mojmap-1.21.x and models/animations.
+
+#[derive(Debug, Clone)]
+pub struct NeoForgeEntityModelExport {
+    pub class_name: String,
+    pub source: String,
+    pub animation_source: Option<String>,
+    pub animation_records: Vec<McreatorAnimationRecord>,
+    pub part_count: usize,
+    pub cube_count: usize,
+}
+
+/// Produce a self-contained native 1.21.1 HierarchicalModel and its optional
+/// AnimationDefinition companion. This is separate from the MCreator source
+/// bridge because the NeoForge porter registers model layers and renderers itself.
+pub fn generate_neoforge_entity_model_sources(
+    model: &ParsedModel,
+    class_name: &str,
+    modid: &str,
+    package: &str,
+) -> Result<NeoForgeEntityModelExport> {
+    let class_name = java_identifier(class_name, "ConvertedEntityModel");
+    let generated_animation = generate_animation_definition_java(model, &class_name)?;
+    let mut source = generate_mojmap_model_java(model, &class_name, modid)?;
+
+    let old_header = format!(
+        "public class {class_name}<T extends Entity> extends EntityModel<T> {{"
+    );
+    let new_header = format!(
+        "public class {class_name}<T extends Entity> extends HierarchicalModel<T> {{\n\tprivate final ModelPart root;"
+    );
+    if !source.contains(&old_header) {
+        bail!("Generated base model '{}' did not contain the expected EntityModel header.", class_name);
+    }
+    source = source.replace(&old_header, &new_header);
+
+    let constructor = format!("\tpublic {class_name}(ModelPart root) {{\n");
+    if !source.contains(&constructor) {
+        bail!("Generated base model '{}' did not contain its root constructor.", class_name);
+    }
+    source = source.replace(
+        &constructor,
+        &format!("{constructor}\t\tthis.root = root;\n"),
+    );
+
+    let root_getter_anchor = "\t}\n\n\tpublic static LayerDefinition createBodyLayer()";
+    if !source.contains(root_getter_anchor) {
+        bail!("Generated base model '{}' did not contain its layer-definition boundary.", class_name);
+    }
+    source = source.replace(
+        root_getter_anchor,
+        "\t}\n\n\t@Override\n\tpublic ModelPart root() {\n\t\treturn this.root;\n\t}\n\n\tpublic static LayerDefinition createBodyLayer()",
+    );
+
+    let mut animation_calls = String::from(
+        "\t\tthis.root.getAllParts().forEach(ModelPart::resetPose);\n"
+    );
+    if let Some(animation) = generated_animation.as_ref() {
+        let animation_class = format!("{class_name}Animation");
+        for record in &animation.records {
+            if record.walking {
+                animation_calls.push_str(&format!(
+                    "\t\tif (limbSwingAmount > 0.0001F) KeyframeAnimations.animate(this, {animation_class}.{field}, (long) (limbSwing * 50.0F), limbSwingAmount, new Vector3f());\n",
+                    field = record.field
+                ));
+            } else {
+                animation_calls.push_str(&format!(
+                    "\t\tKeyframeAnimations.animate(this, {animation_class}.{field}, (long) (ageInTicks * 50.0F), 1.0F, new Vector3f());\n",
+                    field = record.field
+                ));
+            }
+        }
+    }
+    let old_setup = format!(
+        "\tpublic void setupAnim(T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {{\n\t\tthis.bridgeAgeInTicks = ageInTicks;\n\t\t// AnimationDefinition clips are linked by the generated MCreator living-entity element.\n\t}}"
+    );
+    let new_setup = format!(
+        "\tpublic void setupAnim(T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {{\n\t\tthis.bridgeAgeInTicks = ageInTicks;\n{animation_calls}\t}}"
+    );
+    if !source.contains(&old_setup) {
+        bail!("Generated base model '{}' did not contain the expected setupAnim body.", class_name);
+    }
+    source = source.replace(&old_setup, &new_setup);
+
+    let imports = format!(r#"package {package}.client.model;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import net.minecraft.client.animation.KeyframeAnimations;
+import net.minecraft.client.model.HierarchicalModel;
+import net.minecraft.client.model.geom.ModelLayerLocation;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.builders.CubeDeformation;
+import net.minecraft.client.model.geom.builders.CubeListBuilder;
+import net.minecraft.client.model.geom.builders.LayerDefinition;
+import net.minecraft.client.model.geom.builders.MeshDefinition;
+import net.minecraft.client.model.geom.builders.PartDefinition;
+import net.minecraft.client.model.geom.builders.PartPose;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
+import org.joml.Vector3f;
+
+"#);
+    source = source.replacen(
+        "// Generated by MojModelBridge native Rust from reconstructed model geometry\n// MCreator import format: Mojmap 1.21.x / Modded Entity\nimport com.mojang.math.Axis;\n\n",
+        "",
+        1,
+    );
+    source = format!("{imports}{source}");
+
+    let animation_source = generated_animation.map(|animation| {
+        let animation_imports = format!(r#"package {package}.client.model.animation;
+
+import net.minecraft.client.animation.AnimationChannel;
+import net.minecraft.client.animation.AnimationDefinition;
+import net.minecraft.client.animation.Keyframe;
+import net.minecraft.client.animation.KeyframeAnimations;
+
+"#);
+        format!("{animation_imports}{}", animation.source)
+    });
+    let animation_records = generated_animation
+        .map(|animation| animation.records)
+        .unwrap_or_default();
+
+    Ok(NeoForgeEntityModelExport {
+        class_name,
+        source,
+        animation_source,
+        animation_records,
+        part_count: model.parts.len(),
+        cube_count: model.cube_count(),
+    })
+}
+
 pub fn export_model_sources(
     source: &Path,
     output_root: &Path,
@@ -625,6 +760,28 @@ mod tests {
         assert!(generated.source.contains("KeyframeAnimations.posVec"));
         assert_eq!(generated.records.len(), 1);
         assert_eq!(generated.records[0].channel_count, 4);
+    }
+
+    #[test]
+    fn generates_native_hierarchical_entity_model_and_connects_animation_clips() {
+        let generated = generate_neoforge_entity_model_sources(
+            &model(),
+            "ConvertedWingModel",
+            "demo_mod",
+            "demo",
+        ).unwrap();
+        assert!(generated.source.contains("package demo.client.model;"));
+        assert!(generated.source.contains("extends HierarchicalModel<T>"));
+        assert!(generated.source.contains("public ModelPart root()"));
+        assert!(generated.source.contains("ModelPart::resetPose"));
+        assert!(generated.source.contains("KeyframeAnimations.animate(this, ConvertedWingModelAnimation."));
+        assert!(generated.source.contains("(long) (limbSwing * 50.0F)"));
+        let animation = generated.animation_source.expect("animation class should be generated");
+        assert!(animation.contains("package demo.client.model.animation;"));
+        assert!(animation.contains("public class ConvertedWingModelAnimation"));
+        assert_eq!(generated.animation_records.len(), 1);
+        assert_eq!(generated.part_count, 2);
+        assert_eq!(generated.cube_count, 2);
     }
 
     #[test]

@@ -24,6 +24,7 @@ use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
 use crate::native_block_entity::discover_block_entities;
+use crate::native_gui::{discover_block_guis, NativeGuiPlan};
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
 use crate::localization::CreativeTabCatalog;
 use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
@@ -69,6 +70,7 @@ pub struct NativeBlockEntityPlan {
     pub associated_blocks: Vec<String>,
     pub generated_class: String,
     pub generated_as: String,
+    pub gui: Option<NativeGuiPlan>,
     pub warnings: Vec<String>,
 }
  
@@ -92,6 +94,28 @@ pub struct NativeBlockPlan {
     pub recovered_properties: Map<String, Value>,
     pub generated_as: String,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NativeEntityModelPlan {
+    pub entity_registry_name: String,
+    pub source_entity_class: String,
+    pub source_renderer_class: String,
+    pub source_model_class: String,
+    pub source_path: String,
+    pub generated_class: String,
+    pub animation_count: usize,
+    pub part_count: usize,
+    pub cube_count: usize,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct NativeEntityModelSource {
+    plan: NativeEntityModelPlan,
+    shadow_size: f64,
+    model_java: String,
+    animation_java: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -148,7 +172,9 @@ pub struct NeoForgePortReport {
     pub target_api_knowledge: Vec<TargetApiMethod>,
     pub blocks: Vec<NativeBlockPlan>,
     pub block_entities: Vec<NativeBlockEntityPlan>,
+    pub custom_guis: Vec<NativeGuiPlan>,
     pub entities: Vec<NativeEntityPlan>,
+    pub entity_models: Vec<NativeEntityModelPlan>,
     pub armor_sets: Vec<NativeArmorPlan>,
     pub creative_tabs: BTreeMap<String, Vec<String>>,
     pub projectiles: Vec<String>,
@@ -421,9 +447,11 @@ pub fn port_to_neoforge(
     deduplicate_blocks(&mut block_records, &mut warnings);
     let block_entity_bindings: Vec<(String, String)> = block_records.iter()
         .map(|block| (block.id.clone(), block.class_name.clone())).collect();
+    let native_guis = discover_block_guis(roots, &block_entity_bindings)?;
+    warnings.extend(native_guis.iter().flat_map(|gui| gui.warnings.iter().cloned()));
     let block_entity_sources = discover_block_entities(roots, &block_entity_bindings)?;
     warnings.extend(block_entity_sources.iter().flat_map(|record| record.warnings.iter().cloned()));
-    let native_block_entities: Vec<NativeBlockEntityPlan> = block_entity_sources.iter()
+    let mut native_block_entities: Vec<NativeBlockEntityPlan> = block_entity_sources.iter()
         .map(|record| NativeBlockEntityPlan {
             registry_name: record.registry_name.clone(),
             source_class: record.source_class.clone(),
@@ -435,8 +463,36 @@ pub fn port_to_neoforge(
             } else {
                 "native BlockEntity + EntityBlock + BlockEntityType registration placeholder".to_owned()
             },
+            gui: None,
             warnings: record.warnings.clone(),
         }).collect();
+
+    for gui in &native_guis {
+        for block_id in &gui.associated_blocks {
+            if let Some(block_entity) = native_block_entities.iter_mut()
+                .find(|entity| entity.associated_blocks.iter().any(|id| id == block_id)) {
+                if block_entity.gui.is_none() {
+                    block_entity.gui = Some(gui.clone());
+                    block_entity.generated_as = "native MenuProvider block entity with recovered GUI texture/slot layout".to_owned();
+                } else {
+                    warnings.push(format!("Block '{}' has more than one GUI binding; only the first is attached to its generated block entity.", block_id));
+                }
+            } else {
+                native_block_entities.push(NativeBlockEntityPlan {
+                    registry_name: format!("{block_id}_container"),
+                    source_class: "GeneratedGuiBlockEntity".to_owned(),
+                    source_path: gui.source_path.clone(),
+                    associated_blocks: vec![block_id.clone()],
+                    generated_class: generated_gui_block_entity_class(block_id),
+                    generated_as: "synthetic MenuProvider block entity backing a recovered legacy GUI".to_owned(),
+                    gui: Some(gui.clone()),
+                    warnings: vec![
+                        "A synthetic inventory was created to make the recovered GUI openable. Original machine fields, recipes, NBT and ticking behavior remain unported.".to_owned()
+                    ],
+                });
+            }
+        }
+    }
 
 
     let mut armor_stats = compiled_armor_stats(roots)?;
@@ -451,6 +507,19 @@ pub fn port_to_neoforge(
         &target_mod_id,
     )?;
     let native_entities = collect_native_entities(&graph.entities);
+    let native_entity_model_sources = collect_native_entity_models(
+        &graph, &native_entities, &target_mod_id, &target_package, &mut warnings
+    );
+    let native_entity_models: Vec<NativeEntityModelPlan> = native_entity_model_sources
+        .iter().map(|model| model.plan.clone()).collect();
+    for entity in &native_entities {
+        if !native_entity_models.iter().any(|model| model.entity_registry_name == normalized_id(&entity.registry_name)) {
+            warnings.push(format!(
+                "No usable source model/renderer link was recovered for entity '{}'; its generic fallback renderer remains.",
+                entity.registry_name
+            ));
+        }
+    }
     // Only bind automatically to generic Item records here. Tiered tools have
     // their own generated classes and should not be pointed at a launcher class
     // that would conflict with their specialized constructor.
@@ -510,6 +579,8 @@ pub fn port_to_neoforge(
         &native_block_entities,
         &native_projectile_records,
         &creative_tab_assignments,
+        &native_guis,
+        &native_entity_model_sources,
     )?;
     let generated_resource_files = write_native_resources(
         &resources_root, &target_mod_id, &item_records, &tool_records, &block_records, &native_armors
@@ -725,7 +796,9 @@ pub fn port_to_neoforge(
         target_api_knowledge,
         blocks,
         block_entities: native_block_entities,
+        custom_guis: native_guis,
         entities,
+        entity_models: native_entity_models,
         armor_sets,
         creative_tabs: creative_tab_assignments.iter()
             .map(|(tab, fields)| (tab.clone(), fields.iter().cloned().collect()))
@@ -781,6 +854,10 @@ pub fn port_to_neoforge(
             "creative_tab_groups": report.creative_tabs.len(),
             "creative_tab_items": report.creative_tabs.values().map(Vec::len).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
+            "entity_models": report.entity_models.len(),
+            "entity_animation_clips": report.entity_models.iter().map(|model| model.animation_count).sum::<usize>(),
+            "custom_guis": report.custom_guis.len(),
+            "block_gui_bindings": report.custom_guis.iter().map(|gui| gui.associated_blocks.len()).sum::<usize>(),
             "throwable_projectiles": report.native_projectiles.len(),
             "recipes": report.native_recipes.generated.len(),
             "resource_files": resource_files_copied
@@ -790,6 +867,7 @@ pub fn port_to_neoforge(
             "legacy_api_methods": report.detected_legacy_api_methods.len(),
             "target_api_reference_symbols": report.target_api_knowledge.len(),
             "custom_entity_ai_and_models": report.entities.len(),
+            "custom_gui_button_and_machine_logic": report.custom_guis.len(),
             "block_entity_storage_ticking_menus_and_logic": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "custom_armor_repair_and_effects": report.armor_sets.len(),
             "custom_projectile_impact_logic": report.native_projectiles.len(),
@@ -799,7 +877,7 @@ pub fn port_to_neoforge(
         "documentation_domains": report.detected_domains,
         "notes": [
             "Registered simple items and blocks are emitted as native NeoForge registrations.",
-            "Registered living entities receive generated PathfinderMob classes, recovered basic attributes, conservative goals, and a fallback humanoid renderer.",
+            "Registered living entities receive generated PathfinderMob classes, recovered basic attributes, conservative goals, and source-linked native models/animations when recoverable.",
             "Original assets and data JSON are copied with the mod namespace remapped where possible.",
             "Custom source behavior not explicitly converted is listed as pending in port-analysis.json."
         ]
@@ -1818,6 +1896,8 @@ fn write_native_registries(
     block_entities: &[NativeBlockEntityPlan],
     projectiles: &[ProjectileRecord],
     creative_tabs: &BTreeMap<String, BTreeSet<String>>,
+    guis: &[NativeGuiPlan],
+    entity_models: &[NativeEntityModelSource],
 ) -> Result<Vec<String>> {
     let java_base = output_root.join("src/main/java").join(package.replace('.', "/"));
     let registry_root = java_base.join("registry");
@@ -1844,6 +1924,15 @@ fn write_native_registries(
         ));
     }
 
+    if !guis.is_empty() {
+        fs::write(registry_root.join("ModMenus.java"), generate_menu_registry_java(package, guis))?;
+        generated.push(format!("src/main/java/{}/registry/ModMenus.java", package.replace('.', "/")));
+        let client_root = java_base.join("client");
+        fs::create_dir_all(&client_root)?;
+        fs::write(client_root.join("ModScreens.java"), generate_screens_java(package, mod_id, guis))?;
+        generated.push(format!("src/main/java/{}/client/ModScreens.java", package.replace('.', "/")));
+    }
+
     if tools.iter().any(|tool| matches!(tool.kind.as_str(), "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe")) {
         fs::write(registry_root.join("ModToolTiers.java"), generate_tool_tiers_java(package, tools))?;
         generated.push(format!("src/main/java/{}/registry/ModToolTiers.java", package.replace('.', "/")));
@@ -1860,7 +1949,7 @@ fn write_native_registries(
         for record in &active_block_entities {
             fs::write(
                 block_entity_root.join(format!("{}.java", record.generated_class)),
-                generate_block_entity_java(package, record)
+                generate_block_entity_java(package, mod_id, record)
             )?;
             generated.push(format!("src/main/java/{}/blockentity/{}.java", package.replace('.', "/"), record.generated_class));
         }
@@ -1883,11 +1972,27 @@ fn write_native_registries(
         )?;
         fs::write(
             client_root.join("ModEntityRenderers.java"),
-            generate_entity_renderers_java(package, mod_id, resources_root, entities, projectiles)
+            generate_entity_renderers_java(package, mod_id, resources_root, entities, projectiles, entity_models)
         )?;
 
         generated.push(format!("src/main/java/{}/registry/ModEntities.java", package.replace('.', "/")));
         generated.push(format!("src/main/java/{}/client/ModEntityRenderers.java", package.replace('.', "/")));
+
+        if !entity_models.is_empty() {
+            let model_root = java_base.join("client/model");
+            fs::create_dir_all(&model_root)?;
+            let animation_root = model_root.join("animation");
+            for model in entity_models {
+                fs::write(model_root.join(format!("{}.java", model.plan.generated_class)), &model.model_java)?;
+                generated.push(format!("src/main/java/{}/client/model/{}.java", package.replace('.', "/"), model.plan.generated_class));
+                if let Some(animation) = model.animation_java.as_ref() {
+                    fs::create_dir_all(&animation_root)?;
+                    let animation_class = format!("{}Animation", model.plan.generated_class);
+                    fs::write(animation_root.join(format!("{animation_class}.java")), animation)?;
+                    generated.push(format!("src/main/java/{}/client/model/animation/{animation_class}.java", package.replace('.', "/")));
+                }
+            }
+        }
 
         if !entities.is_empty() {
             fs::write(entity_root.join("ModEntityAttributes.java"), generate_entity_attributes_java(package, entities))?;
@@ -1912,7 +2017,7 @@ fn write_native_registries(
 
     if !armors.is_empty() || !entities.is_empty() || !projectiles.is_empty() || !active_block_entities.is_empty() {
         fs::write(java_base.join("NeoForgeMod.java"), generate_mod_entrypoint(
-            package, mod_id, !armors.is_empty(), !entities.is_empty()
+            package, mod_id, !armors.is_empty(), !entities.is_empty(), !guis.is_empty()
         ))?;
         generated.push(format!("src/main/java/{}/NeoForgeMod.java", package.replace('.', "/")));
     }
@@ -2275,10 +2380,10 @@ public final class ModBlockEntities {{
     body
 }
 
-fn generate_block_entity_java(package: &str, entity: &NativeBlockEntityPlan) -> String {
-    format!(r#"package {package}.blockentity;
+fn generate_block_entity_java(package: &str, mod_id: &str, entity: &NativeBlockEntityPlan) -> String {
+    let Some(gui) = entity.gui.as_ref() else {
+        return format!(r#"package {package}.blockentity;
 
-import {package}.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -2289,7 +2394,46 @@ public final class {class_name} extends BlockEntity {{
         super(type, pos, state);
     }}
 }}
-"#, class_name = entity.generated_class)
+"#, class_name = entity.generated_class);
+    };
+    let menu_class = generated_gui_menu_class(gui);
+    let slot_count = generated_gui_slot_count(gui);
+    format!(r#"package {package}.blockentity;
+
+import {package}.registry.ModMenus;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
+
+public final class {class_name} extends BlockEntity implements MenuProvider {{
+    private final SimpleContainer guiInventory = new SimpleContainer({slot_count});
+
+    public {class_name}(BlockEntityType<?> type, BlockPos pos, BlockState state) {{
+        super(type, pos, state);
+    }}
+
+    @Override
+    public Component getDisplayName() {{
+        return Component.translatable("container.{mod_id}.{key}");
+    }}
+
+    @Override
+    public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {{
+        ContainerLevelAccess access = this.level == null
+            ? ContainerLevelAccess.NULL
+            : ContainerLevelAccess.create(this.level, this.worldPosition);
+        return new ModMenus.{menu_class}(containerId, playerInventory, this.guiInventory, access);
+    }}
+}}
+"#, class_name = entity.generated_class, key = gui.key)
 }
 
 fn generate_armor_materials_java(package: &str, armors: &[ArmorSetRecord]) -> String {
@@ -2670,18 +2814,97 @@ public final class ModEntityAttributes {{
     body
 }
 
+
+fn collect_native_entity_models(
+    graph: &crate::mod_graph::ModGraph,
+    entities: &[EntityMetadata],
+    mod_id: &str,
+    package: &str,
+    warnings: &mut Vec<String>,
+) -> Vec<NativeEntityModelSource> {
+    let mut output = Vec::new();
+    for entity in entities {
+        let registrations: Vec<&crate::mod_graph::RendererRegistration> = graph.registrations.iter()
+            .filter(|registration| registration.entity_class == entity.class_name && !registration.model_class.is_empty())
+            .collect();
+        let mut recovered = false;
+        for registration in registrations {
+            let source = graph.java_files.get(&registration.model_class)
+                .or_else(|| graph.class_files.get(&registration.model_class));
+            let Some(source) = source else { continue };
+            let parsed = match crate::mcreator_model::parse_model_source_with_args(source, &registration.model_args) {
+                Ok(model) => model,
+                Err(error) => {
+                    warnings.push(format!(
+                        "Mob model '{}' for entity '{}' was discovered but could not be parsed: {error:#}",
+                        registration.model_class, entity.registry_name
+                    ));
+                    continue;
+                }
+            };
+            let generated_class = format!("{}Model", generated_entity_class(entity));
+            let generated = match crate::mcreator_model::generate_neoforge_entity_model_sources(
+                &parsed, &generated_class, mod_id, package
+            ) {
+                Ok(generated) => generated,
+                Err(error) => {
+                    warnings.push(format!(
+                        "Mob model '{}' for entity '{}' could not be emitted as a NeoForge model: {error:#}",
+                        registration.model_class, entity.registry_name
+                    ));
+                    continue;
+                }
+            };
+            let mut model_warnings = Vec::new();
+            if generated.animation_records.is_empty() {
+                model_warnings.push("No translatable keyframe animation clips were recovered; the generated model retains its recovered bind pose and any procedural root rotations.".to_owned());
+            }
+            let plan = NativeEntityModelPlan {
+                entity_registry_name: normalized_id(&entity.registry_name),
+                source_entity_class: registration.entity_class.clone(),
+                source_renderer_class: registration.renderer_class.clone(),
+                source_model_class: registration.model_class.clone(),
+                source_path: source.to_string_lossy().to_string(),
+                generated_class: generated.class_name.clone(),
+                animation_count: generated.animation_records.len(),
+                part_count: generated.part_count,
+                cube_count: generated.cube_count,
+                warnings: model_warnings,
+            };
+            output.push(NativeEntityModelSource {
+                plan,
+                shadow_size: registration.shadow_size,
+                model_java: generated.source,
+                animation_java: generated.animation_source,
+            });
+            recovered = true;
+            break;
+        }
+        if !recovered && !graph.registrations.iter().any(|registration| registration.entity_class == entity.class_name) {
+            warnings.push(format!(
+                "No renderer registration was found for mob '{}'; generated a generic fallback renderer.",
+                entity.registry_name
+            ));
+        }
+    }
+    output.sort_by(|a, b| a.plan.entity_registry_name.cmp(&b.plan.entity_registry_name));
+    output
+}
+
 fn generate_entity_renderers_java(
     package: &str,
     mod_id: &str,
     resources_root: &Path,
     entities: &[EntityMetadata],
     projectiles: &[ProjectileRecord],
+    models: &[NativeEntityModelSource],
 ) -> String {
     let mut body = format!(r#"package {package}.client;
 
 import {package}.NeoForgeMod;
 import {package}.entity.*;
 import {package}.registry.ModEntities;
+import {package}.client.model.*;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.MobRenderer;
@@ -2697,23 +2920,44 @@ public final class ModEntityRenderers {{
     private ModEntityRenderers() {{}}
 
     @SubscribeEvent
-    public static void register(EntityRenderersEvent.RegisterRenderers event) {{
+    public static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {{
 "#);
+    for model in models {
+        body.push_str(&format!(
+            "        event.registerLayerDefinition({class_name}.LAYER_LOCATION, {class_name}::createBodyLayer);\n",
+            class_name = model.plan.generated_class
+        ));
+    }
+    body.push_str("    }\n\n    @SubscribeEvent\n    public static void register(EntityRenderersEvent.RegisterRenderers event) {\n");
     for entity in entities {
         let field = java_field_name(&entity.registry_name, "ENTITY");
         let class_name = generated_entity_class(entity);
         let texture = find_entity_texture(resources_root, mod_id, entity)
             .map(|path| format!("ResourceLocation.fromNamespaceAndPath(\"{mod_id}\", \"{path}\")"))
             .unwrap_or_else(|| "ResourceLocation.withDefaultNamespace(\"textures/entity/steve.png\")".to_owned());
-        body.push_str(&format!(
-            r#"        event.registerEntityRenderer(ModEntities.{field}.get(), context -> new MobRenderer<{class_name}, HumanoidModel<{class_name}>>(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5F) {{
+        if let Some(model) = models.iter().find(|model| model.plan.entity_registry_name == normalized_id(&entity.registry_name)) {
+            body.push_str(&format!(
+                r#"        event.registerEntityRenderer(ModEntities.{field}.get(), context -> new MobRenderer<{class_name}, {model_class}<{class_name}>>(context, new {model_class}<>(context.bakeLayer({model_class}.LAYER_LOCATION)), {shadow}F) {{
+            @Override
+            public ResourceLocation getTextureLocation({class_name} entity) {{
+                return {texture};
+            }}
+        }});
+"#,
+                model_class = model.plan.generated_class,
+                shadow = model.shadow_size.clamp(0.0, 8.0),
+            ));
+        } else {
+            body.push_str(&format!(
+                r#"        event.registerEntityRenderer(ModEntities.{field}.get(), context -> new MobRenderer<{class_name}, HumanoidModel<{class_name}>>(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5F) {{
             @Override
             public ResourceLocation getTextureLocation({class_name} entity) {{
                 return {texture};
             }}
         }});
 "#
-        ));
+            ));
+        }
     }
     for projectile in projectiles {
         let field = projectile_entity_field(projectile);
@@ -2743,7 +2987,7 @@ fn find_entity_texture(resources_root: &Path, mod_id: &str, entity: &EntityMetad
     Some(path.strip_prefix(&namespace_root).ok()?.to_string_lossy().replace('\\', "/"))
 }
 
-fn generate_mod_entrypoint(package: &str, mod_id: &str, has_armors: bool, has_entities: bool) -> String {
+fn generate_mod_entrypoint(package: &str, mod_id: &str, has_armors: bool, has_entities: bool, has_guis: bool) -> String {
     let mut body = format!(r#"package {package};
 
 import {package}.registry.ModBlockEntities;
@@ -2758,6 +3002,9 @@ import net.neoforged.fml.common.Mod;
     }
     if has_entities {
         body.push_str(&format!("import {package}.entity.ModEntityAttributes;\n"));
+    }
+    if has_guis {
+        body.push_str(&format!("import {package}.registry.ModMenus;\n"));
     }
     body.push_str(&format!(r#"
 @Mod("{mod_id}")
@@ -2777,9 +3024,13 @@ public final class NeoForgeMod {{
     if has_entities {
         body.push_str("        modEventBus.addListener(ModEntityAttributes::createAttributes);\n");
     }
+    if has_guis {
+        body.push_str("        ModMenus.register(modEventBus);\n");
+    }
     body.push_str("    }\n}\n");
     body
 }
+
 fn generate_blocks_java(
     package: &str,
     _mod_id: &str,
@@ -2790,6 +3041,13 @@ fn generate_blocks_java(
 
 import {package}.NeoForgeMod;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
@@ -2799,6 +3057,7 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.network.NetworkHooks;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -2860,10 +3119,22 @@ public final class ModBlocks {{
         public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {{
             return new {entity_class}(ModBlockEntities.{be_field}.get(), pos, state);
         }}
-    }}
 "#,
                 entity_class = entity.generated_class
             ));
+            if entity.gui.is_some() {
+                body.push_str(r#"
+        @Override
+        public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+            if (!level.isClientSide && player instanceof ServerPlayer serverPlayer
+                    && level.getBlockEntity(pos) instanceof MenuProvider provider) {
+                NetworkHooks.openScreen(serverPlayer, provider, pos);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
+"#);
+            }
+            body.push_str("    }\n");
         } else {
             body.push_str(&format!(
                 "    public static final DeferredBlock<Block> {field} = BLOCKS.register(\"{id}\", () -> {block_factory});\n",
@@ -2880,6 +3151,190 @@ public final class ModBlocks {{
 }
 "#);
     body
+}
+
+fn generated_gui_menu_class(gui: &NativeGuiPlan) -> String {
+    format!("Converted{}Menu", java_type_identifier(&gui.key))
+}
+
+fn generated_gui_screen_class(gui: &NativeGuiPlan) -> String {
+    format!("Converted{}Screen", java_type_identifier(&gui.key))
+}
+
+fn generated_gui_menu_field(gui: &NativeGuiPlan) -> String {
+    java_field_name(&gui.key, "MENU")
+}
+
+fn generated_gui_slot_count(gui: &NativeGuiPlan) -> usize {
+    gui.slots.iter().map(|slot| slot.index.saturating_add(1)).max().unwrap_or(0)
+}
+
+fn generate_menu_registry_java(package: &str, guis: &[NativeGuiPlan]) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.flag.FeatureFlags;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public final class ModMenus {{
+    public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, NeoForgeMod.MOD_ID);
+"#);
+    for gui in guis {
+        if gui.associated_blocks.is_empty() { continue; }
+        let menu_class = generated_gui_menu_class(gui);
+        let field = generated_gui_menu_field(gui);
+        let slot_count = generated_gui_slot_count(gui);
+        let block_field = java_field_name(&gui.associated_blocks[0], "BLOCK");
+        body.push_str(&format!(r#"
+    public static final DeferredHolder<MenuType<?>, MenuType<{menu_class}>> {field} =
+        MENUS.register("{key}", () -> new MenuType<>({menu_class}::new, FeatureFlags.DEFAULT_FLAGS));
+
+    public static final class {menu_class} extends AbstractContainerMenu {{
+        private final Container backing;
+        private final ContainerLevelAccess access;
+
+        public {menu_class}(int containerId, Inventory playerInventory) {{
+            this(containerId, playerInventory, new SimpleContainer({slot_count}), ContainerLevelAccess.NULL);
+        }}
+
+        public {menu_class}(int containerId, Inventory playerInventory, Container backing, ContainerLevelAccess access) {{
+            super({field}.get(), containerId);
+            this.backing = backing;
+            this.access = access;
+"#, key = gui.key));
+        for slot in &gui.slots {
+            body.push_str(&format!(
+                "            this.addSlot(new Slot(backing, {}, {}, {}));\n",
+                slot.index, slot.x, slot.y
+            ));
+        }
+        body.push_str(r#"            for (int row = 0; row < 3; row++) {
+                for (int column = 0; column < 9; column++) {
+                    this.addSlot(new Slot(playerInventory, column + row * 9 + 9, 8 + column * 18, 84 + row * 18));
+                }
+            }
+            for (int column = 0; column < 9; column++) {
+                this.addSlot(new Slot(playerInventory, column, 8 + column * 18, 142));
+            }
+        }
+
+        @Override
+        public boolean stillValid(Player player) {
+            return AbstractContainerMenu.stillValid(this.access, player, ModBlocks.BLOCK_REPLACE.get());
+        }
+
+        @Override
+        public ItemStack quickMoveStack(Player player, int index) {
+            if (index < 0 || index >= this.slots.size()) return ItemStack.EMPTY;
+            Slot slot = this.slots.get(index);
+            if (slot == null || !slot.hasItem()) return ItemStack.EMPTY;
+            ItemStack stack = slot.getItem();
+            ItemStack original = stack.copy();
+            int backingSize = this.backing.getContainerSize();
+            if (index < backingSize) {
+                if (!this.moveItemStackTo(stack, backingSize, this.slots.size(), true)) return ItemStack.EMPTY;
+            } else if (!this.moveItemStackTo(stack, 0, backingSize, false)) {
+                return ItemStack.EMPTY;
+            }
+            if (stack.isEmpty()) slot.set(ItemStack.EMPTY);
+            else slot.setChanged();
+            return original;
+        }
+    }
+"#.to_owned().replace("ModBlocks.BLOCK_REPLACE", &format!("ModBlocks.{block_field}")));
+    }
+    body.push_str(r#"
+    private ModMenus() {}
+
+    public static void register(IEventBus modEventBus) {
+        MENUS.register(modEventBus);
+    }
+}
+"#);
+    body
+}
+
+fn generate_screens_java(package: &str, mod_id: &str, guis: &[NativeGuiPlan]) -> String {
+    let mut body = format!(r#"package {package}.client;
+
+import {package}.NeoForgeMod;
+import {package}.registry.ModMenus;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+
+@EventBusSubscriber(modid = NeoForgeMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+public final class ModScreens {{
+    private ModScreens() {{}}
+
+    @SubscribeEvent
+    public static void register(RegisterMenuScreensEvent event) {{
+"#);
+    for gui in guis {
+        if gui.associated_blocks.is_empty() { continue; }
+        body.push_str(&format!(
+            "        event.register(ModMenus.{field}.get(), {screen}::new);\n",
+            field = generated_gui_menu_field(gui),
+            screen = generated_gui_screen_class(gui),
+        ));
+    }
+    body.push_str("    }\n");
+    for gui in guis {
+        if gui.associated_blocks.is_empty() { continue; }
+        let menu_class = generated_gui_menu_class(gui);
+        let screen_class = generated_gui_screen_class(gui);
+        let texture = gui.texture_path.as_ref().map(|path| {
+            format!("    private static final ResourceLocation TEXTURE_{} = ResourceLocation.fromNamespaceAndPath(\"{}\", \"{}\");\n",
+                java_field_name(&gui.key,"GUI"), mod_id, path)
+        }).unwrap_or_default();
+        body.push_str(&format!(r#"
+    public static final class {screen_class} extends AbstractContainerScreen<ModMenus.{menu_class}> {{
+{texture}        public {screen_class}(ModMenus.{menu_class} menu, Inventory playerInventory, Component title) {{
+            super(menu, playerInventory, title);
+            this.imageWidth = {width};
+            this.imageHeight = {height};
+        }}
+
+        @Override
+        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {{
+"#,
+            width = gui.image_width,
+            height = gui.image_height
+        ));
+        if gui.texture_path.is_some() {
+            body.push_str(&format!(
+                "            graphics.blit(TEXTURE_{}, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight);\n",
+                java_field_name(&gui.key, "GUI")
+            ));
+        } else {
+            body.push_str("            graphics.fill(this.leftPos, this.topPos, this.leftPos + this.imageWidth, this.topPos + this.imageHeight, 0xFF202020);\n");
+        }
+        body.push_str("        }\n    }\n");
+    }
+    body.push_str("}\n");
+    body
+}
+
+fn generated_gui_block_entity_class(block_id: &str) -> String {
+    format!("ConvertedGuiBlockEntity{}", java_type_identifier(block_id))
 }
 
 fn generated_block_entity_class(source_class: &str) -> String {

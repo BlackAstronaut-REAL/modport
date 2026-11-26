@@ -21,6 +21,7 @@ pub mod source_version;
 pub mod target_api_dictionary;
 pub mod native_recipe_bridge;
 pub mod native_block_entity;
+pub mod native_gui;
 pub mod native_lore;
 pub mod localization;
 pub mod mcreator_model;

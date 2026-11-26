@@ -71,6 +71,10 @@ struct PortUiSummary {
     item_count: usize,
     block_count: usize,
     entity_count: usize,
+    entity_model_count: usize,
+    animation_clip_count: usize,
+    custom_gui_count: usize,
+    gui_block_binding_count: usize,
     armor_set_count: usize,
     creative_tab_group_count: usize,
     creative_tab_item_count: usize,
@@ -131,6 +135,10 @@ fn port_ui_summary(report: &NeoForgePortReport) -> PortUiSummary {
         item_count: report.items.len(),
         block_count: report.blocks.len(),
         entity_count: report.entities.len(),
+        entity_model_count: report.entity_models.len(),
+        animation_clip_count: report.entity_models.iter().map(|model| model.animation_count).sum(),
+        custom_gui_count: report.custom_guis.len(),
+        gui_block_binding_count: report.custom_guis.iter().map(|gui| gui.associated_blocks.len()).sum(),
         armor_set_count: report.armor_sets.len(),
         creative_tab_group_count: report.creative_tabs.len(),
         creative_tab_item_count: report.creative_tabs.values().map(Vec::len).sum(),
@@ -1102,6 +1110,11 @@ impl MojModelBridgeApp {
                     ui.label(format!("Items / tools: {}", result.item_count));
                     ui.label(format!("Blocks: {}", result.block_count));
                     ui.label(format!("Entities: {}", result.entity_count));
+                    ui.label(format!("Mob models: {}", result.entity_model_count));
+                    ui.end_row();
+                    ui.label(format!("Animation clips: {}", result.animation_clip_count));
+                    ui.label(format!("Custom GUIs: {}", result.custom_gui_count));
+                    ui.label(format!("GUI-to-block bindings: {}", result.gui_block_binding_count));
                     ui.label(format!("Armor sets: {}", result.armor_set_count));
                     ui.end_row();
                     ui.label(format!("Creative tab groups: {}", result.creative_tab_group_count));
