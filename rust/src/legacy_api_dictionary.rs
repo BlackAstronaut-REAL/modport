@@ -277,15 +277,15 @@ const DEFINITIONS: &[Definition] = &[
     // Tile entities / block entities.
     d!("TileEntity", "readFromNBT", V_ALL, "block_entity_load", "BlockEntity#loadAdditional", "block_entity", "adapter_required", "Translate NBTTagCompound and preserve base metadata and custom data versioning.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "writeToNBT", V_ALL, "block_entity_save", "BlockEntity#saveAdditional", "block_entity", "adapter_required", "Only write custom fields in saveAdditional; preserve base serialization.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "updateEntity", V_ALL, "block_entity_tick", "BlockEntityTicker / BlockEntity# tick", "block_entity", "adapter_required", "Register a ticker from the block entity type and separate client/server tick logic.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "getDescriptionPacket", V_ALL, "block_entity_update_packet", "BlockEntity#getUpdatePacket", "networking", "adapter_required", "Use ClientboundBlockEntityDataPacket or an explicit custom payload.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "onDataPacket", V_ALL, "block_entity_packet_receive", "BlockEntity#onDataPacket", "networking", "adapter_required", "Translate packet NBT and update client render state safely.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "updateEntity", V_17_18, "block_entity_tick", "BlockEntityTicker / BlockEntity# tick", "block_entity", "adapter_required", "Register a ticker from the block entity type and separate client/server tick logic.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getDescriptionPacket", V_17_18, "block_entity_update_packet", "BlockEntity#getUpdatePacket", "networking", "adapter_required", "Use ClientboundBlockEntityDataPacket or an explicit custom payload.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onDataPacket", V_18, "block_entity_packet_receive", "BlockEntity#onDataPacket", "networking", "adapter_required", "Translate packet NBT and update client render state safely.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "markDirty", V_ALL, "block_entity_mark_changed", "BlockEntity#setChanged", "block_entity", "automatic_rename_candidate", "Preserve chunk dirty marking and client update packet requirements.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "invalidate", V_ALL, "block_entity_invalidate", "BlockEntity#setRemoved", "block_entity", "automatic_rename_candidate", "Preserve capability invalidation and removal lifecycle.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "validate", V_ALL, "block_entity_validate", "BlockEntity#onLoad / lifecycle attachment", "block_entity", "adapter_required", "Modern lifecycle timing is tied to chunk load and level attachment.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getBlockType", V_ALL, "block_entity_block", "BlockEntity#getBlockState", "block_entity", "automatic_rename_candidate", "The modern state is more useful than a global Block singleton.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getBlockMetadata", V_ALL, "block_entity_metadata", "BlockEntity#getBlockState properties", "block_entity", "adapter_required", "Translate metadata checks to state-property comparisons.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "getWorldObj", V_ALL, "block_entity_level", "BlockEntity#getLevel", "block_entity", "automatic_rename_candidate", "Handle a null level before attachment or after removal.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getWorldObj", V_17_18, "block_entity_level", "BlockEntity#getLevel", "block_entity", "automatic_rename_candidate", "Handle a null level before attachment or after removal.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getPos", V_18, "block_entity_position", "BlockEntity#getBlockPos", "block_entity", "automatic_rename_candidate", "The 1.7.10 coordinate fields need to be reconstructed into BlockPos.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "shouldRefresh", V_18, "block_entity_refresh_predicate", "BlockEntity# setRemoved / state replacement checks", "block_entity", "adapter_required", "Preserve old/new block-state comparison to avoid unnecessary block-entity recreation.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getMaxRenderDistanceSquared", V_ALL, "block_entity_render_distance", "BlockEntityRenderer#getViewDistance", "rendering", "client_adapter_required", "Move the value into the target block-entity renderer.", "net/minecraft/tileentity/TileEntity.html"),
@@ -3372,19 +3372,39 @@ const DEFINITIONS: &[Definition] = &[
     d!("World", "updateWeather", V_112, "world_update_weather", "World rain/thunder state tick", "world_weather", "adapter_required", "Protected lifecycle method; preserve weather timers, event packets and provider effects.", "net/minecraft/world/World.html"),
     d!("World", "updateWeatherBody", V_112, "world_update_weather_body", "World weather state transition implementation", "world_weather", "adapter_required", "Preserve clear/rain/thunder transitions, timers and server-to-client synchronization.", "net/minecraft/world/World.html"),
 
+    d!("TileEntity", "addMapping", V_17_18, "tile_entity_legacy_name_registration", "TileEntityType registration / ResourceLocation", "registration", "adapter_required", "Legacy class-to-string mapping registry used by 1.7.10 and 1.8.9; 1.12.2 replaces it with register and a ResourceLocation key.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "createAndLoadEntity", V_17_18, "tile_entity_legacy_nbt_factory", "TileEntity.loadStatic / BlockEntity.loadStatic", "block_entities", "adapter_required", "Legacy static factory creates the registered tile entity from NBT; retain registry lookup and failure behavior.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getDistanceFrom", V_17, "tile_entity_legacy_distance", "BlockEntity#getBlockPos / position distance math", "block_entities", "signature_adapter_required", "1.7.10-only distance method accepts three doubles; later versions use getDistanceSq with squared-distance semantics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getWorld", V_18, "tile_entity_world_getter", "BlockEntity#getLevel", "block_entities", "automatic_rename_candidate", "1.8.9/1.12.2 world getter; 1.7.10 uses getWorldObj.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getDisplayName", V_112, "tile_entity_display_name", "BlockEntity#getDisplayName / Component", "localization", "adapter_required", "Preserve ITextComponent output and lock/custom-name metadata when converting to modern Component.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "func_145828_a", V_17, "tile_entity_legacy_crash_report", "CrashReportCategory.addDetail", "diagnostics", "signature_adapter_required", "1.7.10 SRG-only crash-report detail hook; preserve report category and tile coordinates/type data.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "func_183000_F", V_18, "tile_entity_legacy_srg_boolean_hook", "Manual BlockEntity behavior reconstruction", "block_entities", "manual_review", "1.8.9-only SRG boolean helper; preserve the raw method and resolve its meaning from call sites.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "setPos", V_18, "tile_entity_position_write", "BlockEntity#setBlockPos", "block_entities", "automatic_rename_candidate", "Translate the immutable BlockPos setter while retaining dirty chunk and cached-position behavior.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "serializeNBT", V_18, "tile_entity_capability_nbt_serialize", "BlockEntity#saveWithFullMetadata / serializeNBT", "persistence", "adapter_required", "Preserve capability serialization payload and NBT wrapper semantics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "deserializeNBT", V_18, "tile_entity_capability_nbt_deserialize", "BlockEntity#loadWithComponents / deserializeNBT", "persistence", "adapter_required", "Preserve capability deserialization ordering and NBT wrapper semantics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "hasWorldObj", V_17_18, "tile_entity_legacy_world_presence", "BlockEntity#hasLevel", "block_entities", "automatic_rename_candidate", "Legacy world-object presence check; 1.12.2 renames this to hasWorld.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "setWorldObj", V_17_18, "tile_entity_legacy_world_set", "BlockEntity#setLevel", "block_entities", "automatic_rename_candidate", "Legacy world setter; 1.12.2 replaces it with setWorld.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "setWorld", V_112, "tile_entity_world_write", "BlockEntity#setLevel", "block_entities", "automatic_rename_candidate", "1.12 world reference setter; the older releases expose setWorldObj.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "setWorldCreate", V_112, "tile_entity_world_create", "BlockEntity#setLevel / world initialization", "block_entities", "adapter_required", "Set the tile entity's world while preserving first-creation initialization semantics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "hasCapability", V_18, "tile_entity_capability_query", "ICapabilityProvider#hasCapability", "capabilities", "adapter_required", "Preserve capability identity and EnumFacing side; capability lookup is not equivalent to nullable-field access.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onlyOpsCanSetNbt", V_112, "tile_entity_nbt_edit_permission", "BlockEntity#onlyOpCanSetNbt", "security", "adapter_required", "Preserve the operator-only NBT-editing flag for structure/command block data flows.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "restrictNBTCopy", V_18, "tile_entity_nbt_copy_restriction", "BlockEntity#onlyOpCanSetNbt / NBT placement policy", "security", "adapter_required", "Preserve whether a tile entity's NBT may be copied into an ItemStack and placed by a player.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "mirror", V_112, "tile_entity_mirror_transform", "BlockEntity#mirror", "block_entities", "automatic_rename_candidate", "Apply the Mirror transform to orientation-bearing tile-entity data.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "rotate", V_112, "tile_entity_rotation_transform", "BlockEntity#rotate", "block_entities", "automatic_rename_candidate", "Apply the modern Rotation transform to orientation-bearing tile entities.", "net/minecraft/tileentity/TileEntity.html"),
+
     // TileEntity 1.12.2 lifecycle, persistence, synchronization and render hooks.
-    d!("TileEntity", "addInfoToCrashReport", V_112, "tile_entity_crash_report_details", "CrashReportCategory tile entity diagnostics", "block_entities_debug", "adapter_required", "Preserve tile entity class, registry key, block position and current state in crash diagnostics.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "canRenderBreaking", V_112, "tile_entity_breaking_render_predicate", "Tile entity custom block destruction overlay", "block_entities_render", "automatic_rename_candidate", "Preserve whether the renderer handles block-damage crack-stage geometry for this tile entity.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "addInfoToCrashReport", V_18, "tile_entity_crash_report_details", "CrashReportCategory tile entity diagnostics", "block_entities_debug", "adapter_required", "Preserve tile entity class, registry key, block position and current state in crash diagnostics.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "canRenderBreaking", V_18, "tile_entity_breaking_render_predicate", "Tile entity custom block destruction overlay", "block_entities_render", "automatic_rename_candidate", "Preserve whether the renderer handles block-damage crack-stage geometry for this tile entity.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "canRenderInPass", V_112, "tile_entity_render_pass_predicate", "Tile entity render pass eligibility", "block_entities_render", "automatic_rename_candidate", "Preserve legacy render pass ID selection for multi-pass tile entity renderers.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "clearRemoved", V_112, "tile_entity_clear_removed_flag", "Tile entity removal state reset", "block_entities", "adapter_required", "Preserve reattachment behavior when a tile entity is moved/reinserted rather than newly constructed.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "getDistanceSq", V_112, "tile_entity_distance_squared", "Tile entity distance squared from XYZ", "block_entities_render", "automatic_rename_candidate", "Preserve precise tile position and center offset for render-distance culling.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getDistanceSq", V_18, "tile_entity_distance_squared", "Tile entity distance squared from XYZ", "block_entities_render", "automatic_rename_candidate", "Preserve precise tile position and center offset for render-distance culling.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getGlobalPos", V_112, "tile_entity_global_position", "GlobalPos dimension plus BlockPos", "block_entities", "automatic_rename_candidate", "Preserve dimension key and position together for cross-dimension references and persistent data.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getName", V_112, "tile_entity_display_name", "Tile entity custom/default display name", "block_entities_gui", "automatic_rename_candidate", "Preserve ITextComponent name and fallback to custom name or translation key.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "getTileData", V_112, "tile_entity_persistent_custom_data", "Tile entity persistent custom NBTTagCompound", "block_entities_persistence", "automatic_rename_candidate", "Preserve Forge tile data compound independently from vanilla writeToNBT fields.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "getTileData", V_18, "tile_entity_persistent_custom_data", "Tile entity persistent custom NBTTagCompound", "block_entities_persistence", "automatic_rename_candidate", "Preserve Forge tile data compound independently from vanilla writeToNBT fields.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getUpdatePacket", V_112, "tile_entity_update_packet", "SPacketUpdateTileEntity synchronization", "block_entities_networking", "automatic_rename_candidate", "Preserve packet type, tile position, update type and custom NBT payload; client packet arrives through onDataPacket.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "hasWorld", V_112, "tile_entity_has_world", "Tile entity world attachment predicate", "block_entities", "automatic_rename_candidate", "Preserve unattached/null-world state during construction and deserialization.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "isRemoved", V_112, "tile_entity_removed_predicate", "Tile entity detached/removed state", "block_entities", "automatic_rename_candidate", "Preserve removed flag independently from world reference and chunk unload state.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "onLoad", V_112, "tile_entity_on_load_callback", "Tile entity world/chunk load callback", "block_entities", "adapter_required", "Preserve invocation after world and position are assigned; used to register ticking, capabilities and render state.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "onLoad", V_18, "tile_entity_on_load_callback", "Tile entity world/chunk load callback", "block_entities", "adapter_required", "Preserve invocation after world and position are assigned; used to register ticking, capabilities and render state.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "onNeighborChange", V_112, "tile_entity_neighbor_change_callback", "Tile entity neighbor block change callback", "block_entities", "adapter_required", "Preserve changed neighbor BlockPos, distinct from block's neighborChanged callback.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "onSynced", V_112, "tile_entity_synchronized_callback", "Tile entity update packet applied callback", "block_entities_networking", "adapter_required", "Preserve callback timing after packet/tag state has been applied to client tile data.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "receiveClientEvent", V_ALL, "tile_entity_client_event", "Tile entity block event client dispatch", "block_entities_networking", "adapter_required", "Preserve event ID and integer parameter and returned handled flag.", "net/minecraft/tileentity/TileEntity.html"),
@@ -3844,7 +3864,7 @@ const DEFINITIONS: &[Definition] = &[
     // TileEntity static registry and NBT construction helpers.
     d!("TileEntity", "create", V_ALL, "tile_entity_create_from_nbt", "TileEntity instance factory from NBT ID", "block_entities", "adapter_required", "Preserve registry alias lookup, id resolution and null for unknown tile entity IDs.", "net/minecraft/tileentity/TileEntity.html"),
     d!("TileEntity", "getKey", V_112, "tile_entity_registry_key", "TileEntity registry ResourceLocation", "block_entities", "automatic_rename_candidate", "Preserve class-to-registry key mapping and alias behavior.", "net/minecraft/tileentity/TileEntity.html"),
-    d!("TileEntity", "register", V_ALL, "tile_entity_register_class", "TileEntity class/name registration", "registration", "registration_adapter_required", "Preserve numeric legacy ID, class and namespaced registry key/aliases.", "net/minecraft/tileentity/TileEntity.html"),
+    d!("TileEntity", "register", V_112, "tile_entity_register_class", "TileEntity class/name registration", "registration", "registration_adapter_required", "Preserve numeric legacy ID, class and namespaced registry key/aliases.", "net/minecraft/tileentity/TileEntity.html"),
 
     // Dedicated server player operations and network state.
     d!("EntityPlayerMP", "addExperience", V_ALL, "server_player_add_experience", "Server-side player XP orb/experience award", "player_progression", "adapter_required", "Preserve XP points, level progress and server-to-client experience synchronization.", "net/minecraft/entity/player/EntityPlayerMP.html"),
@@ -6362,6 +6382,54 @@ mod tests {
         assert!(!has(&v17, "canBlockSeeSky"));
         assert!(!has(&v112, "getTopBlock"));
         assert!(!has(&v112, "isBlockFreezable"));
+    }
+
+
+    #[test]
+    fn tile_entity_dictionary_matches_legacy_registration_and_sync_apis() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| {
+            entries.iter().any(|entry| entry.source_owner == "TileEntity" && entry.source_method == method)
+        };
+        for method in [
+            "addMapping", "createAndLoadEntity", "getBlockMetadata", "getBlockType",
+            "getDescriptionPacket", "getDistanceFrom", "getMaxRenderDistanceSquared",
+            "getWorldObj", "hasWorldObj", "invalidate", "isInvalid", "markDirty",
+            "readFromNBT", "receiveClientEvent", "setWorldObj", "updateContainingBlockInfo",
+            "updateEntity", "validate", "writeToNBT", "func_145828_a",
+        ] { assert!(has(&v17, method), "missing 1.7.10 TileEntity#{method}"); }
+        for method in [
+            "addMapping", "addInfoToCrashReport", "canRenderBreaking", "createAndLoadEntity",
+            "deserializeNBT", "getBlockMetadata", "getBlockType", "getDescriptionPacket",
+            "getDistanceSq", "getMaxRenderDistanceSquared", "getPos", "getRenderBoundingBox",
+            "getTileData", "getWorld", "hasCapability", "hasFastRenderer", "hasWorldObj",
+            "invalidate", "isInvalid", "markDirty", "onChunkUnload", "onDataPacket", "onLoad",
+            "readFromNBT", "receiveClientEvent", "restrictNBTCopy", "serializeNBT", "setPos",
+            "setWorldObj", "shouldRefresh", "shouldRenderInPass", "updateContainingBlockInfo",
+            "validate", "writeToNBT", "func_183000_F",
+        ] { assert!(has(&v18, method), "missing 1.8.9 TileEntity#{method}"); }
+        for method in [
+            "addInfoToCrashReport", "canRenderBreaking", "create", "getBlockMetadata",
+            "getBlockType", "getDisplayName", "getKey", "getMaxRenderDistanceSquared",
+            "getPos", "getRenderBoundingBox", "getTileData", "getUpdatePacket", "getUpdateTag",
+            "getWorld", "hasCapability", "hasFastRenderer", "hasWorld", "invalidate",
+            "isInvalid", "markDirty", "onChunkUnload", "onDataPacket", "onLoad",
+            "onlyOpsCanSetNbt", "readFromNBT", "receiveClientEvent", "register",
+            "restrictNBTCopy", "serializeNBT", "setPos", "setWorld", "setWorldCreate",
+            "shouldRefresh", "shouldRenderInPass", "updateContainingBlockInfo", "validate",
+            "writeToNBT", "rotate", "mirror",
+        ] { assert!(has(&v112, method), "missing 1.12.2 TileEntity#{method}"); }
+        assert!(!has(&v17, "getPos"));
+        assert!(!has(&v17, "getUpdatePacket"));
+        assert!(!has(&v18, "getUpdatePacket"));
+        assert!(!has(&v112, "getDescriptionPacket"));
+        assert!(!has(&v112, "getWorldObj"));
+        assert!(!has(&v17, "getWorld"));
+        assert!(!has(&v17, "setWorld"));
+        assert!(!has(&v18, "setWorld"));
+        assert!(!has(&v112, "getDistanceFrom"));
     }
 
     #[test]
