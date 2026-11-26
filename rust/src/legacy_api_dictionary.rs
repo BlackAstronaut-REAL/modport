@@ -2874,6 +2874,32 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityMob", "getExperiencePoints", V_ALL, "mob_experience_drop", "LivingEntity#getExperienceReward", "combat", "adapter_required", "Preserve player/attacker context and mob-specific XP reward.", "net/minecraft/entity/monster/EntityMob.html"),
     d!("EntityMob", "attackEntityAsMob", V_ALL, "mob_melee_attack", "Mob#doHurtTarget / melee goal", "combat", "adapter_required", "Preserve target entity, weapon enchantments, knockback and attack result.", "net/minecraft/entity/monster/EntityMob.html"),
 
+
+
+    d!("ForgeHooks", "onLivingHeal", V_ALL, "forge_hook_living_heal", "LivingHealEvent", "forge_events", "event_adapter_required", "Preserve mutable healing amount and cancellation.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onLivingConvert", V_18, "forge_hook_living_convert", "LivingConversionEvent", "forge_events", "event_adapter_required", "Preserve source and replacement entity, conversion reason and cancellation.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onLivingExperienceDrop", V_18, "forge_hook_living_experience_drop", "LivingExperienceDropEvent", "forge_events", "event_adapter_required", "Preserve mutable XP amount, attacking player and recently-hit state.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerDestroyItem", V_ALL, "forge_hook_player_destroy_item", "PlayerDestroyItemEvent", "forge_events", "event_adapter_required", "Preserve the destroyed stack and hand before it is replaced by an empty stack.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerSleepInBed", V_18, "forge_hook_player_sleep", "PlayerSleepInBedEvent", "forge_events", "event_adapter_required", "Preserve bed position and sleep result override.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerWakeUp", V_18, "forge_hook_player_wake", "PlayerWakeUpEvent", "forge_events", "event_adapter_required", "Preserve immediately/ updateWorldFlag booleans and wake-up ordering.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerRightClickBlock", V_18, "forge_hook_player_block_interaction", "PlayerInteractEvent.RightClickBlock", "forge_events", "event_adapter_required", "Preserve hand, position, face, hit vector and cancellation/result overrides.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerRightClickItem", V_18, "forge_hook_player_item_interaction", "PlayerInteractEvent.RightClickItem", "forge_events", "event_adapter_required", "Preserve hand, stack and interaction result.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerLeftClickBlock", V_18, "forge_hook_player_left_click_block", "PlayerInteractEvent.LeftClickBlock", "forge_events", "event_adapter_required", "Preserve position, face and block-harvest cancellation.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onBlockPlace", V_ALL, "forge_hook_block_place", "BlockEvent.EntityPlaceEvent / PlaceEvent", "forge_events", "event_adapter_required", "Preserve placed state, replaced state, entity placer, hand and cancellation.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onBlockHarvested", V_ALL, "forge_hook_block_harvested", "BlockEvent.HarvestDropsEvent", "forge_events", "event_adapter_required", "Preserve tool, fortune/silk-touch context, mutable drops and experience.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onHoeUse", V_ALL, "forge_hook_hoe_use", "UseHoeEvent", "forge_events", "event_adapter_required", "Preserve player, hand, clicked position and result state when custom hoe behavior is used.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onTravelToDimension", V_18, "forge_hook_dimension_travel", "EntityTravelToDimensionEvent", "forge_events", "event_adapter_required", "Preserve source entity, destination dimension ID and cancellation before transfer.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onItemUseStart", V_ALL, "forge_hook_item_use_start", "LivingEntityUseItemEvent.Start", "forge_events", "event_adapter_required", "Preserve stack and duration override when item use begins.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onItemUseTick", V_ALL, "forge_hook_item_use_tick", "LivingEntityUseItemEvent.Tick", "forge_events", "event_adapter_required", "Preserve remaining-use count and cancellation/tick mutation.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onItemUseFinish", V_ALL, "forge_hook_item_use_finish", "LivingEntityUseItemEvent.Finish", "forge_events", "event_adapter_required", "Preserve final stack replacement and event ordering when item use completes.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onItemUseStop", V_ALL, "forge_hook_item_use_stop", "LivingEntityUseItemEvent.Stop", "forge_events", "event_adapter_required", "Preserve interrupted-use callback and remaining duration.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onPlayerInteract", V_ALL, "forge_hook_player_interact", "PlayerInteractEvent", "forge_events", "event_adapter_required", "Preserve action subtype, hand, clicked position and cancellation/result state.", "net/minecraftforge/common/ForgeHooks.html"),
+
+    d!("ForgeChunkManager", "requestPlayerTicket", V_ALL, "forge_player_chunk_ticket_request", "ForgeChunkManager player ticket request", "chunk_loading", "adapter_required", "Preserve player identity and mod owner when requesting a player-associated ticket.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "getConfigDefaults", V_112, "forge_chunk_config_defaults", "Forge chunk loading configuration", "chunk_loading", "adapter_required", "Preserve per-mod ticket, depth and player-ticket defaults.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "getMaxTicketLengthFor", V_112, "forge_chunk_max_ticket_length", "Forge chunk loading configuration", "chunk_loading", "automatic_rename_candidate", "Preserve per-mod maximum ticket length.", "net/minecraftforge/common/ForgeChunkManager.html"),
+    d!("ForgeChunkManager", "getTicketCountFor", V_112, "forge_chunk_ticket_count", "Forge chunk ticket accounting", "chunk_loading", "automatic_rename_candidate", "Preserve per-mod ticket count including player tickets.", "net/minecraftforge/common/ForgeChunkManager.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7131,6 +7157,56 @@ mod tests {
         }
         assert!(has(&v112,"getProfessionForge"));
         assert!(!has(&v17,"getProfessionForge"));
+    }
+
+
+    #[test]
+    fn ore_dictionary_preserves_legacy_tag_membership_semantics() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "OreDictionary" && e.source_method == method);
+        for version in [&v17, &v18, &v112] {
+            for method in ["getOreID","getOreName","getOreNames","getOreIDs","getOres","registerOre","doesOreNameExist","itemMatches"] {
+                assert!(has(version, method), "missing OreDictionary#{method}");
+            }
+        }
+    }
+
+    #[test]
+    fn forge_hooks_cover_living_player_block_and_item_events() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeHooks" && e.source_method == method);
+        for method in ["onLivingAttack","onLivingHurt","onLivingDamage","onLivingDeath","onLivingDrops","onLivingFall","onLivingJump","onLivingHeal","onLivingKnockBack","onPlayerDestroyItem","onBlockBreakEvent","onBlockPlace","onBlockHarvested","onCropsGrowPre","onCropsGrowPost","onHoeUse","onItemUseStart","onItemUseTick","onItemUseFinish","onItemUseStop","onPlayerInteract"] {
+            assert!(has(&v17, method), "missing 1.7.10 ForgeHooks#{method}");
+            assert!(has(&v18, method), "missing 1.8.9 ForgeHooks#{method}");
+            assert!(has(&v112, method), "missing 1.12.2 ForgeHooks#{method}");
+        }
+        for method in ["onLivingConvert","onLivingSetAttackTarget","onLivingExperienceDrop","onPlayerTossEvent","onPlayerAttackTarget","onPlayerSleepInBed","onPlayerWakeUp","onPlayerRightClickBlock","onPlayerRightClickItem","onPlayerLeftClickBlock","onAnvilChange","onAnvilRepair","onTravelToDimension"] {
+            assert!(has(&v18, method), "missing 1.8.9 ForgeHooks#{method}");
+            assert!(has(&v112, method), "missing 1.12.2 ForgeHooks#{method}");
+            assert!(!has(&v17, method), "unexpected 1.7.10 ForgeHooks#{method}");
+        }
+    }
+
+    #[test]
+    fn forge_chunk_manager_dictionary_preserves_ticket_lifecycle() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeChunkManager" && e.source_method == method);
+        for version in [&v17, &v18, &v112] {
+            for method in ["requestTicket","requestPlayerTicket","releaseTicket","forceChunk","unforceChunk","reorderChunk","getPersistentChunksFor","setForcedChunkLoadingCallback","loadWorld","unloadWorld"] {
+                assert!(has(version, method), "missing ForgeChunkManager#{method}");
+            }
+        }
+        for method in ["getConfigDefaults","getMaxChunkDepthFor","getMaxTicketLengthFor","getTicketCountFor"] {
+            assert!(has(&v112, method), "missing 1.12.2 ForgeChunkManager#{method}");
+            assert!(!has(&v17, method));
+            assert!(!has(&v18, method));
+        }
     }
 
     #[test]
