@@ -2972,6 +2972,50 @@ const DEFINITIONS: &[Definition] = &[
     d!("NetworkRegistry", "register", V_ALL, "forge_network_handler_register", "NetworkRegistry handler registration", "networking", "adapter_required", "Preserve mod container and network handler registration ordering.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
     d!("NetworkRegistry", "registerChannel", V_17_18, "forge_network_channel_register", "FMLEmbeddedChannel registration", "networking", "adapter_required", "Preserve channel name, side and handler ordering.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
 
+
+
+    d!("EntityAITasks", "areTasksCompatible", V_17_18, "ai_scheduler_compatibility", "GoalSelector goal conflict resolution", "entity_ai", "adapter_required", "Preserve legacy mutex-bit compatibility for task pairs.", "net/minecraft/entity/ai/EntityAITasks.html"),
+    d!("EntityAITasks", "canUse", V_112, "ai_scheduler_can_use", "GoalSelector#canUse", "entity_ai", "adapter_required", "Preserve modern goal flag compatibility and disabled-control checks.", "net/minecraft/entity/ai/EntityAITasks.html"),
+    d!("EntityAITasks", "getTaskEntries", V_112, "ai_scheduler_task_entries", "GoalSelector goal-entry list", "entity_ai", "adapter_required", "Preserve task priority, task instance and insertion order.", "net/minecraft/entity/ai/EntityAITasks.html"),
+
+    d!("EntityMoveHelper", "getSpeed", V_17_18, "ai_move_speed_read", "MoveControl speed modifier", "entity_ai", "adapter_required", "Preserve current speed modifier separately from movement attribute base value.", "net/minecraft/entity/ai/EntityMoveHelper.html"),
+
+    d!("EntityLookHelper", "getLookPosition", V_17_18, "ai_look_target_read", "LookControl / look vector", "entity_ai", "adapter_required", "Preserve the current target vector and null/not-looking behavior.", "net/minecraft/entity/ai/EntityLookHelper.html"),
+    d!("EntityLookHelper", "isLooking", V_17_18, "ai_look_pending_predicate", "LookControl look operation state", "entity_ai", "automatic_rename_candidate", "Preserve whether a look target is active.", "net/minecraft/entity/ai/EntityLookHelper.html"),
+
+    d!("EntityJumpHelper", "setJumping", V_ALL, "ai_jump_request", "JumpControl#jump", "entity_ai", "automatic_rename_candidate", "Preserve queued jump request and tick timing.", "net/minecraft/entity/ai/EntityJumpHelper.html"),
+    d!("EntityJumpHelper", "doJump", V_17_18, "ai_jump_execute", "JumpControl#tick", "entity_ai", "adapter_required", "Preserve jump impulse, ground state and request consumption.", "net/minecraft/entity/ai/EntityJumpHelper.html"),
+    d!("EntityJumpHelper", "isJumping", V_17_18, "ai_jump_state", "JumpControl jump state", "entity_ai", "automatic_rename_candidate", "Preserve jump-request state separately from vertical motion.", "net/minecraft/entity/ai/EntityJumpHelper.html"),
+
+    d!("EntitySenses", "clearSensingCache", V_ALL, "ai_senses_cache_clear", "Sensing visibility cache invalidation", "entity_ai", "automatic_rename_candidate", "Preserve cache invalidation timing after movement and world changes.", "net/minecraft/entity/ai/EntitySenses.html"),
+    d!("EntitySenses", "update", V_17_18, "ai_senses_cache_tick", "Sensing cache update", "entity_ai", "automatic_rename_candidate", "Preserve cache expiry and visibility recomputation timing.", "net/minecraft/entity/ai/EntitySenses.html"),
+
+    d!("EntityAITarget", "shouldExecute", V_ALL, "ai_target_should_execute", "TargetGoal#canUse", "entity_ai", "adapter_required", "Preserve target candidate selection, visibility, range and owner/team restrictions.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "continueExecuting", V_ALL, "ai_target_continue", "TargetGoal#canContinueToUse", "entity_ai", "adapter_required", "Preserve target validity, range and line-of-sight checks after acquisition.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "startExecuting", V_ALL, "ai_target_start", "TargetGoal#start", "entity_ai", "automatic_rename_candidate", "Preserve target assignment and aggro side effects.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "resetTask", V_ALL, "ai_target_reset", "TargetGoal#stop", "entity_ai", "automatic_rename_candidate", "Preserve target clearing and forget-target behavior.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "updateTask", V_ALL, "ai_target_tick", "TargetGoal#tick", "entity_ai", "automatic_rename_candidate", "Preserve target maintenance and look-control updates.", "net/minecraft/entity/ai/EntityAITarget.html"),
+    d!("EntityAITarget", "setMutexBits", V_17_18, "ai_target_mutex_write", "Goal#setFlags", "entity_ai", "adapter_required", "Translate legacy target-goal mutex bitmask into Goal.Flag values.", "net/minecraft/entity/ai/EntityAITarget.html"),
+
+    d!("PathNavigate", "getPathToXYZ", V_17_18, "path_to_xyz", "PathNavigation#createPath(BlockPos,int)", "entity_ai", "adapter_required", "Preserve target coordinates and path search range.", "net/minecraft/pathfinding/PathNavigate.html"),
+    d!("PathNavigate", "setAvoidsWater", V_17_18, "path_navigate_water_avoidance", "PathNavigation#setCanFloat / water malus", "entity_ai", "adapter_required", "Preserve water avoidance independently from swimming permission.", "net/minecraft/pathfinding/PathNavigate.html"),
+
+    d!("PathNavigateGround", "getPathablePosY", V_17_18, "ground_pathable_y", "GroundPathNavigation node height selection", "entity_ai", "adapter_required", "Preserve step height, water avoidance and ground path node selection.", "net/minecraft/pathfinding/PathNavigateGround.html"),
+    d!("PathNavigateGround", "isSafeToStandAt", V_17_18, "ground_path_safety", "WalkNodeEvaluator / safe node test", "entity_ai", "adapter_required", "Preserve collision, support, hazard and entity-size checks.", "net/minecraft/pathfinding/PathNavigateGround.html"),
+    d!("PathNavigateGround", "getPathNodeType", V_18, "ground_path_node_type", "WalkNodeEvaluator#getPathType", "entity_ai", "adapter_required", "Preserve block/path node classification and malus mapping.", "net/minecraft/pathfinding/PathNavigateGround.html"),
+    d!("PathNavigateGround", "canNavigate", V_ALL, "ground_can_navigate", "GroundPathNavigation#canUpdatePath", "entity_ai", "adapter_required", "Preserve ground movement and liquid/ladder path constraints.", "net/minecraft/pathfinding/PathNavigateGround.html"),
+
+    d!("PathFinder", "createEntityPathTo", V_17_18, "pathfinder_create_path", "PathFinder#findPath", "entity_ai", "adapter_required", "Preserve search range, visited-node budget and path target semantics.", "net/minecraft/pathfinding/PathFinder.html"),
+    d!("PathFinder", "findPath", V_112, "pathfinder_find_path", "PathFinder#findPath", "entity_ai", "adapter_required", "Preserve target set, max distance and node evaluator behavior.", "net/minecraft/pathfinding/PathFinder.html"),
+
+    d!("PathEntity", "getCurrentPathLength", V_ALL, "path_length_read", "Path#getNodeCount", "entity_ai", "automatic_rename_candidate", "Preserve node count and path trimming semantics.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "getCurrentPathIndex", V_ALL, "path_index_read", "Path#getNextNodeIndex", "entity_ai", "automatic_rename_candidate", "Preserve the current node cursor.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "setCurrentPathIndex", V_ALL, "path_index_write", "Path#setNextNodeIndex", "entity_ai", "automatic_rename_candidate", "Preserve cursor mutation and completion state.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "getFinalPathPoint", V_ALL, "path_final_point", "Path#getEndNode", "entity_ai", "automatic_rename_candidate", "Preserve final node coordinate.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "getPathPointFromIndex", V_ALL, "path_point_lookup", "Path#getNode", "entity_ai", "automatic_rename_candidate", "Preserve node index and out-of-range behavior.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "isFinished", V_ALL, "path_finished_predicate", "Path#isDone", "entity_ai", "automatic_rename_candidate", "Preserve path completion state.", "net/minecraft/pathfinding/PathEntity.html"),
+    d!("PathEntity", "isSamePath", V_17_18, "path_same_path_predicate", "Path equality / node sequence compare", "entity_ai", "adapter_required", "Preserve path point sequence comparison rather than object identity.", "net/minecraft/pathfinding/PathEntity.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7371,6 +7415,40 @@ mod tests {
         assert!(has(&v112,"NetworkRegistry","newEventDrivenChannel"));
         assert!(has(&v17,"NetworkRegistry","registerGuiHandler"));
         assert!(has(&v112,"NetworkRegistry","registerGuiHandler"));
+    }
+
+
+    #[test]
+    fn legacy_ai_goal_scheduler_and_pathfinding_apis_are_indexed() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for owner in ["EntityAIBase","EntityAITasks","EntityMoveHelper","EntityLookHelper","EntityJumpHelper","EntitySenses","EntityAITarget","PathNavigate","PathNavigateGround","PathFinder","PathEntity"] {
+            for version in [&v17,&v18,&v112] {
+                let required:&[&str]=match owner {
+                    "EntityAIBase"=>&["shouldExecute","continueExecuting","startExecuting","resetTask","updateTask"],
+                    "EntityAITasks"=>&["addTask","removeTask","onUpdateTasks"],
+                    "EntityMoveHelper"=>&["setMoveTo","onUpdateMoveHelper"],
+                    "EntityLookHelper"=>&["setLookPosition","onUpdateLook"],
+                    "EntityJumpHelper"=>&["setJumping"],
+                    "EntitySenses"=>&["canSee","clearSensingCache"],
+                    "EntityAITarget"=>&["shouldExecute","continueExecuting","startExecuting","resetTask","updateTask","isSuitableTarget"],
+                    "PathNavigate"=>&["setPath","noPath","canNavigate","getPath"],
+                    "PathNavigateGround"=>&["canNavigate"],
+                    "PathFinder"=>&[],
+                    "PathEntity"=>&["getCurrentPathLength","getCurrentPathIndex","setCurrentPathIndex","getFinalPathPoint","getPathPointFromIndex","isFinished"],
+                    _=>&[],
+                };
+                for method in required {assert!(has(version,owner,method),"missing {owner}#{method}");}
+            }
+        }
+        assert!(has(&v17,"EntityAIBase","setMutexBits"));
+        assert!(has(&v18,"EntityAITasks","disableControlFlag"));
+        assert!(has(&v112,"EntityAITasks","setControlFlag"));
+        assert!(has(&v17,"PathNavigate","tryMoveToEntityLiving"));
+        assert!(has(&v18,"PathNavigate","tryMoveToXYZ"));
+        assert!(has(&v112,"PathFinder","findPath"));
     }
 
     #[test]
