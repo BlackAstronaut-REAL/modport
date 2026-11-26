@@ -4805,7 +4805,7 @@ fn source_owner_doc_path(version: &str, owner: &str) -> Option<&'static str> {
         "EntityLookHelper" => Some("net/minecraft/entity/ai/EntityLookHelper.html"),
         "EntityAnimal" => Some("net/minecraft/entity/passive/EntityAnimal.html"),
         "EntityMob" => Some("net/minecraft/entity/monster/EntityMob.html"),
-        "WorldSavedData" => Some("net/minecraft/world/WorldSavedData.html"),
+        "WorldSavedData" => Some(if version == "1.12.2" { "net/minecraft/world/storage/WorldSavedData.html" } else { "net/minecraft/world/WorldSavedData.html" }),
         "PathNavigateGround" => Some("net/minecraft/pathfinding/PathNavigateGround.html"),
         "TileEntityFurnace" => Some("net/minecraft/tileentity/TileEntityFurnace.html"),
         "WorldServer" => Some("net/minecraft/world/WorldServer.html"),
