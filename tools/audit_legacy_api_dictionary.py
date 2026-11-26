@@ -214,10 +214,10 @@ def audit_version(
     version: str,
     documented: set[tuple[str, str]],
     mappings: list[dict[str, Any]],
+    documented_by_version: dict[str, set[tuple[str, str]]],
 ) -> dict[str, Any]:
     # Keep the full JavaDoc class-page path in the coverage key. Class simple
-    # names are not globally unique (for example client/server or Forge/Minecraft
-    # packages), so collapsing them can falsely inflate the coverage percentage.
+    # names are not globally unique, so package collisions cannot inflate coverage.
     docs_by_owner: dict[str, set[str]] = defaultdict(set)
     methods_by_page: dict[str, set[str]] = defaultdict(set)
     for page, method in documented:
@@ -226,7 +226,7 @@ def audit_version(
 
     duplicate_counter: Counter[tuple[str, str]] = Counter()
     mapped_pages: set[tuple[str, str]] = set()
-    stale: list[dict[str, str]] = []
+    stale: list[dict[str, Any]] = []
     doc_link_mismatches: list[dict[str, str]] = []
     ambiguous: list[dict[str, str]] = []
 
@@ -251,16 +251,13 @@ def audit_version(
         )
 
         if exact_pages:
-            # Multiple exact URLs can occur when a shared mapping spans releases;
-            # this report is release-scoped, so the page set remains deduplicated.
             mapped_pages.update((page, method) for page in exact_pages)
             continue
 
-        # If the URL is wrong or absent, recover only when the JavaDoc index has
-        # exactly one class with this simple name and method. Never guess between
-        # same-named types in different packages.
+        # Recover a bad/missing URL only when owner + method identifies one
+        # unique class page. Never guess between same-named classes in packages.
         fallback_pages = sorted(
-            page for page in docs_by_owner.get(owner, [])
+            page for page in docs_by_owner.get(owner, set())
             if method in methods_by_page.get(page, set())
         )
         if len(fallback_pages) == 1:
@@ -280,10 +277,21 @@ def audit_version(
                 "candidate_pages": "; ".join(fallback_pages),
             })
         else:
+            other_release_matches: dict[str, list[str]] = {}
+            for other_version, other_documented in documented_by_version.items():
+                if other_version == version:
+                    continue
+                pages = sorted(
+                    page for page, candidate_method in other_documented
+                    if candidate_method == method and Path(page).stem == owner
+                )
+                if pages:
+                    other_release_matches[other_version] = pages
             stale.append({
                 "owner": owner,
                 "method": method,
                 "documentation_urls": "; ".join(urls),
+                "documented_in_other_versions": other_release_matches,
             })
 
     duplicate_pairs = [
@@ -291,13 +299,13 @@ def audit_version(
         for (owner, method), count in sorted(duplicate_counter.items())
         if count > 1
     ]
-
-    # The exact documented owner page and method form the denominator. This
-    # prevents a method in one package from covering a same-named class elsewhere.
     unmapped = sorted(
         documented - mapped_pages,
         key=lambda pair: (pair[0].casefold(), pair[1].casefold()),
     )
+    scope_candidates = [
+        item for item in stale if item["documented_in_other_versions"]
+    ]
     return {
         "version": version,
         "documented_method_owner_pairs": len(documented),
@@ -309,6 +317,7 @@ def audit_version(
             100.0 * len(mapped_pages) / len(documented), 2
         ) if documented else 0.0,
         "stale_or_undocumented_mappings": stale,
+        "version_scope_candidates": scope_candidates,
         "documentation_link_mismatches": doc_link_mismatches,
         "ambiguous_owner_method_mappings": ambiguous,
         "duplicate_dictionary_pairs": duplicate_pairs,
@@ -355,14 +364,19 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
             f"- Validated mappings: **{report['validated_dictionary_pairs']}**",
             f"- Coverage: **{report['coverage_percent']:.2f}%**",
             f"- Stale or undocumented mappings: **{len(report['stale_or_undocumented_mappings'])}**",
+            f"- Stale mappings also documented in another release: **{len(report['version_scope_candidates'])}**",
             f"- Documentation-link mismatches: **{len(report['documentation_link_mismatches'])}**",
             f"- Ambiguous owner/method mappings: **{len(report['ambiguous_owner_method_mappings'])}**",
             f"- Duplicate owner/method pairs: **{len(report['duplicate_dictionary_pairs'])}**",
         ])
         if report["stale_or_undocumented_mappings"]:
-            lines.extend(["", "### Mappings not found in the JavaDocs", ""])
+            lines.extend(["", "### Mappings not found in this release's JavaDocs", ""])
             for item in report["stale_or_undocumented_mappings"][:40]:
-                lines.append(f"- {item['owner']}#{item['method']}")
+                line = f"- {item['owner']}#{item['method']}"
+                other = item.get("documented_in_other_versions", {})
+                if other:
+                    line += f" (documented in: {', '.join(sorted(other))}; review version mask)"
+                lines.append(line)
             if len(report["stale_or_undocumented_mappings"]) > 40:
                 lines.append(
                     f"- ...and {len(report['stale_or_undocumented_mappings']) - 40} more (see JSON output)"
@@ -442,13 +456,23 @@ def main() -> int:
 
     try:
         dictionary = load_dictionary(args.dictionary_json)
+        documented_by_version = {
+            version: load_index(version, args.cache_dir, args.offline)
+            for version in VERSIONS
+        }
         reports = []
         for version in VERSIONS:
             mappings = dictionary.get(version)
             if not isinstance(mappings, list):
                 raise ValueError(f"dictionary export has no mapping list for {version}")
-            documented = load_index(version, args.cache_dir, args.offline)
-            reports.append(audit_version(version, documented, mappings))
+            reports.append(
+                audit_version(
+                    version,
+                    documented_by_version[version],
+                    mappings,
+                    documented_by_version,
+                )
+            )
     except Exception as error:  # noqa: BLE001 - one actionable CLI error
         print(f"Audit failed: {error}", file=sys.stderr)
         return 2
