@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 pub const TARGET_MINECRAFT_VERSION: &str = "1.21.1";
 pub const DEFAULT_NEOFORGE_VERSION: &str = "21.1.235";
+pub const DEFAULT_GRADLE_VERSION: &str = "9.2.1";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct NeoForgeProjectReport {
@@ -44,6 +45,9 @@ pub fn create_neoforge_project(
 
     files.push(("settings.gradle".to_owned(), settings_gradle().to_owned()));
     files.push(("build.gradle".to_owned(), build_gradle().to_owned()));
+    files.push(("gradlew.bat".to_owned(), gradlew_bat().to_owned()));
+    files.push(("gradlew".to_owned(), gradlew_unix().to_owned()));
+    files.push(("gradle/wrapper/gradle-wrapper.properties".to_owned(), gradle_wrapper_properties().to_owned()));
     files.push(("gradle.properties".to_owned(), render(
         gradle_properties(),
         &[
@@ -147,6 +151,15 @@ pub fn create_neoforge_project(
         }
         fs::write(&destination, content)
             .with_context(|| format!("writing generated NeoForge project file {}", destination.display()))?;
+        if relative == "gradlew" {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut permissions = fs::metadata(&destination)?.permissions();
+                permissions.set_mode(0o755);
+                fs::set_permissions(&destination, permissions)?;
+            }
+        }
         generated_files.push(relative);
     }
     generated_files.sort();
@@ -163,7 +176,7 @@ pub fn create_neoforge_project(
         warnings: vec![
             "No legacy source behavior has been converted by this scaffold generator.".to_owned(),
             "Run the source-driven content adapters before treating the generated project as a completed port.".to_owned(),
-            "A Gradle wrapper JAR is not bundled; use an installed Gradle to run gradle build or generate a wrapper with gradle wrapper.".to_owned(),
+            "The generated gradlew / gradlew.bat launcher downloads the pinned Gradle distribution on first build; internet access is required for that initial download.".to_owned(),
         ],
     })
 }
@@ -242,6 +255,84 @@ fn render(template: &str, replacements: &[(&str, &str)]) -> String {
         result = result.replace(needle, value);
     }
     result
+}
+
+fn gradlew_bat() -> &'static str {
+    r#"@echo off
+setlocal
+set "MODPORT_GRADLE_VERSION=9.2.1"
+if defined GRADLE_USER_HOME (
+    set "MODPORT_GRADLE_USER_HOME=%GRADLE_USER_HOME%"
+) else (
+    set "MODPORT_GRADLE_USER_HOME=%USERPROFILE%\.gradle"
+)
+set "MODPORT_GRADLE_CACHE=%MODPORT_GRADLE_USER_HOME%\wrapper\dists\modport-gradle-%MODPORT_GRADLE_VERSION%"
+set "MODPORT_GRADLE_HOME=%MODPORT_GRADLE_CACHE%\gradle-%MODPORT_GRADLE_VERSION%"
+set "MODPORT_GRADLE_CMD=%MODPORT_GRADLE_HOME%\bin\gradle.bat"
+
+if not exist "%MODPORT_GRADLE_CMD%" (
+    echo Modport: downloading Gradle %MODPORT_GRADLE_VERSION% on first build...
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $gradleUserHome = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $env:USERPROFILE '.gradle' }; $root = Join-Path $gradleUserHome 'wrapper\dists\modport-gradle-9.2.1'; New-Item -ItemType Directory -Force -Path $root | Out-Null; $zip = Join-Path $root 'gradle-9.2.1-bin.zip'; Invoke-WebRequest -UseBasicParsing -Uri 'https://services.gradle.org/distributions/gradle-9.2.1-bin.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $root -Force; Remove-Item -LiteralPath $zip -Force"
+    if errorlevel 1 (
+        echo Modport: Gradle download failed. Check your internet connection and retry.
+        exit /b 1
+    )
+)
+
+if not exist "%MODPORT_GRADLE_CMD%" (
+    echo Modport: Gradle was not found after downloading the distribution.
+    exit /b 1
+)
+
+call "%MODPORT_GRADLE_CMD%" %*
+exit /b %ERRORLEVEL%
+"#
+}
+
+fn gradlew_unix() -> &'static str {
+    r#"#!/usr/bin/env sh
+set -eu
+
+GRADLE_VERSION="9.2.1"
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-"$HOME/.gradle"}"
+GRADLE_CACHE="${GRADLE_USER_HOME}/wrapper/dists/modport-gradle-${GRADLE_VERSION}"
+GRADLE_HOME="${GRADLE_CACHE}/gradle-${GRADLE_VERSION}"
+GRADLE_COMMAND="${GRADLE_HOME}/bin/gradle"
+
+if [ ! -x "${GRADLE_COMMAND}" ]; then
+    mkdir -p "${GRADLE_CACHE}"
+    ARCHIVE="${GRADLE_CACHE}/gradle-${GRADLE_VERSION}-bin.zip"
+    URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+    echo "Modport: downloading Gradle ${GRADLE_VERSION} on first build..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fL "${URL}" -o "${ARCHIVE}"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "${ARCHIVE}" "${URL}"
+    else
+        echo "Modport: curl or wget is required to download Gradle." >&2
+        exit 1
+    fi
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "Modport: unzip is required to install the Gradle distribution." >&2
+        exit 1
+    fi
+    unzip -q -o "${ARCHIVE}" -d "${GRADLE_CACHE}"
+    rm -f "${ARCHIVE}"
+fi
+
+exec "${GRADLE_COMMAND}" "$@"
+"#
+}
+
+fn gradle_wrapper_properties() -> &'static str {
+    r#"distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-9.2.1-bin.zip
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+"#
 }
 
 fn settings_gradle() -> &'static str {
@@ -510,15 +601,18 @@ NeoForge 1.21.1 project generated by Modport.
 
 ## Build
 
-Use an installed Gradle distribution:
+Run the included self-bootstrapping Gradle launcher:
 
-    gradle build
+    .\gradlew.bat build
 
-To create a local Gradle wrapper:
+The first build downloads Gradle 9.2.1 from the official Gradle distribution
+service into your user Gradle cache. No separate Gradle installation is needed.
+On Linux/macOS, run:
 
-    gradle wrapper
+    ./gradlew build
 
-Then run gradlew build on Windows with gradlew.bat.
+Java 21 is still required for NeoForge. The Gradle distribution is cached and
+reused by later builds.
 
 ## Port status
 
@@ -545,6 +639,10 @@ mod tests {
         assert_eq!(report.status, "scaffold_only");
         assert_eq!(report.minecraft_version, "1.21.1");
         assert!(output.join("build.gradle").is_file());
+        assert!(output.join("gradlew.bat").is_file());
+        assert!(output.join("gradlew").is_file());
+        assert!(output.join("gradle/wrapper/gradle-wrapper.properties").is_file());
+        assert!(fs::read_to_string(output.join("gradlew.bat")).unwrap().contains("services.gradle.org/distributions/gradle-9.2.1-bin.zip"));
         assert!(output.join("src/main/resources/META-INF/neoforge.mods.toml").is_file());
         assert!(output.join("src/main/java/com/example/examplemod/NeoForgeMod.java").is_file());
         assert!(output.join("modport/port-status.json").is_file());
