@@ -33,6 +33,7 @@ jobs:
           python tools/audit_legacy_api_dictionary.py
           --write-markdown build/reports/LEGACY_API_DICTIONARY_AUDIT.md
           --write-json build/reports/legacy-api-dictionary-audit.json
+          --write-scope-suggestions build/reports/legacy-api-dictionary-scope-recommendations.json
       - name: Publish audit report
         if: always()
         uses: actions/upload-artifact@v4
@@ -46,4 +47,9 @@ jobs:
         run: |
           if [ -f build/reports/LEGACY_API_DICTIONARY_AUDIT.md ]; then
             cat build/reports/LEGACY_API_DICTIONARY_AUDIT.md
+          fi
+          if [ -f build/reports/legacy-api-dictionary-scope-recommendations.json ]; then
+            echo "SCOPE_RECOMMENDATIONS_JSON_BEGIN"
+            cat build/reports/legacy-api-dictionary-scope-recommendations.json
+            echo "SCOPE_RECOMMENDATIONS_JSON_END"
           fi
