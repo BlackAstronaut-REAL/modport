@@ -3155,6 +3155,32 @@ const DEFINITIONS: &[Definition] = &[
     d!("FMLEmbeddedChannel", "attr", V_ALL, "fml_channel_attribute", "Netty Channel attribute lookup", "networking", "adapter_required", "Preserve channel attribute key identity and value lifetime.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
     d!("FMLEmbeddedChannel", "writeAndFlush", V_ALL, "fml_channel_send", "Netty outbound packet dispatch", "networking", "adapter_required", "Preserve flush boundary and asynchronous network ordering.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
 
+    d!("IRecipe", "getRegistryName", V_112, "recipe_registry_name", "Recipe#getId / ResourceLocation", "registration", "automatic_rename_candidate", "Preserve stable namespaced recipe identity.", "net/minecraft/item/crafting/IRecipe.html"),
+    d!("IRecipe", "setRegistryName", V_112, "recipe_registry_name_write", "Recipe registry key assignment", "registration", "automatic_rename_candidate", "Preserve namespace/path and duplicate registration failure behavior.", "net/minecraft/item/crafting/IRecipe.html"),
+
+    d!("CraftingManager", "findMatchingRecipe", V_17_18, "crafting_find_match", "RecipeManager#getRecipeFor", "recipes", "adapter_required", "Preserve recipe iteration order, first-match semantics and crafting inventory/world inputs.", "net/minecraft/item/crafting/CraftingManager.html"),
+    d!("CraftingManager", "getRemainingItems", V_18, "crafting_remaining_items", "Recipe#getRemainingItems", "recipes", "adapter_required", "Preserve per-slot container item behavior after crafting.", "net/minecraft/item/crafting/CraftingManager.html"),
+    d!("CraftingManager", "getRecipe", V_112, "crafting_recipe_lookup", "RecipeManager#getRecipeFor / recipe registry lookup", "recipes", "adapter_required", "Preserve recipe registry lookup by key and inventory match semantics.", "net/minecraft/item/crafting/CraftingManager.html"),
+    d!("CraftingManager", "registerRecipe", V_112, "crafting_register_recipe", "RecipeManager registration / recipe serializer", "recipes", "registration_adapter_required", "Preserve recipe ID, serializer, recipe ordering and duplicate-key behavior.", "net/minecraft/item/crafting/CraftingManager.html"),
+
+    d!("FurnaceRecipes", "smelting", V_ALL, "furnace_recipes_singleton", "RecipeManager smelting registry", "recipes", "automatic_rename_candidate", "Preserve singleton registry identity and registration lifecycle.", "net/minecraft/item/crafting/FurnaceRecipes.html"),
+    d!("FurnaceRecipes", "getSmeltingResult", V_ALL, "furnace_smelting_result", "RecipeManager furnace recipe lookup", "recipes", "adapter_required", "Preserve item metadata matching, NBT behavior, output stack and recipe precedence.", "net/minecraft/item/crafting/FurnaceRecipes.html"),
+    d!("FurnaceRecipes", "getSmeltingList", V_17_18, "furnace_smelting_list", "Furnace recipe registry", "recipes", "adapter_required", "Preserve mutable registry map iteration and exact input-to-output mapping.", "net/minecraft/item/crafting/FurnaceRecipes.html"),
+    d!("FurnaceRecipes", "getSmeltingExperience", V_ALL, "furnace_smelting_experience", "AbstractFurnaceBlockEntity experience storage", "recipes", "adapter_required", "Preserve per-output XP values and fractional XP accumulation.", "net/minecraft/item/crafting/FurnaceRecipes.html"),
+    d!("FurnaceRecipes", "addSmelting", V_17_18, "furnace_smelting_register", "Furnace recipe registry / data-driven cooking recipe", "recipes", "registration_adapter_required", "Preserve input stack metadata, output stack and experience value.", "net/minecraft/item/crafting/FurnaceRecipes.html"),
+
+
+
+
+
+    d!("RecipeSorter", "register", V_18, "recipe_sorter_register", "RecipeManager serializer/recipe ordering", "recipes", "registration_adapter_required", "Preserve recipe class, category, sorting dependency expression and registration order.", "net/minecraftforge/oredict/RecipeSorter.html"),
+    d!("RecipeSorter", "getCategory", V_18, "recipe_sorter_category", "Recipe sort category", "recipes", "automatic_rename_candidate", "Preserve category lookup for legacy recipe sorting.", "net/minecraftforge/oredict/RecipeSorter.html"),
+    d!("RecipeSorter", "getDependencies", V_18, "recipe_sorter_dependencies", "Recipe sorting dependency graph", "recipes", "adapter_required", "Preserve before/after constraints between recipe classes.", "net/minecraftforge/oredict/RecipeSorter.html"),
+
+
+
+
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7678,6 +7704,30 @@ mod tests {
             assert!(has(version,"FMLNetworkHandler","getEntitySpawningPacket"));
         }
         assert!(has(&v112,"SimpleNetworkWrapper","sendToServer"));
+    }
+
+
+    #[test]
+    fn recipe_and_fuel_dictionary_preserves_crafting_contracts() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["matches","getCraftingResult","canFit","getRecipeOutput"] {
+                assert!(has(version,"IRecipe",method),"missing IRecipe#{method}");
+            }
+            assert!(has(version,"FurnaceRecipes","smelting"));
+            assert!(has(version,"FurnaceRecipes","getSmeltingResult"));
+            assert!(has(version,"FurnaceRecipes","getSmeltingExperience"));
+            assert!(has(version,"IFuelHandler","getBurnTime"));
+        }
+        assert!(has(&v17,"IRecipe","getRecipeSize"));
+        assert!(has(&v18,"IRecipe","getRemainingItems"));
+        assert!(has(&v112,"IRecipe","getIngredients"));
+        assert!(has(&v112,"Ingredient","apply"));
+        assert!(has(&v112,"OreIngredient","getMatchingStacks"));
+        assert!(has(&v18,"RecipeSorter","register"));
     }
 
     #[test]
