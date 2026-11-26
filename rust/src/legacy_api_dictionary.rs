@@ -486,14 +486,14 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldProvider", "getDimensionType", V_18, "dimension_type", "Level#dimensionType / DimensionType", "dimensions", "adapter_required", "Translate the provider's dimension type into a registered dimension type.", "net/minecraft/world/WorldProvider.html"),
     d!("Chunk", "getBlockState", V_18, "chunk_block_state_read", "Level#getBlockState", "chunk", "adapter_required", "Prefer level access to preserve palette and unloaded-chunk semantics.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "setBlockState", V_18, "chunk_block_state_write", "Level#setBlock / LevelChunk#setBlockState", "chunk", "adapter_required", "Preserve heightmap, lighting, block-entity and neighbor update effects.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getTileEntity", V_ALL, "chunk_block_entity_lookup", "LevelChunk#getBlockEntity", "chunk", "adapter_required", "Translate coordinates to BlockPos and check creation/load flags.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getTileEntity", V_18, "chunk_block_entity_lookup", "LevelChunk#getBlockEntity", "chunk", "adapter_required", "Translate coordinates to BlockPos and check creation/load flags.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "addTileEntity", V_ALL, "chunk_block_entity_add", "LevelChunk#setBlockEntity", "chunk", "adapter_required", "Ensure the entity is attached to the correct level and position.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "removeTileEntity", V_ALL, "chunk_block_entity_remove", "LevelChunk#removeBlockEntity", "chunk", "automatic_rename_candidate", "Preserve removal reason and deferred block-entity lifecycle.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "getHeightValue", V_ALL, "chunk_height_value", "Level#getHeight / Heightmap", "chunk", "adapter_required", "Translate legacy heightmap type into Heightmap.Types.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "getEntitiesWithinAABBForEntity", V_ALL, "chunk_entity_aabb_query", "Level#getEntitiesOfClass", "chunk", "adapter_required", "Use a type-filtered level query and preserve entity exclusion predicates.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "addEntity", V_ALL, "chunk_add_entity", "ServerLevel#addFreshEntity / Level#addFreshEntity", "chunk", "adapter_required", "Entity insertion is controlled by the level/entity manager, not direct chunk lists.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "onLoad", V_ALL, "chunk_load_lifecycle", "ChunkEvent.Load / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move work to chunk load events/ticking lifecycle and preserve once-only execution.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "onUnload", V_ALL, "chunk_unload_lifecycle", "ChunkEvent.Unload / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move cleanup to unload events and invalidate attached capabilities.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "onLoad", V_112, "chunk_load_lifecycle", "ChunkEvent.Load / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move work to chunk load events/ticking lifecycle and preserve once-only execution.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "onUnload", V_112, "chunk_unload_lifecycle", "ChunkEvent.Unload / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move cleanup to unload events and invalidate attached capabilities.", "net/minecraft/world/chunk/Chunk.html"),
     d!("BiomeGenBase", "getTemperature", V_112, "biome_temperature", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Temperature is climate settings and may be position-adjusted.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getRainfall", V_112, "biome_downfall", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Map rainfall to downfall and preserve precipitation type.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getBiomeName", V_ALL, "biome_display_name", "Biome registry key / Component localization", "biomes", "adapter_required", "Use registry identity for logic and Component localization for display.", "net/minecraft/world/biome/BiomeGenBase.html"),
@@ -2699,6 +2699,68 @@ const DEFINITIONS: &[Definition] = &[
     d!("BiomeGenBase", "ignorePlayerSpawnSuitability", V_112, "biome_spawn_suitability_override", "Biome spawn suitability policy", "biomes_spawning", "adapter_required", "Preserve override that bypasses player spawn-suitability checks.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "isMutation", V_112, "biome_is_mutation", "Biome mutation parent relationship", "biomes_worldgen", "automatic_rename_candidate", "Preserve mutation-variant state and parent mapping.", "net/minecraft/world/biome/BiomeGenBase.html"),
 
+    d!("Chunk", "canBlockSeeTheSky", V_17, "chunk_legacy_sky_visibility", "Chunk#canSeeSky / Level#canSeeSky", "world_lighting", "signature_adapter_required", "1.7 integer-coordinate sky visibility query; preserve local chunk bounds and skylight presence.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "canSeeSky", V_18, "chunk_sky_visibility", "Chunk#canSeeSky / LevelChunk sky visibility", "world_lighting", "automatic_rename_candidate", "1.8/1.12 BlockPos-based sky visibility query.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "enqueueRelightChecks", V_ALL, "chunk_enqueue_relight_checks", "LevelLightEngine relight scheduling", "world_lighting", "adapter_required", "Preserve per-chunk relight cursor and incremental budget.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "fillChunk", V_17_18, "chunk_network_binary_load", "ClientboundLevelChunkPacketData / ChunkData", "networking", "adapter_required", "Translate packed section data, available-section masks and ground-up-continuous semantics.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150802_k", V_17_18, "chunk_legacy_chunk_state_predicate", "Chunk loaded/empty state helpers", "world_chunks", "manual_review", "SRG-only 1.7/1.8 method; retain exact descriptor and resolve semantics from call sites.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150804_b", V_17_18, "chunk_legacy_scheduled_update", "Chunk scheduled block update processing", "world_chunks", "signature_adapter_required", "SRG method present in both older releases; preserve its boolean argument and callback ordering.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150806_e", V_17, "chunk_legacy_tile_entity_lookup", "Chunk#getTileEntity / LevelChunk#getBlockEntity", "world_chunks", "signature_adapter_required", "1.7 SRG tile-entity lookup with integer local coordinates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150807_a", V_17, "chunk_legacy_block_write", "Chunk#setBlockState / Level#setBlock", "world_chunks", "signature_adapter_required", "1.7 SRG block replacement; preserve metadata, heightmap, lighting and tile-entity side effects.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150808_b", V_17, "chunk_legacy_metadata_lookup", "Chunk#getBlockMetadata", "world_chunks", "signature_adapter_required", "1.7 SRG integer-coordinate metadata accessor.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150809_p", V_17_18, "chunk_legacy_update_flag", "Chunk lifecycle/update flag", "world_chunks", "manual_review", "SRG-only 1.7/1.8 method; retain exact descriptor for bytecode-level behavior analysis.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "func_150812_a", V_17, "chunk_legacy_tile_entity_write", "Chunk#addTileEntity / LevelChunk#setBlockEntity", "world_chunks", "signature_adapter_required", "1.7 SRG tile-entity insertion with integer local coordinates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "generateHeightMap", V_ALL, "chunk_heightmap_generation", "Chunk heightmap generation / Heightmap", "world_chunks", "adapter_required", "Preserve heightmap initialization and dirty-state interactions.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "generateSkylightMap", V_ALL, "chunk_skylight_map_generation", "Chunk skylight generation / LevelLightEngine", "world_lighting", "adapter_required", "Preserve initial skylight propagation and section updates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getAreLevelsEmpty", V_ALL, "chunk_vertical_range_empty", "Chunk#isEmptyBetween / section emptiness", "world_chunks", "adapter_required", "Preserve inclusive min/max Y and empty section semantics.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBiomeArray", V_ALL, "chunk_biome_array", "Chunk biome storage / biome container", "worldgen", "adapter_required", "Preserve legacy 16x16 biome ID array and serialization order.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBiomeGenForWorldCoords", V_17, "chunk_legacy_biome_lookup", "Chunk#getBiome / WorldChunkManager", "worldgen", "signature_adapter_required", "1.7 integer X/Z biome lookup through WorldChunkManager.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBiome", V_18, "chunk_biome_lookup", "Chunk#getBiome / BiomeProvider", "worldgen", "adapter_required", "Preserve BlockPos and provider inputs for biome lookup.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlock", V_17_18, "chunk_legacy_block_lookup", "Chunk#getBlockState / Level#getBlockState", "world_chunks", "adapter_required", "Preserve integer coordinates and old Block return value; 1.8 also has BlockPos overload.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlockLightValue", V_17, "chunk_legacy_block_light_lookup", "Chunk#getLightFor / Level#getBrightness", "world_lighting", "signature_adapter_required", "1.7 coordinate-based block light lookup with legacy minimum-light parameter.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlockMetadata", V_17_18, "chunk_legacy_metadata_lookup", "Chunk#getBlockState / BlockState properties", "world_chunks", "adapter_required", "Preserve integer or BlockPos metadata lookup including legacy damage values.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getChunkCoordIntPair", V_17_18, "chunk_legacy_coordinate_pair", "ChunkPos", "world_chunks", "automatic_rename_candidate", "Preserve legacy chunk X/Z pair identity for map, entity and network systems.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getEntitiesOfTypeWithinAAAB", V_17_18, "chunk_legacy_typed_entity_query", "Chunk#getEntitiesOfClass / entity query", "world_entities", "adapter_required", "Preserve legacy AAAB spelling, entity type, AABB and selector.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getEntityLists", V_18, "chunk_entity_section_lists", "LevelChunk entity section storage", "world_entities", "adapter_required", "Preserve section-to-entity-list mapping where bytecode mutates it.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getHeightMap", V_18, "chunk_heightmap_array", "Chunk heightmap storage / Heightmap", "world_chunks", "adapter_required", "Preserve mutable heightmap array identity and horizontal index packing.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getLightFor", V_18, "chunk_light_lookup", "LevelLightEngine#getLayerListener / Level#getBrightness", "world_lighting", "adapter_required", "Preserve EnumSkyBlock and BlockPos for block/sky light queries.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getLightSubtracted", V_18, "chunk_light_subtracted_lookup", "Level#getMaxLocalRawBrightness", "world_lighting", "adapter_required", "Preserve position and subtraction amount including clamping.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getLowestHeight", V_18, "chunk_lowest_height", "Chunk heightmap / minimum non-air Y", "world_chunks", "automatic_rename_candidate", "Preserve lowest build-space height and empty-section behavior.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getPrecipitationHeight", V_ALL, "chunk_precipitation_height", "Level#getHeight / precipitation heightmap", "world_environment", "adapter_required", "Preserve X/Z or BlockPos and precipitation-specific heightmap type.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getSavedLightValue", V_17, "chunk_legacy_saved_light_lookup", "Chunk#getLightFor / light engine", "world_lighting", "signature_adapter_required", "1.7 EnumSkyBlock plus integer coordinates saved-light lookup.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isAtLocation", V_ALL, "chunk_coordinate_match", "ChunkPos coordinate comparison", "world_chunks", "automatic_rename_candidate", "Preserve X/Z coordinate comparisons.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isLightPopulated", V_18, "chunk_light_populated_flag", "Chunk lighting state", "world_lighting", "automatic_rename_candidate", "Preserve whether initial light propagation has completed.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isLoaded", V_18, "chunk_loaded_flag", "Chunk load state / LevelChunk lifecycle", "world_chunks", "automatic_rename_candidate", "Preserve loaded status independently from chunk-map presence.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isPopulated", V_18, "chunk_populated_flag", "Chunk generation status", "worldgen", "automatic_rename_candidate", "Preserve feature-population completion separately from terrain generation.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "isTerrainPopulated", V_18, "chunk_terrain_populated_flag", "Chunk terrain generation status", "worldgen", "automatic_rename_candidate", "Preserve terrain generation completion flag.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "needsSaving", V_ALL, "chunk_save_dirty_predicate", "ChunkMap save scheduling / LevelChunk dirty state", "world_persistence", "adapter_required", "Preserve force-save argument, dirty flags and last-save time checks.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "onChunkLoad", V_17_18, "chunk_legacy_load_callback", "ChunkEvent.Load / LevelChunk lifecycle", "world_chunks", "event_adapter_required", "1.7/1.8 legacy load callback; 1.12 uses onLoad.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "onChunkUnload", V_17_18, "chunk_legacy_unload_callback", "ChunkEvent.Unload / LevelChunk lifecycle", "world_chunks", "event_adapter_required", "1.7/1.8 legacy unload callback; 1.12 uses onUnload.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "populateChunk", V_17_18, "chunk_legacy_population_callback", "ChunkGenerator / ChunkPopulateEvent", "worldgen", "adapter_required", "Preserve provider arguments and feature-population ordering.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "removeEntityAtIndex", V_ALL, "chunk_entity_section_remove", "LevelChunk entity section removal", "world_entities", "adapter_required", "Preserve section index and entity-to-chunk tracking.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "removeInvalidTileEntity", V_18, "chunk_invalid_tile_entity_remove", "LevelChunk#removeBlockEntity", "world_chunks", "automatic_rename_candidate", "Remove only the invalid tile entity at the given BlockPos.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "resetRelightChecks", V_ALL, "chunk_reset_relight_checks", "LevelLightEngine relight scheduling", "world_lighting", "adapter_required", "Reset the pending relight cursor and preserve scheduled section updates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setBiomeArray", V_ALL, "chunk_biome_array_write", "Chunk biome container / biome source", "worldgen", "adapter_required", "Preserve 256-entry legacy biome mapping and conversion into current storage.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setBlockMetadata", V_17, "chunk_legacy_metadata_write", "Chunk#setBlockState / BlockState properties", "world_chunks", "signature_adapter_required", "1.7 integer-coordinate metadata mutation preserving block identity and update flags.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setChunkLoaded", V_189, "chunk_loaded_flag_write", "LevelChunk load lifecycle", "world_chunks", "adapter_required", "1.8.9 loaded-state write and provider lifecycle transitions.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setChunkModified", V_17_18, "chunk_legacy_modified_flag_write", "Chunk#setModified / LevelChunk dirty state", "world_persistence", "adapter_required", "Legacy 1.7/1.8 modified-flag write, distinct from 1.12 markDirty/setModified.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setHasEntities", V_18, "chunk_entity_presence_flag_write", "Chunk entity tracking flag", "world_entities", "adapter_required", "Preserve chunk has-entities flag and save metadata.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setHeightMap", V_18, "chunk_heightmap_array_write", "Chunk heightmap storage / Heightmap", "world_chunks", "adapter_required", "Preserve heightmap values and index packing.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setLastSaveTime", V_18, "chunk_last_save_time_write", "ChunkMap save scheduling", "world_persistence", "adapter_required", "Preserve absolute world-time value used by save throttling.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setLightPopulated", V_18, "chunk_light_populated_flag_write", "Chunk lighting status", "world_lighting", "adapter_required", "Preserve light-populated state after skylight/blocklight calculations.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setLightValue", V_17, "chunk_legacy_light_write", "Chunk#setLightFor / light engine", "world_lighting", "signature_adapter_required", "1.7 EnumSkyBlock plus integer coordinates and light value.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setStorageArrays", V_ALL, "chunk_section_storage_write", "Chunk section storage / LevelChunk sections", "world_chunks", "adapter_required", "Preserve section array order and null/empty section semantics.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setTerrainPopulated", V_18, "chunk_terrain_populated_flag_write", "Chunk terrain generation status", "worldgen", "adapter_required", "Preserve terrain-populated flag independently from feature population.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getPos", V_112, "chunk_position", "ChunkPos", "world_chunks", "automatic_rename_candidate", "Preserve immutable chunk coordinate identity.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getCapabilities", V_112, "chunk_capabilities_read", "ICapabilityProvider / capability dispatcher", "capabilities", "adapter_required", "Preserve capability dispatcher lifecycle and invalidation.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getCapability", V_112, "chunk_capability_lookup", "ICapabilityProvider#getCapability", "capabilities", "adapter_required", "Preserve requested capability identity and optional facing.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "hasCapability", V_112, "chunk_capability_presence", "ICapabilityProvider#hasCapability", "capabilities", "adapter_required", "Preserve requested capability identity and side-specific support.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "markLoaded", V_112, "chunk_loaded_flag_write", "Chunk#setLoaded / ChunkMap lifecycle", "world_chunks", "adapter_required", "Preserve loaded flag changes and provider lifecycle ordering.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "onTick", V_112, "chunk_tick_callback", "LevelChunk#postProcess / chunk ticking lifecycle", "world_chunks", "adapter_required", "Preserve boolean recheck-gaps argument and tick scheduling.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "populate", V_112, "chunk_population_pipeline", "ChunkGenerator / ChunkStatus population", "worldgen", "adapter_required", "Preserve both IChunkGenerator and IChunkProvider overloads.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "read", V_112, "chunk_network_packet_read", "ClientboundLevelChunkPacketData / PacketBuffer", "networking", "adapter_required", "Preserve section mask, ground-up flag and packet-buffer consumption.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "wasTicked", V_112, "chunk_ticked_state", "Chunk tick lifecycle state", "world_chunks", "automatic_rename_candidate", "Preserve whether the chunk has been ticked for current tick scheduling.", "net/minecraft/world/chunk/Chunk.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -3723,22 +3785,22 @@ const DEFINITIONS: &[Definition] = &[
 
     // Chunk/ChunkPrimer and section storage methods used by worldgen and custom blocks.
     d!("Chunk", "checkLight", V_112, "chunk_lighting_validation", "Chunk lighting consistency check", "world_lighting", "adapter_required", "Preserve section light arrays and world skylight propagation.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getBlockLightOpacity", V_112, "chunk_block_light_opacity", "Chunk block-state light opacity lookup", "world_lighting", "automatic_rename_candidate", "Preserve block position and state-dependent opacity.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getBlockLightOpacity", V_18, "chunk_block_light_opacity", "Chunk block-state light opacity lookup", "world_lighting", "automatic_rename_candidate", "Preserve block position and state-dependent opacity.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "getBlockStorageArray", V_ALL, "chunk_section_storage_array", "ExtendedBlockStorage section array", "world_chunks", "automatic_rename_candidate", "Preserve null entries for empty sections and exact vertical section index mapping.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "getEntitiesOfTypeWithinAABB", V_112, "chunk_entities_by_class_aabb", "Chunk typed entity query", "world_entities", "automatic_rename_candidate", "Preserve entity class, predicate, bounds and per-section entity list traversal.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getHeight", V_ALL, "chunk_height_value", "Chunk highest non-air Y height", "world_chunks", "automatic_rename_candidate", "Preserve heightmap and local X/Z coordinates; result is dimension-height aware.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getInhabitedTime", V_112, "chunk_inhabited_time", "Chunk accumulated inhabited ticks", "world_chunks", "automatic_rename_candidate", "Preserve long tick counter used for regional difficulty and chunk lifecycle.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getRandomWithSeed", V_112, "chunk_deterministic_random", "Chunk deterministic coordinate random", "worldgen", "automatic_rename_candidate", "Preserve world seed and chunk X/Z derivation for reproducible feature generation.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getTileEntityMap", V_112, "chunk_tile_entity_map", "Chunk tile entity position map", "world_chunks", "automatic_rename_candidate", "Preserve map identity and pending tile entity entries during chunk load.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getHeight", V_18, "chunk_height_value", "Chunk highest non-air Y height", "world_chunks", "automatic_rename_candidate", "Preserve heightmap and local X/Z coordinates; result is dimension-height aware.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getInhabitedTime", V_18, "chunk_inhabited_time", "Chunk accumulated inhabited ticks", "world_chunks", "automatic_rename_candidate", "Preserve long tick counter used for regional difficulty and chunk lifecycle.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getRandomWithSeed", V_ALL, "chunk_deterministic_random", "Chunk deterministic coordinate random", "worldgen", "automatic_rename_candidate", "Preserve world seed and chunk X/Z derivation for reproducible feature generation.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getTileEntityMap", V_18, "chunk_tile_entity_map", "Chunk tile entity position map", "world_chunks", "automatic_rename_candidate", "Preserve map identity and pending tile entity entries during chunk load.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "getTopFilledSegment", V_ALL, "chunk_top_filled_section", "Highest non-empty ExtendedBlockStorage section", "world_chunks", "automatic_rename_candidate", "Preserve null/empty section behavior and section-index-to-block-Y conversion.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "getWorld", V_112, "chunk_world_reference", "Chunk owning World reference", "world_chunks", "automatic_rename_candidate", "Preserve dimension/world identity; do not use the currently active client world as a substitute.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "getWorld", V_18, "chunk_world_reference", "Chunk owning World reference", "world_chunks", "automatic_rename_candidate", "Preserve dimension/world identity; do not use the currently active client world as a substitute.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "isEmpty", V_ALL, "chunk_empty_predicate", "Chunk empty state", "world_chunks", "automatic_rename_candidate", "Preserve block section and entity-independent emptiness semantics.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "isEmptyBetween", V_112, "chunk_vertical_empty_predicate", "Chunk vertical range emptiness", "world_chunks", "automatic_rename_candidate", "Preserve min/max Y and section traversal for spawn/height queries.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "markDirty", V_ALL, "chunk_mark_dirty", "Chunk persistence dirty flag", "world_persistence", "adapter_required", "Preserve dirty state when block/tile entity/light data changes and save scheduling.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "markDirty", V_112, "chunk_mark_dirty", "Chunk persistence dirty flag", "world_persistence", "adapter_required", "Preserve dirty state when block/tile entity/light data changes and save scheduling.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "removeEntity", V_ALL, "chunk_entity_remove", "Chunk entity list removal", "world_chunks", "adapter_required", "Preserve entity section membership and chunk tracking removal order.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "setInhabitedTime", V_112, "chunk_inhabited_time_write", "Chunk accumulated inhabited ticks", "world_chunks", "adapter_required", "Preserve persisted long counter and server tick timing.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "setLightFor", V_112, "chunk_light_write", "Chunk block/sky light section mutation", "world_lighting", "adapter_required", "Preserve EnumSkyBlock and section light array updates.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("Chunk", "setModified", V_112, "chunk_modified_flag_write", "Chunk saved/modified state", "world_persistence", "adapter_required", "Preserve direct modified flag change independently from markDirty side effects.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setInhabitedTime", V_18, "chunk_inhabited_time_write", "Chunk accumulated inhabited ticks", "world_chunks", "adapter_required", "Preserve persisted long counter and server tick timing.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setLightFor", V_18, "chunk_light_write", "Chunk block/sky light section mutation", "world_lighting", "adapter_required", "Preserve EnumSkyBlock and section light array updates.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("Chunk", "setModified", V_18, "chunk_modified_flag_write", "Chunk saved/modified state", "world_persistence", "adapter_required", "Preserve direct modified flag change independently from markDirty side effects.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "setTileEntity", V_ALL, "chunk_tile_entity_write", "Chunk tile entity insertion/replacement", "world_chunks", "adapter_required", "Preserve world attachment and invalidation of replaced tile entity.", "net/minecraft/world/chunk/Chunk.html"),
 
     d!("ChunkPrimer", "findGroundBlockIdx", V_112, "chunk_primer_ground_height", "ChunkPrimer top non-air/non-liquid block scan", "worldgen", "adapter_required", "Preserve local X/Z and downward scan semantics used during surface decoration.", "net/minecraft/world/chunk/ChunkPrimer.html"),
@@ -6626,6 +6688,72 @@ mod tests {
         assert!(!has(&v112, "getFloatRainfall"));
         assert!(!has(&v112, "setBiomeName"));
         assert!(!has(&v17, "getRegistryName"));
+    }
+
+
+    #[test]
+    fn chunk_dictionary_matches_all_three_forge_javadocs_and_srg_aliases() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| {
+            entries.iter().any(|entry| entry.source_owner == "Chunk" && entry.source_method == method)
+        };
+        for method in [
+            "addEntity", "addTileEntity", "canBlockSeeTheSky", "enqueueRelightChecks",
+            "fillChunk", "func_150802_k", "func_150804_b", "func_150806_e",
+            "func_150807_a", "func_150808_b", "func_150809_p", "func_150812_a",
+            "generateHeightMap", "generateSkylightMap", "getAreLevelsEmpty", "getBiomeArray",
+            "getBiomeGenForWorldCoords", "getBlock", "getBlockLightValue", "getBlockMetadata",
+            "getBlockStorageArray", "getChunkCoordIntPair", "getEntitiesOfTypeWithinAAAB",
+            "getEntitiesWithinAABBForEntity", "getHeightValue", "getPrecipitationHeight",
+            "getRandomWithSeed", "getSavedLightValue", "getTopFilledSegment", "isAtLocation",
+            "isEmpty", "needsSaving", "onChunkLoad", "onChunkUnload", "populateChunk",
+            "removeEntity", "removeEntityAtIndex", "removeTileEntity", "resetRelightChecks",
+            "setBiomeArray", "setBlockMetadata", "setChunkModified", "setLightValue",
+            "setStorageArrays",
+        ] { assert!(has(&v17, method), "missing 1.7.10 Chunk#{method}"); }
+        for method in [
+            "addEntity", "addTileEntity", "canSeeSky", "enqueueRelightChecks", "fillChunk",
+            "func_150804_b", "func_150809_p", "generateHeightMap", "generateSkylightMap",
+            "getAreLevelsEmpty", "getBiome", "getBiomeArray", "getBlock", "getBlockLightOpacity",
+            "getBlockMetadata", "getBlockState", "getBlockStorageArray", "getChunkCoordIntPair",
+            "getEntitiesOfTypeWithinAAAB", "getEntitiesWithinAABBForEntity", "getEntityLists",
+            "getHeight", "getHeightMap", "getHeightValue", "getInhabitedTime", "getLightFor",
+            "getLightSubtracted", "getLowestHeight", "getPrecipitationHeight", "getRandomWithSeed",
+            "getTileEntity", "getTileEntityMap", "getTopFilledSegment", "getWorld", "isAtLocation",
+            "isEmpty", "isLightPopulated", "isLoaded", "isPopulated", "isTerrainPopulated",
+            "needsSaving", "onChunkLoad", "onChunkUnload", "populateChunk", "removeEntity",
+            "removeEntityAtIndex", "removeInvalidTileEntity", "removeTileEntity", "resetRelightChecks",
+            "setBiomeArray", "setBlockState", "setChunkLoaded", "setChunkModified", "setHasEntities",
+            "setHeightMap", "setInhabitedTime", "setLastSaveTime", "setLightFor",
+            "setLightPopulated", "setModified", "setStorageArrays", "setTerrainPopulated",
+        ] { assert!(has(&v18, method), "missing 1.8.9 Chunk#{method}"); }
+        for method in [
+            "addEntity", "addTileEntity", "canSeeSky", "checkLight", "enqueueRelightChecks",
+            "generateHeightMap", "generateSkylightMap", "getBiome", "getBiomeArray",
+            "getBlockLightOpacity", "getBlockState", "getBlockStorageArray", "getCapabilities",
+            "getCapability", "getEntitiesOfTypeWithinAABB", "getEntitiesWithinAABBForEntity",
+            "getEntityLists", "getHeight", "getHeightMap", "getHeightValue", "getInhabitedTime",
+            "getLightFor", "getLightSubtracted", "getLowestHeight", "getPos", "getPrecipitationHeight",
+            "getRandomWithSeed", "getTileEntity", "getTileEntityMap", "getTopFilledSegment", "getWorld",
+            "hasCapability", "isAtLocation", "isEmpty", "isEmptyBetween", "isLightPopulated", "isLoaded",
+            "isPopulated", "isTerrainPopulated", "markDirty", "markLoaded", "needsSaving", "onLoad",
+            "onTick", "onUnload", "populate", "read", "removeEntity", "removeEntityAtIndex",
+            "removeInvalidTileEntity", "removeTileEntity", "resetRelightChecks", "setBiomeArray",
+            "setBlockState", "setHasEntities", "setHeightMap", "setInhabitedTime", "setLastSaveTime",
+            "setLightFor", "setLightPopulated", "setModified", "setStorageArrays", "setTerrainPopulated",
+            "wasTicked",
+        ] { assert!(has(&v112, method), "missing 1.12.2 Chunk#{method}"); }
+        assert!(!has(&v17, "getBlockState"));
+        assert!(!has(&v17, "getWorld"));
+        assert!(!has(&v112, "getChunkCoordIntPair"));
+        assert!(!has(&v112, "onChunkLoad"));
+        assert!(!has(&v112, "getEntitiesOfTypeWithinAAAB"));
+        assert!(!has(&v17, "getEntitiesOfTypeWithinAABB"));
+        assert!(!has(&v17, "getPos"));
+        assert!(!has(&v17, "markDirty"));
+        assert!(!has(&v18, "markDirty"));
     }
 
     #[test]
