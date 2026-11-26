@@ -148,6 +148,30 @@ fn lambda_class(
     None
 }
 
+fn load_reference_local(opcode: u8, operands: &[u8], locals: &[Value]) -> Option<Value> {
+    let index = match opcode {
+        0x19 => *operands.first()? as usize,
+        0x2a..=0x2d => (opcode - 0x2a) as usize,
+        _ => return None,
+    };
+    Some(locals.get(index).cloned().unwrap_or(Value::Unknown))
+}
+
+fn store_reference_local(opcode: u8, operands: &[u8], value: Value, locals: &mut [Value]) -> bool {
+    let index = match opcode {
+        0x3a => match operands.first() {
+            Some(index) => *index as usize,
+            None => return false,
+        },
+        0x4b..=0x4e => (opcode - 0x4b) as usize,
+        _ => return false,
+    };
+    if let Some(slot) = locals.get_mut(index) {
+        *slot = value;
+    }
+    true
+}
+
 fn static_field_assignments(
     class: &ClassFile,
     parsed_classes: &HashMap<String, Arc<ClassFile>>,
@@ -160,6 +184,7 @@ fn static_field_assignments(
     let Some(code) = method.code.as_ref() else { return output };
     let Ok(instructions) = decode_instructions(&code.code) else { return output };
     let mut stack = Vec::<Value>::new();
+    let mut locals = vec![Value::Unknown; code.max_locals as usize];
 
     for instruction in &instructions {
         let op = instruction.opcode;
@@ -169,8 +194,15 @@ fn static_field_assignments(
         }
         match op {
             0x00 => {}
-            0x19 | 0x2a..=0x2d => stack.push(Value::Unknown),
-            0x3a | 0x4b..=0x4e => { let _ = pop(&mut stack); }
+            0x19 | 0x2a..=0x2d => stack.push(
+                load_reference_local(op, &instruction.operands, &locals).unwrap_or(Value::Unknown)
+            ),
+            0x15..=0x18 | 0x1a..=0x29 => stack.push(Value::Unknown),
+            0x3a | 0x4b..=0x4e => {
+                let value = pop(&mut stack);
+                store_reference_local(op, &instruction.operands, value, &mut locals);
+            }
+            0x36..=0x39 | 0x3b..=0x4a => { let _ = pop(&mut stack); }
             0xbb => {
                 let index = u16_at(&instruction.operands, 0).unwrap_or(0);
                 let name = class.class_name(index).unwrap_or("java/lang/Object").to_owned();
@@ -291,6 +323,7 @@ fn scan_registrations(
         let Some(code) = method.code.as_ref() else { continue };
         let Ok(instructions) = decode_instructions(&code.code) else { continue };
         let mut stack = Vec::<Value>::new();
+        let mut locals = vec![Value::Unknown; code.max_locals as usize];
         for instruction in &instructions {
             let op = instruction.opcode;
             if (0x12..=0x14).contains(&op) || (0x01..=0x11).contains(&op) {
@@ -299,8 +332,15 @@ fn scan_registrations(
             }
             match op {
                 0x00 => {}
-                0x19 | 0x2a..=0x2d => stack.push(Value::Unknown),
-                0x3a | 0x4b..=0x4e => { let _ = pop(&mut stack); }
+                0x19 | 0x2a..=0x2d => stack.push(
+                    load_reference_local(op, &instruction.operands, &locals).unwrap_or(Value::Unknown)
+                ),
+                0x15..=0x18 | 0x1a..=0x29 => stack.push(Value::Unknown),
+                0x3a | 0x4b..=0x4e => {
+                    let value = pop(&mut stack);
+                    store_reference_local(op, &instruction.operands, value, &mut locals);
+                }
+                0x36..=0x39 | 0x3b..=0x4a => { let _ = pop(&mut stack); }
                 0xbb => {
                     let index = u16_at(&instruction.operands, 0).unwrap_or(0);
                     let name = class.class_name(index).unwrap_or("java/lang/Object").to_owned();
