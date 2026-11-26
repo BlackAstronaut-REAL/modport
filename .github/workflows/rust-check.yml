@@ -103,7 +103,7 @@ jobs:
 
           Push-Location $output
           try {
-              gradle build --no-daemon --stacktrace
+              .\gradlew.bat build --no-daemon --stacktrace
               if ($LASTEXITCODE -ne 0) { throw "The generated NeoForge project failed Gradle build." }
           }
           finally {
