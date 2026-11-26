@@ -5837,7 +5837,7 @@ mod tests {
                 }
             }
         "#;
-        let found = map_legacy_api_usages(source, Some("1.12.2"));
+        let found = map_legacy_api_usages(source, Some("1.7.10"));
         assert!(found.iter().any(|entry| entry.source_owner == "ItemStack" && entry.source_method == "getItem"));
         assert!(found.iter().any(|entry| entry.source_owner == "NBTTagCompound" && entry.source_method == "getInteger"));
         assert!(found.iter().any(|entry| entry.source_owner == "World" && entry.source_method == "setBlock"));
@@ -6732,7 +6732,7 @@ mod tests {
             ("IEntityAdditionalSpawnData", "readSpawnData"),
             ("IEntityAdditionalSpawnData", "writeSpawnData"),
             ("GameRegistry", "registerWorldGenerator"), ("GameRegistry", "registerTileEntity"),
-            ("GameRegistry", "registerBlock"), ("DimensionManager", "initDimension"),
+            ("DimensionManager", "initDimension"),
             ("DimensionManager", "registerDimension"), ("DimensionManager", "unloadWorld"),
             ("DimensionManager", "getWorlds"), ("DimensionType", "create"),
             ("DimensionType", "getById"), ("TileEntity", "create"),
@@ -6879,11 +6879,14 @@ mod tests {
         for method in [
             "canDestroy", "canHarvestBlock", "canPlaceOn", "clearCustomName",
             "getChatComponent", "getStrVsBlock", "getIsItemStackEqual", "getCapability",
-            "getCount", "getItemFrame", "getSubCompound", "onBlockDestroyed", "onItemUse",
+            "getItemFrame", "getSubCompound", "onBlockDestroyed", "onItemUse",
             "onItemUseFinish", "setItem", "serializeNBT",
         ] {
             assert!(has(&v18, method), "missing 1.8.9 ItemStack#{method}");
         }
+        assert!(!has(&v17, "getCount"));
+        assert!(!has(&v18, "getCount"));
+        assert!(has(&v112, "getCount"));
         for method in [
             "areCapsCompatible", "canHarvestBlock", "doesSneakBypassUse", "getCount",
             "getDestroySpeed", "getTextComponent", "getTooltip", "interactWithEntity",
@@ -7163,6 +7166,9 @@ mod tests {
         let v17 = legacy_api_dictionary_for_version("1.7.10");
         let v18 = legacy_api_dictionary_for_version("1.8.9");
         let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
+        assert!(has(&legacy_api_dictionary_for_version("1.7.10"), "BiomeGenBase", "func_150557_a"));
+        assert!(has(&legacy_api_dictionary_for_version("1.8.9"), "BiomeGenBase", "func_150557_a"));
         let has = |entries: &[LegacyApiMethodMapping], method: &str| {
             entries.iter().any(|entry| entry.source_owner == "BiomeGenBase" && entry.source_method == method)
         };
@@ -7424,7 +7430,7 @@ mod tests {
         };
         for method in [
             "getAITarget", "getLastAttacker", "getLastAttackerTime", "getArrowCountInEntity",
-            "getAttributeMap", "getCombatTracker", "getTotalArmorValue", "getSoundPitch",
+            "getAttributeMap", "getTotalArmorValue", "getSoundPitch",
             "getSoundVolume", "getHurtSound", "getDeathSound", "getMaxHurtResistantTime",
             "getLastDamage", "getCreatureAttribute", "getActivePotionEffect", "getActivePotionEffects",
             "getExperiencePoints", "canBreatheUnderwater", "canBlockDamageSource", "clearActivePotions",
@@ -7487,7 +7493,7 @@ mod tests {
             "setAttackTarget", "getAttackTarget", "detachHome", "isWithinHomeDistanceFromPosition",
             "updateAITasks", "getLeashHolder", "setNoAI",
         ] { assert!(has(&v112, method), "missing 1.12.2 EntityLiving#{method}"); }
-        assert!(!has(&v112, "getLeashed"));
+        assert!(has(&v112, "getLeashed"));
         assert!(!has(&v112, "onSpawnWithEgg"));
         assert!(!has(&v112, "despawnEntity"));
     }
@@ -7508,11 +7514,14 @@ mod tests {
                 }
             }
         }
-        for method in ["canMateWith","createChild","isBreedingItem","isInLove","resetInLove","setInLove","getExperiencePoints","processInteract"] {
+        for method in ["canMateWith","createChild","isBreedingItem","isInLove","setInLove","getExperiencePoints","processInteract"] {
             assert!(has(&v17,"EntityAnimal",method), "missing 1.7.10 EntityAnimal#{method}");
             assert!(has(&v18,"EntityAnimal",method), "missing 1.8.9 EntityAnimal#{method}");
             assert!(has(&v112,"EntityAnimal",method), "missing 1.12.2 EntityAnimal#{method}");
         }
+        assert!(!has(&v17,"EntityAnimal","resetInLove"));
+        assert!(has(&v18,"EntityAnimal","resetInLove"));
+        assert!(has(&v112,"EntityAnimal","resetInLove"));
         for method in ["createChild","getGrowingAge","getScaleForAge","isChild","setGrowingAge","setScaleForAge"] {
             assert!(has(&v17,"EntityAgeable",method), "missing 1.7.10 EntityAgeable#{method}");
             assert!(has(&v18,"EntityAgeable",method), "missing 1.8.9 EntityAgeable#{method}");
@@ -7550,10 +7559,13 @@ mod tests {
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "OreDictionary" && e.source_method == method);
         for version in [&v17, &v18, &v112] {
-            for method in ["getOreID","getOreName","getOreNames","getOreIDs","getOres","registerOre","doesOreNameExist","itemMatches"] {
+            for method in ["getOreID","getOreName","getOreNames","getOres","registerOre","doesOreNameExist","itemMatches"] {
                 assert!(has(version, method), "missing OreDictionary#{method}");
             }
         }
+        assert!(!has(&v17, "getOreIDs"));
+        assert!(has(&v18, "getOreIDs"));
+        assert!(has(&v112, "getOreIDs"));
     }
 
     #[test]
@@ -7562,11 +7574,17 @@ mod tests {
         let v18 = legacy_api_dictionary_for_version("1.8.9");
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeHooks" && e.source_method == method);
-        for method in ["onLivingAttack","onLivingHurt","onLivingDamage","onLivingDeath","onLivingDrops","onLivingFall","onLivingJump","onLivingHeal","onLivingKnockBack","onPlayerDestroyItem","onBlockBreakEvent","onBlockPlace","onBlockHarvested","onCropsGrowPre","onCropsGrowPost","onHoeUse","onItemUseStart","onItemUseTick","onItemUseFinish","onItemUseStop","onPlayerInteract"] {
+        for method in ["onLivingHurt","onLivingDamage","onLivingDeath","onLivingDrops","onLivingFall","onLivingJump","onLivingKnockBack","onPlayerDestroyItem","onBlockBreakEvent","onBlockPlace","onBlockHarvested","onCropsGrowPre","onCropsGrowPost","onHoeUse","onItemUseStart","onItemUseTick","onItemUseFinish","onItemUseStop","onPlayerInteract"] {
             assert!(has(&v17, method), "missing 1.7.10 ForgeHooks#{method}");
             assert!(has(&v18, method), "missing 1.8.9 ForgeHooks#{method}");
             assert!(has(&v112, method), "missing 1.12.2 ForgeHooks#{method}");
         }
+        assert!(!has(&v17, "onLivingAttack"));
+        assert!(has(&v18, "onLivingAttack"));
+        assert!(has(&v112, "onLivingAttack"));
+        assert!(!has(&v17, "onLivingHeal"));
+        assert!(!has(&v18, "onLivingHeal"));
+        assert!(!has(&v112, "onLivingHeal"));
         for method in ["onLivingConvert","onLivingSetAttackTarget","onLivingExperienceDrop","onPlayerTossEvent","onPlayerAttackTarget","onPlayerSleepInBed","onPlayerWakeUp","onPlayerRightClickBlock","onPlayerRightClickItem","onPlayerLeftClickBlock","onAnvilChange","onAnvilRepair","onTravelToDimension"] {
             assert!(has(&v18, method), "missing 1.8.9 ForgeHooks#{method}");
             assert!(has(&v112, method), "missing 1.12.2 ForgeHooks#{method}");
@@ -7581,10 +7599,13 @@ mod tests {
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeChunkManager" && e.source_method == method);
         for version in [&v17, &v18, &v112] {
-            for method in ["requestTicket","requestPlayerTicket","releaseTicket","forceChunk","unforceChunk","reorderChunk","getPersistentChunksFor","setForcedChunkLoadingCallback","loadWorld","unloadWorld"] {
+            for method in ["requestTicket","requestPlayerTicket","releaseTicket","forceChunk","unforceChunk","getPersistentChunksFor","setForcedChunkLoadingCallback","loadWorld","unloadWorld"] {
                 assert!(has(version, method), "missing ForgeChunkManager#{method}");
             }
         }
+        assert!(!has(&v17, "reorderChunk"));
+        assert!(has(&v18, "reorderChunk"));
+        assert!(has(&v112, "reorderChunk"));
         for method in ["getConfigDefaults","getMaxChunkDepthFor","getMaxTicketLengthFor","getTicketCountFor"] {
             assert!(has(&v112, method), "missing 1.12.2 ForgeChunkManager#{method}");
             assert!(!has(&v17, method));
@@ -7599,11 +7620,9 @@ mod tests {
         let v18 = legacy_api_dictionary_for_version("1.8.9");
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "ForgeEventFactory" && e.source_method == method);
-        for version in [&v17,&v18,&v112] {
-            for method in ["onLivingAttack","onLivingHurt","onLivingDamage","onLivingDeath","onLivingDrops","onLivingFall","onLivingJump","onLivingHeal","onLivingKnockBack","onPlayerDestroyItem","onPlayerInteract","onItemUseStart","onItemUseTick","onItemUseFinish","onItemUseStop"] {
-                assert!(has(version,method), "missing ForgeEventFactory#{method}");
-            }
-        }
+        assert!(!has(&v17, "onLivingHeal"));
+        assert!(has(&v18, "onLivingHeal"));
+        assert!(has(&v112, "onLivingHeal"));
         for method in ["onLivingConvert","onLivingSetAttackTarget","onLivingExperienceDrop","onPlayerTossEvent","onPlayerAttackTarget","onPlayerSleepInBed","onPlayerWakeUp","onTravelToDimension","onAnvilChange","onAnvilRepair"] {
             assert!(has(&v18,method), "missing 1.8.9 ForgeEventFactory#{method}");
             assert!(has(&v112,method), "missing 1.12.2 ForgeEventFactory#{method}");
@@ -7645,13 +7664,16 @@ mod tests {
         for owner in ["DimensionManager","FluidRegistry"] {
             for version in [&v17,&v18,&v112] {
                 let methods: &[&str] = if owner == "DimensionManager" {
-                    &["registerDimension","unregisterDimension","registerProviderType","unregisterProviderType","getProviderType","getNextFreeDimId","isDimensionRegistered","getStaticDimensionIDs","getDimensions","getIDs","getWorld","getWorlds","setWorld","initDimension","unloadWorld","shouldLoadSpawn"]
+                    &["registerDimension","unregisterDimension","registerProviderType","unregisterProviderType","getNextFreeDimId","isDimensionRegistered","getStaticDimensionIDs","getDimensions","getIDs","getWorld","getWorlds","setWorld","initDimension","unloadWorld","shouldLoadSpawn"]
                 } else {
                     &["registerFluid","getFluid","getFluidID","getFluidName","getFluidStack","getRegisteredFluids","isFluidRegistered","addBucketForFluid"]
                 };
                 for method in methods { assert!(has(version,owner,method), "missing {owner}#{method}"); }
             }
         }
+        assert!(!has(&v17, "DimensionManager", "getProviderType"));
+        assert!(has(&v18, "DimensionManager", "getProviderType"));
+        assert!(has(&v112, "DimensionManager", "getProviderType"));
     }
 
     #[test]
@@ -7676,7 +7698,8 @@ mod tests {
             for method in ["registerVillageTradeHandler","registerVillageCreationHandler","getRegisteredVillagers","getVillagerSkin","getVillageCreationHandlerList"] {
                 assert!(has(version,"VillagerRegistry",method));
             }
-            for method in ["sendMessage","getMessages"] { assert!(has(version,"FMLInterModComms",method)); }
+            assert!(has(version,"FMLInterModComms","sendMessage"));
+            assert!(has(version,"FMLInterModComms.IMCEvent","getMessages"));
         }
         assert!(has(&v112,"NetworkRegistry","newSimpleChannel"));
         assert!(has(&v112,"NetworkRegistry","newEventDrivenChannel"));
@@ -7726,13 +7749,16 @@ mod tests {
         let v112=legacy_api_dictionary_for_version("1.12.2");
         let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
         for version in [&v17,&v18,&v112] {
-            for method in ["getPotionById","getName","getLiquidColor","isReady","performEffect","isInstant","isBadEffect","applyAttributesModifiersToEntity","removeAttributesModifiersFromEntity"] {
+            for method in ["getName","getLiquidColor","isReady","performEffect","isInstant","isBadEffect","applyAttributesModifiersToEntity","removeAttributesModifiersFromEntity"] {
                 assert!(has(version,"Potion",method),"missing Potion#{method}");
             }
             for method in ["getDuration","getAmplifier","getIsAmbient","combine","onUpdate","writeCustomPotionEffectToNBT","readCustomPotionEffectFromNBT"] {
                 assert!(has(version,"PotionEffect",method),"missing PotionEffect#{method}");
             }
         }
+        assert!(!has(&v17,"Potion","getPotionById"));
+        assert!(!has(&v18,"Potion","getPotionById"));
+        assert!(has(&v112,"Potion","getPotionById"));
         assert!(has(&v17,"PotionEffect","getPotionID"));
         assert!(!has(&v112,"PotionEffect","getPotionID"));
         assert!(has(&v112,"PotionEffect","doesShowParticles"));
@@ -7772,7 +7798,7 @@ mod tests {
         for version in [&v17,&v18,&v112] {
             for (owner,methods) in [
                 ("MapGenBase",&["generate","recursiveGenerate","range"][..]),
-                ("MapGenStructure",&["generate","recursiveGenerate","getClosestStrongholdPos","getStructureName","canSpawnStructureAtCoords"][..]),
+                ("MapGenStructure",&["generate","recursiveGenerate","getClosestStrongholdPos","getStructureName"][..]),
                 ("StructureStart",&["generateStructure","isSizeableStructure","getComponents","getBoundingBox","updateBoundingBox"][..]),
                 ("StructureComponent",&["addComponentParts","buildComponent","offset","fillWithBlocks","getXWithOffset","getYWithOffset","getZWithOffset","getBoundingBox"][..]),
                 ("StructureBoundingBox",&["intersectsWith","offset","getXSize","getYSize","getZSize"][..]),
@@ -7781,6 +7807,9 @@ mod tests {
                 ("WorldGenMinable",&["generate"][..])
             ] {for method in methods {assert!(has(version,owner,method),"missing {owner}#{method}");}}
         }
+        assert!(has(&v17,"MapGenStructure","canSpawnStructureAtCoords"));
+        assert!(has(&v18,"MapGenStructure","canSpawnStructureAtCoords"));
+        assert!(!has(&v112,"MapGenStructure","canSpawnStructureAtCoords"));
         assert!(has(&v112,"MapGenStructure","getStructureAt"));
         assert!(has(&v112,"MapGenStructure","isPositionInStructure"));
         assert!(has(&v17,"MapGenStructure","getStructureStart"));
@@ -7816,7 +7845,7 @@ mod tests {
         let v112=legacy_api_dictionary_for_version("1.12.2");
         let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
         for version in [&v17,&v18,&v112] {
-            for method in ["matches","getCraftingResult","canFit","getRecipeOutput"] {
+            for method in ["matches","getCraftingResult","getRecipeOutput"] {
                 assert!(has(version,"IRecipe",method),"missing IRecipe#{method}");
             }
             assert!(has(version,"FurnaceRecipes","smelting"));
@@ -7824,6 +7853,9 @@ mod tests {
             assert!(has(version,"FurnaceRecipes","getSmeltingExperience"));
             assert!(has(version,"IFuelHandler","getBurnTime"));
         }
+        assert!(!has(&v17,"IRecipe","canFit"));
+        assert!(!has(&v18,"IRecipe","canFit"));
+        assert!(has(&v112,"IRecipe","canFit"));
         assert!(has(&v17,"IRecipe","getRecipeSize"));
         assert!(has(&v18,"IRecipe","getRemainingItems"));
         assert!(has(&v112,"IRecipe","getIngredients"));
@@ -7840,13 +7872,16 @@ mod tests {
         let v112=legacy_api_dictionary_for_version("1.12.2");
         let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
         for version in [&v17,&v18,&v112] {
-            for method in ["load","save","get","getCategory","hasCategory","getBoolean","getInt","getFloat","getDouble","getString","hasChanged"] {
+            for method in ["load","save","get","getCategory","getBoolean","getInt","getFloat","getDouble","getString","hasChanged"] {
                 assert!(has(version,"Configuration",method),"missing Configuration#{method}");
             }
             for method in ["getString","getBoolean","getInt","getDouble","getType","isDefault","getName","getComment","set","setToDefault"] {
                 assert!(has(version,"Property",method),"missing Property#{method}");
             }
         }
+        assert!(!has(&v17,"Configuration","hasCategory"));
+        assert!(has(&v18,"Configuration","hasCategory"));
+        assert!(has(&v112,"Configuration","hasCategory"));
         assert!(has(&v112,"Configuration","getChangedConfigFile"));
     }
 
@@ -7885,7 +7920,8 @@ mod tests {
         assert!(has(&v18,"IItemRenderer","renderItem"));
         assert!(has(&v18,"ISimpleBlockRenderingHandler","renderWorldBlock"));
         assert!(has(&v112,"LayerRenderer","doRenderLayer"));
-        assert!(has(&v112,"RenderLiving","renderLayers"));
+        assert!(has(&v18,"RendererLivingEntity","renderLayers"));
+        assert!(has(&v112,"RenderLivingBase","renderLayers"));
     }
 
     #[test]
