@@ -1659,6 +1659,7 @@ fn creative_mode_tab_key(legacy_tab: &str) -> &'static str {
         "TOOLS" => "TOOLS_AND_UTILITIES",
         "COMBAT" => "COMBAT",
         "FOOD" => "FOOD_AND_DRINKS",
+        "SPAWN_EGGS" => "SPAWN_EGGS",
         "OP_BLOCKS" => "OP_BLOCKS",
         // Modern Minecraft no longer has the old Misc / Materials / Brewing
         // tabs. Ingredients is the closest built-in home for those entries.
