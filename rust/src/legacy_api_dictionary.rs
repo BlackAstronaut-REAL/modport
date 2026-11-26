@@ -481,7 +481,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldProvider", "getCloudHeight", V_ALL, "dimension_cloud_height", "DimensionSpecialEffects#getCloudLevel", "dimensions", "client_adapter_required", "Move visual cloud height into dimension client effects.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "isSurfaceWorld", V_ALL, "surface_dimension_flag", "DimensionType attributes / Level#dimension", "dimensions", "adapter_required", "Recover sky/light/respawn properties instead of a single surface boolean.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "canRespawnHere", V_ALL, "dimension_respawn_allowed", "ServerLevel#isRespawnable", "dimensions", "adapter_required", "Preserve bed/anchor and dimension-specific respawn policy.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getRespawnDimension", V_ALL, "respawn_dimension", "ServerPlayer respawn dimension / ServerLevel", "dimensions", "manual_adapter_required", "Reconstruct player respawn flow using modern respawn data and events.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getRespawnDimension", V_18, "respawn_dimension", "ServerPlayer respawn dimension / ServerLevel", "dimensions", "manual_adapter_required", "Reconstruct player respawn flow using modern respawn data and events.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "calculateCelestialAngle", V_ALL, "celestial_angle", "DimensionSpecialEffects#getSunriseColor / Level#getTimeOfDay", "dimensions", "adapter_required", "Preserve custom day length and sky rendering interpolation.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "getDimensionType", V_18, "dimension_type", "Level#dimensionType / DimensionType", "dimensions", "adapter_required", "Translate the provider's dimension type into a registered dimension type.", "net/minecraft/world/WorldProvider.html"),
     d!("Chunk", "getBlockState", V_18, "chunk_block_state_read", "Level#getBlockState", "chunk", "adapter_required", "Prefer level access to preserve palette and unloaded-chunk semantics.", "net/minecraft/world/chunk/Chunk.html"),
@@ -3417,32 +3417,75 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldProvider", "canCoordinateBeSpawn", V_ALL, "dimension_spawn_coordinate_predicate", "WorldProvider spawn coordinate validity", "dimensions_worldgen", "automatic_rename_candidate", "Preserve x/z surface spawn checks and dimension-specific spawn safety.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "canDoLightning", V_ALL, "dimension_lightning_enabled", "Dimension lightning weather capability", "dimensions_weather", "automatic_rename_candidate", "Preserve whether lightning can occur independently from rain/snow precipitation.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "canDoRainSnowIce", V_ALL, "dimension_precipitation_enabled", "Dimension precipitation capability", "dimensions_weather", "automatic_rename_candidate", "Preserve rain/snow/ice behavior independently from lightning and sky visibility.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "canMineBlock", V_112, "dimension_block_mining_permission", "Dimension block mining permission", "dimensions", "automatic_rename_candidate", "Preserve player and BlockPos checks for dimensions that restrict mining.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "createChunkGenerator", V_112, "dimension_chunk_generator_factory", "IChunkGenerator creation", "dimensions_worldgen", "adapter_required", "Preserve world seed, WorldType, generator options and dimension-specific generator identity.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canMineBlock", V_18, "dimension_block_mining_permission", "Dimension block mining permission", "dimensions", "automatic_rename_candidate", "Preserve player and BlockPos checks for dimensions that restrict mining.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "createChunkGenerator", V_ALL, "dimension_chunk_generator_factory", "IChunkGenerator creation", "dimensions_worldgen", "adapter_required", "Preserve world seed, WorldType, generator options and dimension-specific generator identity.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "createWorldBorder", V_112, "dimension_world_border_factory", "WorldBorder creation", "dimensions", "adapter_required", "Preserve custom world border bounds and warning settings for this dimension.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "doesWaterVaporize", V_112, "dimension_water_vaporization", "Water evaporation/vaporization predicate", "dimensions_fluids", "automatic_rename_candidate", "Preserve dimension-specific water vaporization and sound/particle effects.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "doesWaterVaporize", V_18, "dimension_water_vaporization", "Water evaporation/vaporization predicate", "dimensions_fluids", "automatic_rename_candidate", "Preserve dimension-specific water vaporization and sound/particle effects.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "getBiomeForCoords", V_112, "dimension_biome_at_position", "Biome lookup by BlockPos", "dimensions_worldgen", "automatic_rename_candidate", "Preserve biome provider and exact BlockPos lookup, especially custom dimension biome mappings.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "getBiomeProvider", V_112, "dimension_biome_provider", "BiomeProvider instance", "dimensions_worldgen", "automatic_rename_candidate", "Preserve biome provider identity and world-type/configuration state.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getDimension", V_ALL, "dimension_numeric_id", "Dimension numeric ID", "dimensions", "automatic_rename_candidate", "Preserve runtime numeric dimension ID for old APIs; modern code should use dimension type/resource key.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getEntrancePortalLocation", V_112, "dimension_entrance_portal_location", "Dimension portal entrance/return position", "dimensions", "automatic_rename_candidate", "Preserve provider's destination portal coordinate and null/no-portal behavior.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getHeight", V_ALL, "dimension_height_value", "Dimension build height", "dimensions", "automatic_rename_candidate", "Preserve provider height separately from actual world height and sea level.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getHorizon", V_ALL, "dimension_horizon_height", "Dimension horizon Y position", "dimensions_render", "automatic_rename_candidate", "Preserve horizon height used for sky/fog rendering.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getMovementFactor", V_112, "dimension_movement_factor", "Dimension coordinate travel scale", "dimensions", "automatic_rename_candidate", "Preserve coordinate scaling when traveling between dimensions (e.g. nether-like ratios).", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getSaveFolder", V_ALL, "dimension_save_folder", "Dimension save directory name", "dimensions_persistence", "automatic_rename_candidate", "Preserve nullable custom dimension subfolder and world save layout.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getSkyColor", V_112, "dimension_sky_color", "Dimension sky color calculation", "dimensions_render", "automatic_rename_candidate", "Preserve entity and partial ticks for custom dimension sky tint.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getSpawnCoordinate", V_112, "dimension_spawn_coordinate", "Dimension default spawn coordinate", "dimensions", "automatic_rename_candidate", "Preserve provider-specific spawn coordinate and null result.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getSunBrightness", V_112, "dimension_sun_brightness", "Dimension-adjusted sun brightness", "dimensions_render", "automatic_rename_candidate", "Preserve partial tick and provider sunlight curve.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "getWorldTime", V_112, "dimension_world_time", "WorldProvider-specific time", "dimensions_time", "automatic_rename_candidate", "Preserve provider override of world day/night time.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "hasSkyLight", V_ALL, "dimension_has_skylight", "Dimension skylight capability", "dimensions_lighting", "automatic_rename_candidate", "Preserve whether skylight is available; differs from hasSkyDimension/sky rendering.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "isDaytime", V_112, "dimension_daytime_predicate", "Dimension local daytime", "dimensions_time", "automatic_rename_candidate", "Preserve provider-specific day/night state and time curve.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "isNether", V_ALL, "dimension_nether_classification", "Nether-like dimension predicate", "dimensions", "automatic_rename_candidate", "Preserve Nether classification independently from water vaporization and movement factor.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getDimension", V_18, "dimension_numeric_id", "Dimension numeric ID", "dimensions", "automatic_rename_candidate", "Preserve runtime numeric dimension ID for old APIs; modern code should use dimension type/resource key.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getEntrancePortalLocation", V_17, "dimension_entrance_portal_location", "Dimension portal entrance/return position", "dimensions", "automatic_rename_candidate", "Preserve provider's destination portal coordinate and null/no-portal behavior.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getHeight", V_18, "dimension_height_value", "Dimension build height", "dimensions", "automatic_rename_candidate", "Preserve provider height separately from actual world height and sea level.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getHorizon", V_18, "dimension_horizon_height", "Dimension horizon Y position", "dimensions_render", "automatic_rename_candidate", "Preserve horizon height used for sky/fog rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getMovementFactor", V_18, "dimension_movement_factor", "Dimension coordinate travel scale", "dimensions", "automatic_rename_candidate", "Preserve coordinate scaling when traveling between dimensions (e.g. nether-like ratios).", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSaveFolder", V_18, "dimension_save_folder", "Dimension save directory name", "dimensions_persistence", "automatic_rename_candidate", "Preserve nullable custom dimension subfolder and world save layout.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSkyColor", V_18, "dimension_sky_color", "Dimension sky color calculation", "dimensions_render", "automatic_rename_candidate", "Preserve entity and partial ticks for custom dimension sky tint.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSpawnCoordinate", V_18, "dimension_spawn_coordinate", "Dimension default spawn coordinate", "dimensions", "automatic_rename_candidate", "Preserve provider-specific spawn coordinate and null result.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSunBrightness", V_18, "dimension_sun_brightness", "Dimension-adjusted sun brightness", "dimensions_render", "automatic_rename_candidate", "Preserve partial tick and provider sunlight curve.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWorldTime", V_18, "dimension_world_time", "WorldProvider-specific time", "dimensions_time", "automatic_rename_candidate", "Preserve provider override of world day/night time.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "hasSkyLight", V_112, "dimension_has_skylight", "Dimension skylight capability", "dimensions_lighting", "automatic_rename_candidate", "Preserve whether skylight is available; differs from hasSkyDimension/sky rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isDaytime", V_18, "dimension_daytime_predicate", "Dimension local daytime", "dimensions_time", "automatic_rename_candidate", "Preserve provider-specific day/night state and time curve.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isNether", V_112, "dimension_nether_classification", "Nether-like dimension predicate", "dimensions", "automatic_rename_candidate", "Preserve Nether classification independently from water vaporization and movement factor.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "isSkyColored", V_ALL, "dimension_sky_color_predicate", "Sky rendering capability", "dimensions_render", "automatic_rename_candidate", "Preserve sky visibility/sky color rendering behavior independently from skylight.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "isValidSpawn", V_112, "dimension_valid_spawn_predicate", "Dimension spawn location validity", "dimensions_worldgen", "automatic_rename_candidate", "Preserve BlockPos validation for player spawn and portal/respawn selection.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "onWorldSave", V_112, "dimension_world_save_callback", "WorldProvider persistence save callback", "dimensions_persistence", "adapter_required", "Preserve WorldSavedData/provider-specific save timing before chunk/world save completion.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "onWorldUpdateEntities", V_112, "dimension_world_entity_tick_callback", "Dimension entity tick lifecycle callback", "dimensions", "adapter_required", "Preserve world and server tick ordering for provider-specific entity updates.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "resetRainAndThunder", V_112, "dimension_weather_reset", "Dimension rain/thunder state reset", "dimensions_weather", "adapter_required", "Preserve independent weather timer reset and client state synchronization.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "setDimension", V_112, "dimension_id_write", "WorldProvider numeric dimension ID assignment", "dimensions", "adapter_required", "Preserve ID assignment before world registration and provider initialization.", "net/minecraft/world/WorldProvider.html"),
-    d!("WorldProvider", "setWorld", V_ALL, "dimension_world_reference_write", "WorldProvider owning World assignment", "dimensions", "adapter_required", "Preserve initialization ordering before biome provider/generator/weather methods are called.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "resetRainAndThunder", V_18, "dimension_weather_reset", "Dimension rain/thunder state reset", "dimensions_weather", "adapter_required", "Preserve independent weather timer reset and client state synchronization.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setDimension", V_18, "dimension_id_write", "WorldProvider numeric dimension ID assignment", "dimensions", "adapter_required", "Preserve ID assignment before world registration and provider initialization.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setWorld", V_112, "dimension_world_reference_write", "WorldProvider owning World assignment", "dimensions", "adapter_required", "Preserve initialization ordering before biome provider/generator/weather methods are called.", "net/minecraft/world/WorldProvider.html"),
+
+    d!("WorldProvider", "calcSunriseSunsetColors", V_ALL, "dimension_sunrise_sunset_colors", "DimensionSpecialEffects#sunriseColor", "dimension_render", "client_adapter_required", "Preserve celestial-angle and partial-tick inputs plus the RGBA array used for sunrise/sunset sky rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canBlockFreeze", V_18, "dimension_block_freeze_predicate", "WorldProvider#canBlockFreeze", "dimension_weather", "adapter_required", "Preserve BlockPos and adjacent-water flag when checking freezing in a custom dimension.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canSnowAt", V_18, "dimension_snow_placement_predicate", "WorldProvider#canSnowAt", "dimension_weather", "adapter_required", "Preserve BlockPos and light-check flag for custom-dimension snow and ice placement.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "doesXZShowFog", V_ALL, "dimension_fog_at_coordinate", "DimensionSpecialEffects#renderSky / fog renderer", "dimension_render", "client_adapter_required", "Preserve the X/Z fog visibility predicate separately from the color returned by getFogColor.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "drawClouds", V_189, "dimension_cloud_color_render", "DimensionSpecialEffects#cloudColor", "dimension_render", "client_adapter_required", "1.8.9-only cloud draw/color hook; 1.12.2 uses getCloudColor and renderer registration instead.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "generateLightBrightnessTable", V_ALL, "dimension_light_brightness_curve", "DimensionType#brightnessRamp / light engine", "dimension_lighting", "adapter_required", "Preserve the custom light-level-to-brightness table and ensure dimensions with no sky keep their distinct curve.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getActualHeight", V_18, "dimension_build_height", "LevelHeightAccessor#getMaxBuildHeight", "dimension_world", "automatic_rename_candidate", "Preserve provider-specific world height, especially for dimensions that differ from the vanilla build range.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getAverageGroundLevel", V_ALL, "dimension_average_ground_level", "ChunkGenerator#getSeaLevel / spawn surface logic", "dimension_worldgen", "adapter_required", "Keep this distinct from the actual build height and from the current spawn heightmap.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getBiomeGenForCoords", V_189, "dimension_legacy_biome_lookup", "World#getBiome / BiomeSource", "dimension_worldgen", "adapter_required", "1.8.9 WorldProvider biome lookup; 1.7 exposes its WorldChunkManager and 1.12 uses getBiomeForCoords.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getCloudRenderer", V_18, "dimension_cloud_renderer", "DimensionSpecialEffects#cloudsLocation / renderer", "dimension_render", "client_adapter_required", "Preserve custom cloud renderer registration and client-only execution.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getCloudColor", V_112, "dimension_cloud_color", "DimensionSpecialEffects#cloudColor", "dimension_render", "client_adapter_required", "1.12 Vec3d cloud color hook; preserve partial ticks and do not conflate with 1.8 drawClouds.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getCurrentMoonPhaseFactor", V_18, "dimension_moon_phase_factor", "DimensionType moon phase / sky renderer", "dimension_render", "adapter_required", "Preserve custom fractional moon phase factor used for dimension sky rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getDepartMessage", V_189, "dimension_depart_message", "DimensionType travel message / localization", "dimension_travel", "adapter_required", "1.8.9-only message displayed when leaving a dimension; retain localization component semantics.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getHasNoSky", V_189, "dimension_legacy_no_sky_flag", "DimensionType#hasSkyLight", "dimension_lighting", "automatic_rename_candidate", "1.8.9 provider-level no-sky flag getter; keep distinct from 1.12 hasSkyLight.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getInternalNameSuffix", V_189, "dimension_internal_name_suffix", "DimensionType registry key / save folder", "dimension_registry", "manual_review", "1.8.9 internal provider suffix; preserve separately from the player-visible dimension name.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getLightBrightnessTable", V_18, "dimension_light_brightness_table", "DimensionType#brightnessRamp / light engine", "dimension_lighting", "adapter_required", "Expose the provider's computed light brightness table without sharing mutable arrays across dimensions.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getMoonPhase", V_ALL, "dimension_moon_phase", "DimensionType moon phase / sky renderer", "dimension_render", "adapter_required", "Preserve world-time-based moon phase calculation and custom provider overrides.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getProviderForDimension", V_17_18, "dimension_provider_static_lookup", "DimensionManager#getProviderType / dimension registry", "dimension_registry", "adapter_required", "Legacy static numeric dimension-to-provider lookup; 1.12 moves dimension provider construction to DimensionType.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getRandomizedSpawnPoint", V_18, "dimension_randomized_spawn_point", "WorldProvider#getSpawnPoint / spawn preparation", "dimension_world", "adapter_required", "Preserve the randomized-spawn policy and its chunk/coordinate selection for custom dimensions.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSeed", V_18, "dimension_seed_access", "WorldData#getSeed / Level#getSeed", "dimension_world", "automatic_rename_candidate", "Preserve the dimension world's actual seed rather than substituting the overworld seed.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSkyRenderer", V_18, "dimension_sky_renderer", "DimensionSpecialEffects#renderSky", "dimension_render", "client_adapter_required", "Preserve custom sky renderer registration and client-only render lifecycle.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSpawnPoint", V_112, "dimension_spawn_point", "WorldProvider#getSpawnPoint / ServerLevel spawn position", "dimension_world", "automatic_rename_candidate", "1.12 provider spawn BlockPos accessor; preserve whether the world spawn is forced or randomized.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getStarBrightness", V_18, "dimension_star_brightness", "DimensionSpecialEffects#star brightness", "dimension_render", "client_adapter_required", "Preserve partial-tick interpolation and custom dimension star visibility.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getSunBrightnessFactor", V_18, "dimension_sun_brightness_factor", "DimensionSpecialEffects#sun brightness", "dimension_render", "client_adapter_required", "Preserve the normalized sunlight factor separately from the sun brightness color multiplier.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getVoidFogYFactor", V_ALL, "dimension_void_fog_height_factor", "DimensionSpecialEffects#constantAmbientLight / fog settings", "dimension_render", "adapter_required", "Preserve the dimension-specific Y threshold factor used by void fog rendering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWeatherRenderer", V_18, "dimension_weather_renderer", "DimensionSpecialEffects#weather rendering", "dimension_render", "client_adapter_required", "Preserve custom precipitation renderer registration and client-only lifecycle.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWelcomeMessage", V_189, "dimension_welcome_message", "DimensionType travel message / localization", "dimension_travel", "adapter_required", "1.8.9-only message displayed when entering a dimension; preserve localized formatting.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWorldBorder", V_18, "dimension_world_border", "ServerLevel#getWorldBorder", "dimension_world", "automatic_rename_candidate", "Preserve provider-specific world border and its transition state.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWorldChunkManager", V_189, "dimension_legacy_biome_manager", "World#getBiomeProvider / BiomeSource", "dimension_worldgen", "adapter_required", "1.8.9 provider's biome manager; 1.7 uses its public worldChunkMgr field and 1.12 uses BiomeProvider.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "getWorldHasVoidParticles", V_17, "dimension_void_particle_flag", "DimensionSpecialEffects#forceBrightLightmap / render effects", "dimension_render", "manual_review", "1.7.10 provider-only void particle flag; retain the boolean hook for visual behavior reconstruction.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "isBlockHighHumidity", V_18, "dimension_biome_humidity", "Biome#isHumid", "dimension_weather", "adapter_required", "Preserve BlockPos-aware biome humidity in dimensions with custom biome providers.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "registerWorld", V_17_18, "dimension_world_registration", "WorldProvider#setWorld / DimensionType setup", "dimension_lifecycle", "adapter_required", "Legacy world registration method; 1.12 switches to setWorld and init.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "registerWorldChunkManager", V_17_18, "dimension_biome_manager_initialization", "WorldProvider#init / BiomeProvider", "dimension_worldgen", "adapter_required", "Legacy biome-manager initialization; modern providers initialize a BiomeProvider from the world and dimension type.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setAllowedSpawnTypes", V_18, "dimension_spawn_category_policy", "SpawnPlacements / biome spawn settings", "dimension_spawning", "adapter_required", "Preserve whether hostile and peaceful entities can naturally spawn in this dimension.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setCloudRenderer", V_18, "dimension_cloud_renderer_write", "DimensionSpecialEffects#cloudsLocation / renderer", "dimension_render", "client_adapter_required", "Translate custom cloud renderer registration into modern dimension client effects.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setSkyRenderer", V_18, "dimension_sky_renderer_write", "DimensionSpecialEffects#renderSky", "dimension_render", "client_adapter_required", "Translate custom sky renderer registration and preserve render ordering.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setSpawnPoint", V_18, "dimension_spawn_point_write", "ServerLevel#setDefaultSpawnPos", "dimension_world", "adapter_required", "Preserve provider-specific spawn coordinates and forced-spawn semantics.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setWeatherRenderer", V_18, "dimension_weather_renderer_write", "DimensionSpecialEffects#weather rendering", "dimension_render", "client_adapter_required", "Translate custom precipitation renderer registration to dimension client effects.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "setWorldTime", V_189, "dimension_world_time_write", "ServerLevel#setDayTime", "dimension_world", "adapter_required", "1.8.9 provider-specific world time setter; 1.12 exposes time mutation through the World rather than WorldProvider.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "shouldClientCheckLighting", V_112, "dimension_client_lighting_policy", "Chunk.resetRelightChecks / LevelRenderer", "dimension_lighting", "adapter_required", "Preserve whether client-received chunks should queue relight checks for this dimension.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "shouldMapSpin", V_18, "dimension_map_orientation", "MapRenderer / dimension map rotation", "dimension_render", "adapter_required", "Preserve custom map cursor rotation with entity position and dimension orientation.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "updateWeather", V_18, "dimension_weather_update", "World#updateWeather / ServerLevel weather tick", "dimension_weather", "adapter_required", "Preserve provider-specific weather update hook and server-side update order.", "net/minecraft/world/WorldProvider.html"),
 
     // BiomeGenBase public gameplay, color, spawn and feature hooks.
     d!("BiomeGenBase", "addDefaultFlowers", V_112, "biome_default_flower_registration", "Biome default flower feature registration", "biomes_worldgen", "adapter_required", "Preserve weighted flower state/weight list and decoration order.", "net/minecraft/world/biome/Biome.html"),
@@ -6430,6 +6473,70 @@ mod tests {
         assert!(!has(&v17, "setWorld"));
         assert!(!has(&v18, "setWorld"));
         assert!(!has(&v112, "getDistanceFrom"));
+    }
+
+
+    #[test]
+    fn world_provider_dictionary_covers_legacy_and_modern_dimension_hooks() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| {
+            entries.iter().any(|entry| entry.source_owner == "WorldProvider" && entry.source_method == method)
+        };
+        for method in [
+            "calcSunriseSunsetColors", "calculateCelestialAngle", "canCoordinateBeSpawn",
+            "canRespawnHere", "createChunkGenerator", "doesXZShowFog", "generateLightBrightnessTable",
+            "getAverageGroundLevel", "getCloudHeight", "getDimensionName", "getEntrancePortalLocation",
+            "getFogColor", "getMoonPhase", "getProviderForDimension", "getVoidFogYFactor",
+            "getWorldHasVoidParticles", "isSkyColored", "isSurfaceWorld", "registerWorld",
+            "registerWorldChunkManager",
+        ] { assert!(has(&v17, method), "missing 1.7.10 WorldProvider#{method}"); }
+        for method in [
+            "calcSunriseSunsetColors", "calculateCelestialAngle", "calculateInitialWeather",
+            "canBlockFreeze", "canCoordinateBeSpawn", "canDoLightning", "canDoRainSnowIce",
+            "canMineBlock", "canRespawnHere", "canSnowAt", "createChunkGenerator", "doesWaterVaporize",
+            "doesXZShowFog", "drawClouds", "getActualHeight", "getAverageGroundLevel",
+            "getBiomeGenForCoords", "getCloudHeight", "getCloudRenderer", "getCurrentMoonPhaseFactor",
+            "getDepartMessage", "getDimension", "getDimensionId", "getDimensionName",
+            "getFogColor", "getHasNoSky", "getHeight", "getHorizon", "getInternalNameSuffix",
+            "getLightBrightnessTable", "getMoonPhase", "getMovementFactor", "getRandomizedSpawnPoint",
+            "getRespawnDimension", "getSaveFolder", "getSeed", "getSkyColor", "getSkyRenderer",
+            "getSpawnCoordinate", "getStarBrightness", "getSunBrightness", "getSunBrightnessFactor",
+            "getVoidFogYFactor", "getWeatherRenderer", "getWelcomeMessage", "getWorldBorder",
+            "getWorldChunkManager", "getWorldTime", "isBlockHighHumidity", "isDaytime", "isSkyColored",
+            "isSurfaceWorld", "registerWorld", "registerWorldChunkManager", "resetRainAndThunder",
+            "setAllowedSpawnTypes", "setCloudRenderer", "setDimension", "setSkyRenderer", "setSpawnPoint",
+            "setWeatherRenderer", "setWorldTime", "shouldMapSpin", "updateWeather",
+        ] { assert!(has(&v18, method), "missing 1.8.9 WorldProvider#{method}"); }
+        for method in [
+            "calcSunriseSunsetColors", "calculateCelestialAngle", "calculateInitialWeather",
+            "canBlockFreeze", "canCoordinateBeSpawn", "canDoLightning", "canDoRainSnowIce",
+            "canDropChunk", "canMineBlock", "canRespawnHere", "canSleepAt", "canSnowAt",
+            "createChunkGenerator", "createWorldBorder", "doesWaterVaporize", "doesXZShowFog",
+            "generateLightBrightnessTable", "getActualHeight", "getAverageGroundLevel",
+            "getBiomeForCoords", "getBiomeProvider", "getCloudColor", "getCloudHeight",
+            "getCloudRenderer", "getCurrentMoonPhaseFactor", "getDimension", "getDimensionType",
+            "getDimensionName", "getFogColor", "getHeight", "getHorizon", "getLightBrightnessTable",
+            "getLightmapColors", "getMoonPhase", "getMovementFactor", "getMusicType",
+            "getRandomizedSpawnPoint", "getRespawnDimension", "getSaveFolder", "getSeed",
+            "getSkyColor", "getSkyRenderer", "getSpawnCoordinate", "getSpawnPoint",
+            "getStarBrightness", "getSunBrightness", "getSunBrightnessFactor", "getVoidFogYFactor",
+            "getWeatherRenderer", "getWorldBorder", "getWorldTime", "hasSkyLight", "init",
+            "initCapabilities", "isBlockHighHumidity", "isDaytime", "isNether", "isSkyColored",
+            "isSurfaceWorld", "onPlayerAdded", "onPlayerRemoved", "onWorldSave",
+            "onWorldUpdateEntities", "resetRainAndThunder", "setAllowedSpawnTypes",
+            "setCloudRenderer", "setDimension", "setSkyRenderer", "setSpawnPoint",
+            "setWeatherRenderer", "setWorld", "shouldClientCheckLighting", "shouldMapSpin",
+            "updateWeather",
+        ] { assert!(has(&v112, method), "missing 1.12.2 WorldProvider#{method}"); }
+        assert!(!has(&v17, "getDimensionType"));
+        assert!(!has(&v17, "getWorldBorder"));
+        assert!(!has(&v112, "getWorldChunkManager"));
+        assert!(!has(&v112, "drawClouds"));
+        assert!(!has(&v112, "getWelcomeMessage"));
+        assert!(!has(&v17, "getWorldTime"));
+        assert!(!has(&v17, "setWorld"));
     }
 
     #[test]
