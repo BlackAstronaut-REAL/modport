@@ -72,6 +72,8 @@ struct PortUiSummary {
     block_count: usize,
     entity_count: usize,
     armor_set_count: usize,
+    creative_tab_group_count: usize,
+    creative_tab_item_count: usize,
     projectile_count: usize,
     recipe_count: usize,
     resource_count: usize,
@@ -130,6 +132,8 @@ fn port_ui_summary(report: &NeoForgePortReport) -> PortUiSummary {
         block_count: report.blocks.len(),
         entity_count: report.entities.len(),
         armor_set_count: report.armor_sets.len(),
+        creative_tab_group_count: report.creative_tabs.len(),
+        creative_tab_item_count: report.creative_tabs.values().map(Vec::len).sum(),
         projectile_count: report.native_projectiles.len(),
         recipe_count: report.native_recipes.generated.len(),
         resource_count: report.resource_files_copied,
@@ -1100,8 +1104,11 @@ impl MojModelBridgeApp {
                     ui.label(format!("Entities: {}", result.entity_count));
                     ui.label(format!("Armor sets: {}", result.armor_set_count));
                     ui.end_row();
+                    ui.label(format!("Creative tab groups: {}", result.creative_tab_group_count));
+                    ui.label(format!("Creative tab assignments: {}", result.creative_tab_item_count));
                     ui.label(format!("Projectiles: {}", result.projectile_count));
                     ui.label(format!("Recipes: {}", result.recipe_count));
+                    ui.end_row();
                     ui.label(format!("Resources copied: {}", result.resource_count));
                     ui.label(format!("Warnings: {}", result.warning_count));
                     ui.end_row();
