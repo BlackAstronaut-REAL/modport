@@ -75,6 +75,7 @@ enum Command {
         json: bool,
     },
     /// Create a native NeoForge 1.21.1 Gradle/Java project scaffold.
+    #[command(name = "create-neoforge-project", alias = "create-neo-forge-project")]
     CreateNeoForgeProject {
         output: PathBuf,
         #[arg(long)]
@@ -89,6 +90,7 @@ enum Command {
         overwrite: bool,
     },
     /// Analyze and partially convert a mod folder/JAR/ZIP into a native NeoForge 1.21.1 project.
+    #[command(name = "port-neoforge", alias = "port-neo-forge")]
     PortNeoForge {
         output: PathBuf,
         #[arg(required = true)]
@@ -820,4 +822,41 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod cli_command_tests {
+    use super::{Cli, Command};
+    use clap::Parser;
+
+    #[test]
+    fn documented_port_neoforge_command_is_registered() {
+        let cli = Cli::try_parse_from([
+            "mojmodelbridge",
+            "port-neoforge",
+            "output/converted",
+            "input/legacy-mod.jar",
+        ])
+        .expect("port-neoforge should parse");
+
+        assert!(matches!(cli.command, Command::PortNeoForge { .. }));
+    }
+
+    #[test]
+    fn documented_create_neoforge_project_command_is_registered() {
+        let cli = Cli::try_parse_from([
+            "mojmodelbridge",
+            "create-neoforge-project",
+            "output/converted",
+            "--mod-id",
+            "converted_mod",
+            "--mod-name",
+            "Converted Mod",
+            "--package",
+            "com.example.converted",
+        ])
+        .expect("create-neoforge-project should parse");
+
+        assert!(matches!(cli.command, Command::CreateNeoForgeProject { .. }));
+    }
 }
