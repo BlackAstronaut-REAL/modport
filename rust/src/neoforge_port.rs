@@ -3408,6 +3408,81 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn assigns_generated_items_and_block_items_to_recovered_creative_tabs() {
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("BaseBlade.java"), r#"
+            class BaseBlade extends Item {
+                BaseBlade() { setCreativeTab(CreativeTabs.tabCombat); }
+            }
+            class RubyBlade extends BaseBlade { }
+        "#).unwrap();
+        let catalog = CreativeTabCatalog::load(&[temp.path().to_path_buf()]);
+        let items = vec![ItemRecord {
+            id: "ruby_blade".to_owned(),
+            class_name: "RubyBlade".to_owned(),
+            source_path: "RubyBlade.java".to_owned(),
+            source_text: String::new(),
+            stack_size: 1,
+            kind: "item".to_owned(),
+            lore: Vec::new(),
+            projectile_entity: None,
+            food: None,
+            durability: None,
+            rarity: None,
+            fire_resistant: false,
+            craft_remainder: None,
+            no_repair: false,
+            warnings: Vec::new(),
+        }];
+        let blocks = vec![BlockRecord {
+            id: "ruby_ore".to_owned(),
+            class_name: "RubyOre".to_owned(),
+            source_path: "RubyOre.java".to_owned(),
+            properties: Map::new(),
+            plant_like: false,
+            shape: "cube".to_owned(),
+            warnings: Vec::new(),
+        }];
+        let block_sources = vec![BlockSource {
+            class_name: "RubyOre".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "ruby_ore".to_owned(),
+            source_path: "RubyOre.java".to_owned(),
+            source_text: "setCreativeTab(CreativeTabs.tabBlock);".to_owned(),
+        }];
+
+        let assignments = native_creative_tab_assignments(
+            &catalog, &items, &[], &blocks, &[], &[], &block_sources
+        );
+        assert!(assignments["COMBAT"].contains("ITEM_RUBY_BLADE"));
+        assert!(assignments["BUILDING_BLOCKS"].contains("BLOCK_ITEM_RUBY_ORE"));
+
+        let generated = generate_creative_tabs_java("com.example", &assignments);
+        assert!(generated.contains("BuildCreativeModeTabContentsEvent"));
+        assert!(generated.contains("CreativeModeTabs.COMBAT"));
+        assert!(generated.contains("ModItems.ITEM_RUBY_BLADE.get()"));
+        assert!(generated.contains("ModItems.BLOCK_ITEM_RUBY_ORE.get()"));
+    }
+
+    #[test]
+    fn infers_minimal_blocks_from_matching_blockstate_namespace_only() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("assets/demo/blockstates")).unwrap();
+        fs::create_dir_all(root.join("assets/dependency/blockstates")).unwrap();
+        fs::write(root.join("mcmod.info"), r#"{"modid":"demo","name":"Demo Mod"}"#).unwrap();
+        fs::write(root.join("assets/demo/blockstates/ruby_ore.json"), r#"{"variants":{"":{"model":"demo:block/ruby_ore"}}}"#).unwrap();
+        fs::write(root.join("assets/dependency/blockstates/other_ore.json"), r#"{"variants":{"":{"model":"dependency:block/other_ore"}}}"#).unwrap();
+
+        let mut warnings = Vec::new();
+        let found = discover_blockstate_fallbacks(&[root.to_path_buf()], "demo", &mut warnings);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].registry_name, "ruby_ore");
+        assert_eq!(found[0].class_name, "ResourceBlockstateFallback");
+        assert!(warnings.iter().any(|warning| warning.contains("inferred from the mod's blockstate JSON")));
+    }
+
+    #[test]
     fn detects_versioned_api_overrides_and_typed_calls_for_port_report() {
         let temp = tempdir().unwrap();
         fs::write(
