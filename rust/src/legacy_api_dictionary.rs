@@ -2930,6 +2930,48 @@ const DEFINITIONS: &[Definition] = &[
 
 
 
+    d!("DimensionManager", "unregisterProviderType", V_ALL, "dimension_provider_unregister", "DimensionType registry removal", "dimensions", "adapter_required", "Preserve provider class removal and dimensions that currently use the type.", "net/minecraftforge/common/DimensionManager.html"),
+    d!("DimensionManager", "getStaticDimensionIDs", V_ALL, "dimension_static_ids", "DimensionType registry / static dimension ID map", "dimensions", "adapter_required", "Preserve static IDs separately from dynamically initialized dimensions.", "net/minecraftforge/common/DimensionManager.html"),
+
+    d!("FluidRegistry", "getFluidFromBlock", V_112, "fluid_from_block", "Fluid#getFluidFromBlock / FluidState", "fluids", "automatic_rename_candidate", "Preserve 1.12 block-to-fluid lookup.", "net/minecraftforge/fluids/FluidRegistry.html"),
+    d!("FluidRegistry", "getFluidBlock", V_112, "fluid_block_from_fluid", "Fluid#getBlock", "fluids", "automatic_rename_candidate", "Preserve fluid-to-block association.", "net/minecraftforge/fluids/FluidRegistry.html"),
+
+    d!("BiomeDictionary", "registerBiomeType", V_ALL, "biome_dictionary_register_type", "BiomeDictionary.Type / biome tags", "biomes", "adapter_required", "Preserve multi-type membership and custom type identity for modded biomes.", "net/minecraftforge/common/BiomeDictionary.html"),
+    d!("BiomeDictionary", "getTypesForBiome", V_ALL, "biome_dictionary_types_for_biome", "BiomeDictionary.Type membership / biome tags", "biomes", "automatic_rename_candidate", "Preserve all registered types and deterministic set behavior.", "net/minecraftforge/common/BiomeDictionary.html"),
+    d!("BiomeDictionary", "getBiomesForType", V_ALL, "biome_dictionary_biomes_for_type", "Biome tags / biome registry query", "biomes", "automatic_rename_candidate", "Preserve all matching biome registry entries including modded biomes.", "net/minecraftforge/common/BiomeDictionary.html"),
+    d!("BiomeDictionary", "isBiomeOfType", V_ALL, "biome_dictionary_type_predicate", "BiomeDictionary.Type membership", "biomes", "automatic_rename_candidate", "Preserve type membership predicate without inferring from biome names.", "net/minecraftforge/common/BiomeDictionary.html"),
+    d!("BiomeDictionary", "getTypes", V_112, "biome_dictionary_types", "BiomeDictionary.Type enum values", "biomes", "automatic_rename_candidate", "Preserve the registered type set and extension behavior.", "net/minecraftforge/common/BiomeDictionary.html"),
+    d!("BiomeDictionary", "getType", V_112, "biome_dictionary_type_lookup", "BiomeDictionary.Type lookup", "biomes", "automatic_rename_candidate", "Preserve exact type key lookup and custom type registration semantics.", "net/minecraftforge/common/BiomeDictionary.html"),
+
+    d!("BiomeManager", "addBiome", V_ALL, "biome_manager_add_weighted", "BiomeManager.BiomeEntry / biome weighting", "biomes_worldgen", "adapter_required", "Preserve biome type, weight, duplicate handling and insertion order.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addSpawnBiome", V_ALL, "biome_manager_add_spawn_biome", "World spawn biome selection", "biomes_worldgen", "adapter_required", "Preserve spawn-biome weights and ordering.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "removeSpawnBiome", V_ALL, "biome_manager_remove_spawn_biome", "World spawn biome selection", "biomes_worldgen", "automatic_rename_candidate", "Remove only the specified biome from the spawn pool.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addVillageBiome", V_ALL, "biome_manager_village_biome", "Village biome selection", "biomes_worldgen", "adapter_required", "Preserve village-compatible biome pool and mutation flag.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addStrongholdBiome", V_17_18, "biome_manager_stronghold_biome", "Stronghold biome selection", "biomes_worldgen", "adapter_required", "Preserve stronghold biome pool for legacy structure placement.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addDesertVillageBiome", V_18, "biome_manager_desert_village_biome", "Village biome selection", "biomes_worldgen", "adapter_required", "Preserve desert village biome pool separately from ordinary villages.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addCoolBiome", V_18, "biome_manager_cool_biome", "BiomeManager climate type pool", "biomes_worldgen", "adapter_required", "Preserve cool biome pool and weight.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "addWarmBiome", V_18, "biome_manager_warm_biome", "BiomeManager climate type pool", "biomes_worldgen", "adapter_required", "Preserve warm biome pool and weight.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "getBiomes", V_ALL, "biome_manager_biome_pool", "BiomeManager biome type weights", "biomes_worldgen", "adapter_required", "Preserve ordered weighted entries for a given biome type.", "net/minecraftforge/common/BiomeManager.html"),
+    d!("BiomeManager", "getBiomesToSpawnIn", V_ALL, "biome_manager_spawn_pool", "World spawn biome selection", "biomes_worldgen", "automatic_rename_candidate", "Preserve spawn pool order and modded biome entries.", "net/minecraftforge/common/BiomeManager.html"),
+
+    d!("VillagerRegistry", "registerVillagerId", V_17_18, "villager_registry_numeric_profession", "VillagerProfession registry / ResourceLocation", "villagers", "adapter_required", "Preserve numeric profession IDs for old saves while mapping to registry keys.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "registerVillageTradeHandler", V_ALL, "villager_registry_trade_handler", "VillagerTrades / MerchantOffer registration", "villagers", "adapter_required", "Preserve profession ID, career ID and trade handler ordering.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "registerVillageCreationHandler", V_ALL, "villager_registry_creation_handler", "Structure piece / village generation registration", "villagers", "adapter_required", "Preserve village component weight and placement order.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "registerVillagerSkin", V_17_18, "villager_registry_skin", "Villager profession texture mapping", "villagers", "adapter_required", "Preserve profession-to-skin mapping and fallback texture.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getRegisteredVillagers", V_ALL, "villager_registry_profession_ids", "VillagerProfession registry enumeration", "villagers", "automatic_rename_candidate", "Preserve registered profession ID set and mod additions.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getVillagerSkin", V_ALL, "villager_registry_skin_lookup", "Villager profession texture mapping", "villagers", "automatic_rename_candidate", "Preserve profession skin selection and fallback behavior.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getVillageCreationHandlerList", V_ALL, "villager_registry_creation_handlers", "Village structure generation registry", "villagers", "automatic_rename_candidate", "Preserve handler order and component factories.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getVillageComponent", V_ALL, "villager_registry_village_component", "Village component registration", "villagers", "adapter_required", "Preserve component ID lookup, weight and factory.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getVillagePieceWeight", V_ALL, "villager_registry_piece_weight", "Village structure piece weights", "villagers", "adapter_required", "Preserve component weight and spawn limit.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+    d!("VillagerRegistry", "getTradeList", V_112, "villager_registry_trade_list", "VillagerTrades / MerchantOffers", "villagers", "adapter_required", "Preserve profession/career mapping and trade factory ordering.", "net/minecraftforge/fml/common/registry/VillagerRegistry.html"),
+
+    d!("FMLInterModComms", "sendQuery", V_17_18, "fml_imc_query", "InterModComms query API", "intermod_communications", "adapter_required", "Preserve query key and response collection semantics.", "net/minecraftforge/fml/common/FMLInterModComms.html"),
+    d!("FMLInterModComms", "getMessages", V_ALL, "fml_imc_message_list", "InterModComms message retrieval", "intermod_communications", "adapter_required", "Preserve queued message order and unread/consumed state.", "net/minecraftforge/fml/common/FMLInterModComms.html"),
+    d!("FMLInterModComms", "fetchMessages", V_17_18, "fml_imc_fetch_messages", "InterModComms message queue", "intermod_communications", "adapter_required", "Preserve incoming message queue order and sender metadata.", "net/minecraftforge/fml/common/FMLInterModComms.html"),
+
+    d!("NetworkRegistry", "register", V_ALL, "forge_network_handler_register", "NetworkRegistry handler registration", "networking", "adapter_required", "Preserve mod container and network handler registration ordering.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
+    d!("NetworkRegistry", "registerChannel", V_17_18, "forge_network_channel_register", "FMLEmbeddedChannel registration", "networking", "adapter_required", "Preserve channel name, side and handler ordering.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7280,6 +7322,55 @@ mod tests {
         assert!(!has(&v112,"WorldGenerator","setScale"));
         assert!(has(&v112,"WorldGenerator","setDecorationDefaults"));
         assert!(has(&v112,"EventBus","shutdown"));
+    }
+
+
+    #[test]
+    fn dimension_and_fluid_registries_preserve_legacy_ids_and_runtime_state() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
+        for owner in ["DimensionManager","FluidRegistry"] {
+            for version in [&v17,&v18,&v112] {
+                let methods: &[&str] = if owner == "DimensionManager" {
+                    &["registerDimension","unregisterDimension","registerProviderType","unregisterProviderType","getProviderType","getNextFreeDimId","isDimensionRegistered","getStaticDimensionIDs","getDimensions","getIDs","getWorld","getWorlds","setWorld","initDimension","unloadWorld","shouldLoadSpawn"]
+                } else {
+                    &["registerFluid","getFluid","getFluidID","getFluidName","getFluidStack","getRegisteredFluids","isFluidRegistered","addBucketForFluid"]
+                };
+                for method in methods { assert!(has(version,owner,method), "missing {owner}#{method}"); }
+            }
+        }
+    }
+
+    #[test]
+    fn biome_dictionary_and_manager_preserve_modded_biome_pools() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["registerBiomeType","getTypesForBiome","getBiomesForType","isBiomeOfType"] { assert!(has(version,"BiomeDictionary",method)); }
+            for method in ["addBiome","addSpawnBiome","removeSpawnBiome","addVillageBiome","getBiomes","getBiomesToSpawnIn"] { assert!(has(version,"BiomeManager",method)); }
+        }
+    }
+
+    #[test]
+    fn villager_and_intermod_registries_keep_extension_points() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["registerVillageTradeHandler","registerVillageCreationHandler","getRegisteredVillagers","getVillagerSkin","getVillageCreationHandlerList"] {
+                assert!(has(version,"VillagerRegistry",method));
+            }
+            for method in ["sendMessage","getMessages"] { assert!(has(version,"FMLInterModComms",method)); }
+        }
+        assert!(has(&v112,"NetworkRegistry","newSimpleChannel"));
+        assert!(has(&v112,"NetworkRegistry","newEventDrivenChannel"));
+        assert!(has(&v17,"NetworkRegistry","registerGuiHandler"));
+        assert!(has(&v112,"NetworkRegistry","registerGuiHandler"));
     }
 
     #[test]
