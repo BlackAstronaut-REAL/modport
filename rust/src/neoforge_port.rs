@@ -3220,7 +3220,7 @@ public final class ModMenus {{
                 slot.index, slot.x, slot.y
             ));
         }
-        body.push_str(r#"            for (int row = 0; row < 3; row++) {
+        let player_inventory_slots = r#"            for (int row = 0; row < 3; row++) {
                 for (int column = 0; column < 9; column++) {
                     this.addSlot(new Slot(playerInventory, column + row * 9 + 9, 8 + column * 18, 84 + row * 18));
                 }
@@ -3253,7 +3253,8 @@ public final class ModMenus {{
             return original;
         }
     }
-"#.to_owned().replace("ModBlocks.BLOCK_REPLACE", &format!("ModBlocks.{block_field}")));
+"#.replace("ModBlocks.BLOCK_REPLACE", &format!("ModBlocks.{block_field}"));
+        body.push_str(&player_inventory_slots);
     }
     body.push_str(r#"
     private ModMenus() {}

@@ -558,7 +558,7 @@ import org.joml.Vector3f;
     );
     source = format!("{imports}{source}");
 
-    let animation_source = generated_animation.map(|animation| {
+    let animation_source = generated_animation.as_ref().map(|animation| {
         let animation_imports = format!(r#"package {package}.client.model.animation;
 
 import net.minecraft.client.animation.AnimationChannel;
