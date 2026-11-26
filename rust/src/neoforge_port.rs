@@ -2680,6 +2680,7 @@ fn generate_entity_renderers_java(
     let mut body = format!(r#"package {package}.client;
 
 import {package}.NeoForgeMod;
+import {package}.entity.*;
 import {package}.registry.ModEntities;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -3414,6 +3415,39 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::io::Write;
+
+    #[test]
+    fn entity_renderer_imports_generated_entity_classes_from_entity_package() {
+        let temp = tempdir().unwrap();
+        let entities = vec![EntityMetadata {
+            class_name: "EntityRubyBeast".to_owned(),
+            display_name: "Ruby Beast".to_owned(),
+            registry_name: "ruby_beast".to_owned(),
+            superclass: "EntityMob".to_owned(),
+            width: 0.8,
+            height: 1.9,
+            health: 30.0,
+            movement_speed: 0.25,
+            attack_damage: 5.0,
+            armor: 2.0,
+            follow_range: 24.0,
+            xp: 7,
+            fire_immune: false,
+            water_mob: false,
+            flying_mob: false,
+            ai_classes: Vec::new(),
+            warnings: Vec::new(),
+        }];
+
+        let generated = generate_entity_renderers_java(
+            "com.example.converted", "converted", temp.path(), &entities, &[]
+        );
+
+        assert!(generated.contains("package com.example.converted.client;"));
+        assert!(generated.contains("import com.example.converted.entity.*;"));
+        assert!(generated.contains("MobRenderer<ConvertedEntityRubyBeast"));
+        assert!(generated.contains("getTextureLocation(ConvertedEntityRubyBeast entity)"));
+    }
 
     #[test]
     fn assigns_generated_items_and_block_items_to_recovered_creative_tabs() {
