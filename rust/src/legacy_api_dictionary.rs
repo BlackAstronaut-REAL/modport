@@ -2818,6 +2818,20 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityPlayer", "setItemStackToSlot", V_112, "player_equipment_slot_write", "LivingEntity#setItemSlot / EntityEquipmentSlot", "inventory", "adapter_required", "Preserve explicit equipment slot assignment and stack-copy/capability semantics.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "writeEntityToNBT", V_ALL, "player_write_nbt", "Player#addAdditionalSaveData / player data save", "persistence", "adapter_required", "Preserve player-specific NBT fields, inventory and ability persistence.", "net/minecraft/entity/player/EntityPlayer.html"),
 
+
+
+    d!("EntityLivingBase", "getMaxHurtResistantTime", V_ALL, "living_base_hurt_resistance_window", "LivingEntity hurt resistance / invulnerability timer", "combat", "adapter_required", "Preserve the maximum hurt-resistance window independently from the current remaining hurt timer.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "getLastDamage", V_ALL, "living_base_last_damage", "LivingEntity last damage value", "combat", "automatic_rename_candidate", "Preserve last applied damage independently from source and combat tracker.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "canBlockDamageSource", V_17_18, "living_base_legacy_damage_block", "LivingEntity#isDamageSourceBlocked / shield logic", "combat", "adapter_required", "Legacy damage-source block predicate, before 1.12 shield and hand-aware blocking behavior.", "net/minecraft/entity/EntityLivingBase.html"),
+
+    d!("EntityLiving", "canSpawnUsingCurrentDifficulty", V_17_18, "living_difficulty_spawn_predicate", "Mob#checkSpawnRules / difficulty spawn logic", "spawning", "adapter_required", "Legacy difficulty-aware spawn predicate; 1.12 uses separate spawn-rule checks.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "getBlockPathWeight", V_ALL, "living_path_weight", "Mob#getWalkTargetValue / pathfinding weight", "entity_ai", "adapter_required", "Preserve block/biome-dependent path weight used by creature navigation.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "getLivingSound", V_ALL, "living_ambient_sound", "Mob#getAmbientSound", "audio", "automatic_rename_candidate", "Preserve ambient sound selection.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "hasHome", V_ALL, "living_home_presence", "Mob home position / restriction radius", "entity_ai", "automatic_rename_candidate", "Preserve home restriction enablement.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "getHomePosition", V_ALL, "living_home_position", "Mob#getHomePos", "entity_ai", "automatic_rename_candidate", "Preserve home BlockPos.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "getMaximumHomeDistance", V_ALL, "living_home_radius", "Mob#getHomeRadius", "entity_ai", "automatic_rename_candidate", "Preserve home restriction radius in blocks.", "net/minecraft/entity/EntityLiving.html"),
+    d!("EntityLiving", "setLeashedToEntity", V_17_18, "living_legacy_leash_write", "Mob#setLeashedTo", "entities", "adapter_required", "Preserve entity holder and send-leash-packet flag.", "net/minecraft/entity/EntityLiving.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -6946,6 +6960,85 @@ mod tests {
         assert!(!has(&v17, "handleStatusUpdate"));
         assert!(!has(&v112, "handleHealthUpdate"));
         assert!(!has(&v112, "interactWith"));
+    }
+
+
+    #[test]
+    fn entity_living_base_dictionary_preserves_legacy_combat_and_potion_hooks() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        for method in [
+            "getAITarget", "getLastAttacker", "getLastAttackerTime", "getArrowCountInEntity",
+            "getAttributeMap", "getCombatTracker", "getTotalArmorValue", "getSoundPitch",
+            "getSoundVolume", "getHurtSound", "getDeathSound", "getMaxHurtResistantTime",
+            "getLastDamage", "getCreatureAttribute", "getActivePotionEffect", "getActivePotionEffects",
+            "getExperiencePoints", "canBreatheUnderwater", "canBlockDamageSource", "clearActivePotions",
+            "decreaseAirSupply", "dismountEntity", "isEntityAlive", "isPotionActive",
+            "removePotionEffect", "setAbsorptionAmount", "setArrowCountInEntity", "setHealth",
+            "swingItem", "updatePotionEffects",
+        ] { assert!(has(&v17, "EntityLivingBase", method), "missing 1.7.10 EntityLivingBase#{method}"); }
+        for method in [
+            "getAITarget", "getLastAttacker", "getLastAttackerTime", "getArrowCountInEntity",
+            "getAttributeMap", "getCombatTracker", "getTotalArmorValue", "getSoundPitch",
+            "getSoundVolume", "getHurtSound", "getDeathSound", "getMaxHurtResistantTime",
+            "getLastDamage", "getCreatureAttribute", "getActivePotionEffect", "getActivePotionEffects",
+            "getExperiencePoints", "canBreatheUnderwater", "canBlockDamageSource", "clearActivePotions",
+            "decreaseAirSupply", "dismountEntity", "isEntityAlive", "isPotionActive",
+            "removePotionEffect", "setAbsorptionAmount", "setArrowCountInEntity", "setHealth",
+            "swingItem", "updatePotionEffects",
+        ] { assert!(has(&v18, "EntityLivingBase", method), "missing 1.8.9 EntityLivingBase#{method}"); }
+        for method in [
+            "getCombatTracker", "getAbsorptionAmount", "setAbsorptionAmount", "getArrowCountInEntity",
+            "getAttributeMap", "getTotalArmorValue", "getSoundPitch", "getSoundVolume",
+            "getHurtSound", "getDeathSound", "getMaxHurtResistantTime", "getLastDamage",
+            "getCreatureAttribute", "getActivePotionEffect", "getActivePotionEffects",
+            "getExperiencePoints", "canBreatheUnderwater", "clearActivePotions", "decreaseAirSupply",
+            "dismountEntity", "isEntityAlive", "isPotionActive", "removePotionEffect",
+            "removePotionEffectClient", "setArrowCountInEntity", "setHealth", "swingArm",
+            "updatePotionEffects",
+        ] { assert!(has(&v112, "EntityLivingBase", method), "missing 1.12.2 EntityLivingBase#{method}"); }
+        assert!(!has(&v112, "getAITarget"));
+        assert!(!has(&v112, "swingItem"));
+        assert!(!has(&v17, "swingArm"));
+    }
+
+    #[test]
+    fn entity_living_dictionary_covers_spawn_ai_leash_and_home_hooks() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| {
+            entries.iter().any(|entry| entry.source_owner == "EntityLiving" && entry.source_method == method)
+        };
+        for method in [
+            "canSpawnUsingCurrentDifficulty", "getBlockPathWeight", "getCanSpawnHere",
+            "getLeashed", "getLeashedToEntity", "getLivingSound", "getMaxSpawnedInChunk",
+            "getTalkInterval", "hasHome", "getHomePosition", "getMaximumHomeDistance",
+            "setAttackTarget", "getAttackTarget", "setLeashedToEntity", "clearLeashed",
+            "detachHome", "isWithinHomeDistanceFromPosition", "onSpawnWithEgg", "despawnEntity",
+            "canDespawn", "updateAITasks", "updateEntityActionState",
+        ] { assert!(has(&v17, method), "missing 1.7.10 EntityLiving#{method}"); }
+        for method in [
+            "canSpawnUsingCurrentDifficulty", "getBlockPathWeight", "getCanSpawnHere",
+            "getLeashed", "getLeashedToEntity", "getLivingSound", "getMaxSpawnedInChunk",
+            "getTalkInterval", "hasHome", "getHomePosition", "getMaximumHomeDistance",
+            "setAttackTarget", "getAttackTarget", "setLeashedToEntity", "clearLeashed",
+            "detachHome", "isWithinHomeDistanceFromPosition", "onSpawnWithEgg", "despawnEntity",
+            "canDespawn", "updateAITasks", "updateEntityActionState",
+        ] { assert!(has(&v18, method), "missing 1.8.9 EntityLiving#{method}"); }
+        for method in [
+            "getBlockPathWeight", "getCanSpawnHere", "getLivingSound", "getMaxSpawnedInChunk",
+            "getTalkInterval", "hasHome", "getHomePosition", "getMaximumHomeDistance",
+            "setAttackTarget", "getAttackTarget", "detachHome", "isWithinHomeDistanceFromPosition",
+            "updateAITasks", "getLeashHolder", "setNoAI",
+        ] { assert!(has(&v112, method), "missing 1.12.2 EntityLiving#{method}"); }
+        assert!(!has(&v112, "getLeashed"));
+        assert!(!has(&v112, "onSpawnWithEgg"));
+        assert!(!has(&v112, "despawnEntity"));
     }
 
     #[test]
