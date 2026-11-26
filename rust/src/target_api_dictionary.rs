@@ -885,6 +885,9 @@ const DEFINITIONS: &[Definition] = &[
     t!("Boat", "tick", "void tick()", "vehicle_lifecycle", "Preserve boat status/float/input/paddle tick ordering and client interpolation.", "net/minecraft/world/entity/vehicle/Boat.html", "EntityBoat#onUpdate"),
     t!("Boat", "addAdditionalSaveData", "void addAdditionalSaveData(CompoundTag)", "persistence", "Write boat type and persistent fields while preserving inherited vehicle/entity data.", "net/minecraft/world/entity/vehicle/Boat.html", "EntityBoat#writeEntityToNBT"),
     t!("Boat", "push", "void push(Entity)", "vehicle_collision", "Apply boat/entity collision impulse while preserving passenger and boat-specific exclusions.", "net/minecraft/world/entity/vehicle/Boat.html", "EntityBoat#applyEntityCollision"),
+    // Entity passenger attachment and piston reaction helpers.
+    t!("Entity", "getPassengerRidingPosition", "Vec3 getPassengerRidingPosition(Entity)", "vehicle_passengers", "Compute the final passenger world position from the vehicle attachment point and passenger dimensions; replaces scalar legacy mount offsets only with a positional adapter.", "net/minecraft/world/entity/Entity.html", "EntityBoat#getMountedYOffset"),
+    t!("Entity", "getPistonPushReaction", "PushReaction getPistonPushReaction()", "entity_physics", "Return the modern piston push reaction; translate legacy enum values without conflating them with collision or pickability.", "net/minecraft/world/entity/Entity.html", "EntityArmorStand#getPushReaction"),
 ];
 
 fn to_public(entry: &Definition) -> TargetApiMethod {
