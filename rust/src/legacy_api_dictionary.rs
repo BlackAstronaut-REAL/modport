@@ -7125,7 +7125,7 @@ mod tests {
             "canMineBlock", "canRespawnHere", "canSnowAt", "createChunkGenerator", "doesWaterVaporize",
             "doesXZShowFog", "drawClouds", "getActualHeight", "getAverageGroundLevel",
             "getBiomeGenForCoords", "getCloudHeight", "getCloudRenderer", "getCurrentMoonPhaseFactor",
-            "getDepartMessage", "getDimension", "getDimensionId", "getDimensionName",
+            "getDepartMessage", "getDimensionId", "getDimensionName",
             "getFogColor", "getHasNoSky", "getHeight", "getHorizon", "getInternalNameSuffix",
             "getLightBrightnessTable", "getMoonPhase", "getMovementFactor", "getRandomizedSpawnPoint",
             "getRespawnDimension", "getSaveFolder", "getSeed", "getSkyColor", "getSkyRenderer",
@@ -7144,12 +7144,12 @@ mod tests {
             "generateLightBrightnessTable", "getActualHeight", "getAverageGroundLevel",
             "getBiomeForCoords", "getBiomeProvider", "getCloudColor", "getCloudHeight",
             "getCloudRenderer", "getCurrentMoonPhaseFactor", "getDimension", "getDimensionType",
-            "getDimensionName", "getFogColor", "getHeight", "getHorizon", "getLightBrightnessTable",
+            "getFogColor", "getHeight", "getHorizon", "getLightBrightnessTable",
             "getLightmapColors", "getMoonPhase", "getMovementFactor", "getMusicType",
             "getRandomizedSpawnPoint", "getRespawnDimension", "getSaveFolder", "getSeed",
             "getSkyColor", "getSkyRenderer", "getSpawnCoordinate", "getSpawnPoint",
             "getStarBrightness", "getSunBrightness", "getSunBrightnessFactor", "getVoidFogYFactor",
-            "getWeatherRenderer", "getWorldBorder", "getWorldTime", "hasSkyLight", "init",
+            "getWeatherRenderer", "getWorldTime", "hasSkyLight", "init",
             "initCapabilities", "isBlockHighHumidity", "isDaytime", "isNether", "isSkyColored",
             "isSurfaceWorld", "onPlayerAdded", "onPlayerRemoved", "onWorldSave",
             "onWorldUpdateEntities", "resetRainAndThunder", "setAllowedSpawnTypes",
@@ -7157,6 +7157,8 @@ mod tests {
             "setWeatherRenderer", "setWorld", "shouldClientCheckLighting", "shouldMapSpin",
             "updateWeather",
         ] { assert!(has(&v112, method), "missing 1.12.2 WorldProvider#{method}"); }
+        assert!(!has(&v112, "getDimensionName"));
+        assert!(!has(&v112, "getWorldBorder"));
         assert!(!has(&v17, "getDimensionType"));
         assert!(!has(&v17, "getWorldBorder"));
         assert!(!has(&v112, "getWorldChunkManager"));
