@@ -294,7 +294,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
         "dictionary entry for that release. This is not a claim that every behavior is",
         "automatically portable; conversion status and semantic adapters remain separate.",
         "",
-        "| Forge version | Documented API methods | Dictionary records | Validated mappings | Coverage | Stale mappings | Link mismatches | Duplicate pairs |",
+        "| Forge version | Documented API methods | Dictionary records | Validated mappings | Coverage | Stale mappings | Link mismatches | Ambiguous | Duplicate pairs |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for report in reports:
@@ -306,6 +306,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
             f"| {report['coverage_percent']:.2f}% "
             f"| {len(report['stale_or_undocumented_mappings'])} "
             f"| {len(report['documentation_link_mismatches'])} "
+            f"| {len(report['ambiguous_owner_method_mappings'])} "
             f"| {len(report['duplicate_dictionary_pairs'])} |"
         )
 
@@ -320,6 +321,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
             f"- Coverage: **{report['coverage_percent']:.2f}%**",
             f"- Stale or undocumented mappings: **{len(report['stale_or_undocumented_mappings'])}**",
             f"- Documentation-link mismatches: **{len(report['documentation_link_mismatches'])}**",
+            f"- Ambiguous owner/method mappings: **{len(report['ambiguous_owner_method_mappings'])}**",
             f"- Duplicate owner/method pairs: **{len(report['duplicate_dictionary_pairs'])}**",
         ])
         if report["stale_or_undocumented_mappings"]:
@@ -337,9 +339,18 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
                     f"- {item['owner']}#{item['method']}: expected "
                     f"{item['expected_pages']}, found {item['actual_pages']}"
                 )
+        if report["ambiguous_owner_method_mappings"]:
+            lines.extend(["", "### Ambiguous same-name owners", ""])
+            for item in report["ambiguous_owner_method_mappings"][:30]:
+                lines.append(
+                    f"- {item['owner']}#{item['method']}: "
+                    f"{item['candidate_pages']}"
+                )
         lines.extend(["", "### First 60 unmapped documented methods", ""])
         for item in report["unmapped_methods"][:60]:
-            lines.append(f"- {item['owner']}#{item['method']}")
+            lines.append(
+                f"- {item['class_page']}#{item['method']}"
+            )
         if len(report["unmapped_methods"]) > 60:
             lines.append(
                 f"- ...and {len(report['unmapped_methods']) - 60} more (see JSON output)"
