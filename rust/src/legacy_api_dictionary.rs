@@ -3225,6 +3225,52 @@ const DEFINITIONS: &[Definition] = &[
     d!("ICommandSender", "getServer", V_ALL, "command_sender_server", "CommandSourceStack#getServer", "commands", "automatic_rename_candidate", "Preserve server reference and null/client context behavior.", "net/minecraft/command/ICommandSender.html"),
     d!("ICommandSender", "getCommandStats", V_17_18, "command_sender_stats", "CommandResultStats / command result tracking", "commands", "adapter_required", "Preserve success-count and affected-entity/block/item statistics.", "net/minecraft/command/ICommandSender.html"),
 
+    d!("ModelBase", "getTextureOffset", V_17_18, "model_texture_offset", "ModelPart texture coordinates", "rendering", "automatic_rename_candidate", "Preserve named part-to-texture UV mapping.", "net/minecraft/client/model/ModelBase.html"),
+
+    d!("ModelRenderer", "getRandomCube", V_17_18, "model_part_random_cube", "ModelPart cube selection", "rendering", "adapter_required", "Preserve random source and cube insertion order.", "net/minecraft/client/model/ModelRenderer.html"),
+
+    d!("Render", "getEntityTexture", V_17_18, "entity_render_texture", "EntityRenderer#getTextureLocation", "rendering", "resource_adapter_required", "Preserve per-entity texture selection and fallback resource location.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "getEntityBrightness", V_17_18, "entity_render_brightness", "EntityRenderer#getOverlayCoords / packed light", "rendering", "adapter_required", "Preserve world light, hurt flash and partial-tick interpolation.", "net/minecraft/client/renderer/entity/Render.html"),
+    d!("Render", "renderLivingLabel", V_17_18, "entity_render_label", "EntityRenderer nameplate rendering", "rendering", "adapter_required", "Preserve text, vertical offset, distance threshold and background/see-through rules.", "net/minecraft/client/renderer/entity/Render.html"),
+
+    d!("RenderLiving", "doRender", V_ALL, "living_render_callback", "LivingEntityRenderer#render", "rendering", "adapter_required", "Preserve model animation setup, layers, held-item transforms, leash and nameplate order.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "preRenderCallback", V_17_18, "living_render_pre_scale", "LivingEntityRenderer#scale", "rendering", "adapter_required", "Preserve entity-specific model scale and matrix transforms.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "applyRotations", V_17_18, "living_render_rotation", "LivingEntityRenderer#setupRotations", "rendering", "adapter_required", "Preserve death, sleeping, upside-down, riding and yaw/pitch rotation cases.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "renderModel", V_17_18, "living_render_model", "LivingEntityRenderer model rendering", "rendering", "adapter_required", "Preserve invisibility, alpha, hurt overlay and model part visibility.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "renderLayers", V_17_18, "living_render_layers", "LivingEntityRenderer#renderLayers", "rendering", "adapter_required", "Preserve layer ordering and layer-specific texture/model state.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "getMainModel", V_17_18, "living_main_model", "LivingEntityRenderer#getModel", "rendering", "automatic_rename_candidate", "Preserve renderer-owned model identity and mutable animation state.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "rotateCorpse", V_17_18, "living_death_rotation", "LivingEntityRenderer#setupRotations", "rendering", "adapter_required", "Preserve death rotation, sleeping orientation and special entity transforms.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "renderLeash", V_17_18, "living_leash_render", "Mob leash renderer", "rendering", "adapter_required", "Preserve leash endpoints, interpolated entity positions and rope segment shading.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+    d!("RenderLiving", "canRenderName", V_18, "living_name_visibility", "LivingEntityRenderer#shouldShowName", "rendering", "automatic_rename_candidate", "Preserve team and distance-based name visibility.", "net/minecraft/client/renderer/entity/RenderLiving.html"),
+
+    d!("LayerRenderer", "doRenderLayer", V_18, "entity_render_layer", "RenderLayer#render", "rendering", "adapter_required", "Preserve layer order, parent model transforms, texture state and per-entity visibility.", "net/minecraft/client/renderer/entity/layers/LayerRenderer.html"),
+    d!("LayerRenderer", "shouldCombineTextures", V_18, "entity_render_layer_combine_textures", "RenderLayer#shouldCombineTextures", "rendering", "automatic_rename_candidate", "Preserve whether this layer shares the base model's texture/overlay state.", "net/minecraft/client/renderer/entity/layers/LayerRenderer.html"),
+
+    d!("TileEntitySpecialRenderer", "getRenderBoundingBox", V_112, "tile_entity_render_bounds", "BlockEntityRenderer#getRenderBoundingBox", "rendering", "automatic_rename_candidate", "Preserve custom expanded bounds used for multiblock and animated tile renderers.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "getDistanceSq", V_17_18, "tile_entity_render_distance", "BlockEntityRenderer render-distance test", "rendering", "automatic_rename_candidate", "Preserve squared camera-to-tile distance and custom maximum render distance.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+    d!("TileEntitySpecialRenderer", "setRendererDispatcher", V_17_18, "tile_entity_renderer_dispatcher", "BlockEntityRenderDispatcher registration", "rendering", "adapter_required", "Preserve renderer dispatcher lifecycle and world/client references.", "net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.html"),
+
+    d!("IIconRegister", "registerIcon", V_17_18, "legacy_icon_register", "TextureAtlas#register / resource sprite registration", "rendering", "resource_adapter_required", "Preserve resource namespace, path normalization, missing-texture fallback and atlas stitching.", "net/minecraft/client/renderer/texture/IIconRegister.html"),
+
+    d!("IIcon", "getMinU", V_17_18, "legacy_icon_min_u", "TextureAtlasSprite#getU0", "rendering", "automatic_rename_candidate", "Preserve atlas-space U minimum and interpolation.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getMaxU", V_17_18, "legacy_icon_max_u", "TextureAtlasSprite#getU1", "rendering", "automatic_rename_candidate", "Preserve atlas-space U maximum.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getMinV", V_17_18, "legacy_icon_min_v", "TextureAtlasSprite#getV0", "rendering", "automatic_rename_candidate", "Preserve atlas-space V minimum.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getMaxV", V_17_18, "legacy_icon_max_v", "TextureAtlasSprite#getV1", "rendering", "automatic_rename_candidate", "Preserve atlas-space V maximum.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getIconName", V_17_18, "legacy_icon_name", "ResourceLocation sprite key", "rendering", "automatic_rename_candidate", "Preserve full namespaced texture resource path.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getIconWidth", V_17_18, "legacy_icon_width", "TextureAtlasSprite#getWidth", "rendering", "automatic_rename_candidate", "Preserve sprite pixel width independently from atlas dimensions.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getIconHeight", V_17_18, "legacy_icon_height", "TextureAtlasSprite#getHeight", "rendering", "automatic_rename_candidate", "Preserve sprite pixel height independently from atlas dimensions.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getInterpolatedU", V_17_18, "legacy_icon_interpolated_u", "TextureAtlasSprite#getU", "rendering", "adapter_required", "Preserve legacy 0-16 UV interpolation semantics.", "net/minecraft/util/IIcon.html"),
+    d!("IIcon", "getInterpolatedV", V_17_18, "legacy_icon_interpolated_v", "TextureAtlasSprite#getV", "rendering", "adapter_required", "Preserve legacy 0-16 UV interpolation semantics.", "net/minecraft/util/IIcon.html"),
+
+    d!("IItemRenderer", "handleRenderType", V_17_18, "forge_item_renderer_type", "Item model predicate / item render dispatch", "rendering", "adapter_required", "Preserve item stack and render context distinctions for entity, equipped, first-person and inventory views.", "net/minecraftforge/client/IItemRenderer.html"),
+    d!("IItemRenderer", "shouldUseRenderHelper", V_17_18, "forge_item_render_helper", "Item model transformation / render context", "rendering", "adapter_required", "Preserve helper-dependent transformations such as block, entity, armor and 3D inventory transforms.", "net/minecraftforge/client/IItemRenderer.html"),
+    d!("IItemRenderer", "renderItem", V_17_18, "forge_item_render_callback", "Item model renderer / ItemRenderer#render", "rendering", "adapter_required", "Preserve render type, helper, stack, entity, texture/GL state and transform ordering.", "net/minecraftforge/client/IItemRenderer.html"),
+
+    d!("ISimpleBlockRenderingHandler", "renderWorldBlock", V_17_18, "forge_block_render_world", "BlockRenderDispatcher / baked model rendering", "rendering", "adapter_required", "Preserve world, position, block state, render pass and tessellator/buffer state.", "net/minecraftforge/client/ISimpleBlockRenderingHandler.html"),
+    d!("ISimpleBlockRenderingHandler", "renderInventoryBlock", V_17_18, "forge_block_render_inventory", "BlockEntityWithoutLevelRenderer / item model rendering", "rendering", "adapter_required", "Preserve inventory transform, metadata and block render ID.", "net/minecraftforge/client/ISimpleBlockRenderingHandler.html"),
+    d!("ISimpleBlockRenderingHandler", "shouldRender3DInInventory", V_17_18, "forge_block_inventory_3d", "Block model display context", "rendering", "automatic_rename_candidate", "Preserve whether inventory rendering uses a 3D representation.", "net/minecraftforge/client/ISimpleBlockRenderingHandler.html"),
+    d!("ISimpleBlockRenderingHandler", "getRenderId", V_17_18, "forge_block_render_id", "Block model/render type registration", "rendering", "adapter_required", "Preserve custom render ID mapping and registry order.", "net/minecraftforge/client/ISimpleBlockRenderingHandler.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7807,6 +7853,27 @@ mod tests {
         assert!(has(&v18,"ICommand","getCommandAliases"));
         assert!(has(&v112,"ICommand","getTabCompletions"));
         assert!(has(&v112,"CommandHandler","getCommand"));
+    }
+
+
+    #[test]
+    fn model_and_renderer_dictionary_preserves_geometry_uv_and_render_order() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["render","setModelAttributes"] {assert!(has(version,"ModelBase",method));}
+            for method in ["addBox","setRotationPoint","render","setTextureSize","setTextureOffset"] {assert!(has(version,"ModelRenderer",method));}
+            for method in ["doRender","shouldRender"] {assert!(has(version,"Render",method));}
+            assert!(has(version,"TileEntitySpecialRenderer","renderTileEntityAt") || has(version,"TileEntitySpecialRenderer","render"));
+        }
+        assert!(has(&v17,"IIconRegister","registerIcon"));
+        assert!(has(&v18,"IIcon","getInterpolatedU"));
+        assert!(has(&v18,"IItemRenderer","renderItem"));
+        assert!(has(&v18,"ISimpleBlockRenderingHandler","renderWorldBlock"));
+        assert!(has(&v112,"LayerRenderer","doRenderLayer"));
+        assert!(has(&v112,"RenderLiving","renderLayers"));
     }
 
     #[test]
