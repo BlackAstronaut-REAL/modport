@@ -507,17 +507,22 @@ pub fn generate_neoforge_entity_model_sources(
     if let Some(animation) = generated_animation.as_ref() {
         let animation_class = format!("{class_name}Animation");
         for record in &animation.records {
+            let lower = record.source_name.to_ascii_lowercase();
             if record.walking {
                 animation_calls.push_str(&format!(
                     "\t\tif (limbSwingAmount > 0.0001F) KeyframeAnimations.animate(this, {animation_class}.{field}, (long) (limbSwing * 50.0F), limbSwingAmount, new Vector3f());\n",
                     field = record.field
                 ));
-            } else {
+            } else if ["idle", "stand", "rest", "hover", "fly", "swim", "flap"].iter()
+                .any(|marker| lower.contains(marker)) {
                 animation_calls.push_str(&format!(
                     "\t\tKeyframeAnimations.animate(this, {animation_class}.{field}, (long) (ageInTicks * 50.0F), 1.0F, new Vector3f());\n",
                     field = record.field
                 ));
             }
+            // One-shot clips (attack, hurt, death, interact, etc.) are still
+            // emitted as AnimationDefinitions, but are intentionally not
+            // auto-played continuously. They need an entity-state trigger.
         }
     }
     let old_setup = format!(
@@ -557,6 +562,12 @@ import org.joml.Vector3f;
         1,
     );
     source = format!("{imports}{source}");
+    if generated_animation.is_some() {
+        source = source.replace(
+            "import net.minecraft.world.entity.Entity;\n",
+            &format!("import net.minecraft.world.entity.Entity;\nimport {package}.client.model.animation.*;\n"),
+        );
+    }
 
     let animation_source = generated_animation.as_ref().map(|animation| {
         let animation_imports = format!(r#"package {package}.client.model.animation;
@@ -776,12 +787,34 @@ mod tests {
         assert!(generated.source.contains("ModelPart::resetPose"));
         assert!(generated.source.contains("KeyframeAnimations.animate(this, ConvertedWingModelAnimation."));
         assert!(generated.source.contains("(long) (limbSwing * 50.0F)"));
+        assert!(generated.source.contains("import demo.client.model.animation.*;"));
         let animation = generated.animation_source.expect("animation class should be generated");
         assert!(animation.contains("package demo.client.model.animation;"));
         assert!(animation.contains("public class ConvertedWingModelAnimation"));
         assert_eq!(generated.animation_records.len(), 1);
         assert_eq!(generated.part_count, 2);
         assert_eq!(generated.cube_count, 2);
+    }
+
+    #[test]
+    fn emits_one_shot_animation_definitions_without_autoplaying_them() {
+        let mut model = model();
+        model.blockbench_animations.push(json!({
+            "name":"animation.model.attack",
+            "loop":false,
+            "length":0.35,
+            "animators":{"bone1":{"name":"wing","type":"bone","keyframes":[
+                {"channel":"rotation","time":0.0,"data_points":[{"x":0.0,"y":0.0,"z":0.0}]},
+                {"channel":"rotation","time":0.35,"data_points":[{"x":35.0,"y":0.0,"z":0.0}]}
+            ]}}
+        }));
+        let generated = generate_neoforge_entity_model_sources(
+            &model, "ConvertedWingModel", "demo_mod", "demo"
+        ).unwrap();
+        assert_eq!(generated.animation_records.len(), 2);
+        assert!(generated.animation_source.unwrap().contains("ConvertedWingModelAttack"));
+        assert!(!generated.source.contains("ConvertedWingModelAnimation.ConvertedWingModelAttack"));
+        assert!(generated.source.contains("ConvertedWingModelAnimation.ConvertedWingModelWalk"));
     }
 
     #[test]
