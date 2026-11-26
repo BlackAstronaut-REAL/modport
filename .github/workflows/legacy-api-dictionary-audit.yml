@@ -1,0 +1,55 @@
+name: Legacy API dictionary audit
+
+on:
+  push:
+    branches:
+      - rust-rewrite
+    paths:
+      - rust/src/legacy_api_dictionary.rs
+      - rust/examples/dump_legacy_api_dictionary.rs
+      - tools/audit_legacy_api_dictionary.py
+      - .github/workflows/legacy-api-dictionary-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test JavaDoc index parser
+        run: python tools/audit_legacy_api_dictionary.py --self-test
+      - name: Audit the three legacy dictionaries
+        run: >-
+          python tools/audit_legacy_api_dictionary.py
+          --write-markdown build/reports/LEGACY_API_DICTIONARY_AUDIT.md
+          --write-json build/reports/legacy-api-dictionary-audit.json
+          --write-scope-suggestions build/reports/legacy-api-dictionary-scope-recommendations.json
+      - name: Publish audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-api-dictionary-audit
+          path: build/reports/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Print audit report
+        if: always()
+        run: |
+          if [ -f build/reports/LEGACY_API_DICTIONARY_AUDIT.md ]; then
+            cat build/reports/LEGACY_API_DICTIONARY_AUDIT.md
+          fi
+          if [ -f build/reports/legacy-api-dictionary-scope-recommendations.json ]; then
+            echo "SCOPE_RECOMMENDATIONS_JSON_BEGIN"
+            cat build/reports/legacy-api-dictionary-scope-recommendations.json
+            echo "SCOPE_RECOMMENDATIONS_JSON_END"
+          fi

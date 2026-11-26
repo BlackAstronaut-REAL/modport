@@ -1,0 +1,45 @@
+name: Rust engine checks
+
+on:
+  push:
+    branches: [rust-rewrite]
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-check.yml"
+  pull_request:
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-check.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+      - name: Format engine and desktop
+        run: |
+          cargo fmt --manifest-path rust/Cargo.toml --all
+          cargo fmt --manifest-path rust/desktop/Cargo.toml --all
+      - name: Test engine
+        run: cargo test --manifest-path rust/Cargo.toml --all-targets
+      - name: Test desktop
+        run: cargo test --manifest-path rust/desktop/Cargo.toml
+      - name: Build CLI
+        run: cargo build --release --manifest-path rust/Cargo.toml
+      - name: Build desktop executable
+        run: cargo build --release --manifest-path rust/desktop/Cargo.toml
+      - name: Upload executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: MojModelBridge-Rust-Windows-x64
+          path: |
+            rust/target/release/mojmodelbridge.exe
+            rust/desktop/target/release/mojmodelbridge-desktop.exe
+          if-no-files-found: error

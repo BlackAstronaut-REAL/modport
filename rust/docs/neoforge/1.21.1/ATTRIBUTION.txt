@@ -1,0 +1,10 @@
+NeoForge documentation corpus
+
+Local snapshot of the NeoForge documentation for Minecraft 1.21.1.
+Source repository: https://github.com/BlackAstronaut-REAL/docs
+Source path: versioned_docs/version-1.21.1
+Source commit: a0b6ed89a964fc9826102c8098bfd22367b40dfc
+Contents: 63 Markdown pages and 15 category metadata files.
+The original hierarchy is preserved. Per-page provenance is in manifest.json.
+The copied documentation is distributed under the MIT license supplied by the source repository.
+See LICENSE.
