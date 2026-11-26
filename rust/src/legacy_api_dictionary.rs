@@ -3181,6 +3181,50 @@ const DEFINITIONS: &[Definition] = &[
 
 
 
+    d!("Configuration", "getDouble", V_ALL, "config_double_read", "ForgeConfigSpec.DoubleValue#get", "configuration", "adapter_required", "Preserve double precision, bounds and default behavior.", "net/minecraftforge/common/config/Configuration.html"),
+    d!("Configuration", "getIntList", V_ALL, "config_integer_list_read", "ForgeConfigSpec.ConfigValue<List<Integer>>", "configuration", "adapter_required", "Preserve list ordering, range validation and invalid element fallback.", "net/minecraftforge/common/config/Configuration.html"),
+    d!("Configuration", "getChangedConfigFile", V_18, "config_changed_file", "ModConfig file path", "configuration", "automatic_rename_candidate", "Preserve the exact file associated with the loaded configuration.", "net/minecraftforge/common/config/Configuration.html"),
+
+
+
+    d!("ICommand", "getCommandAliases", V_17_18, "command_legacy_aliases", "Command#getAliases", "commands", "adapter_required", "Preserve alias order and conflicts.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "getRequiredPermissionLevel", V_112, "command_permission_level", "Command#getPermission", "commands", "automatic_rename_candidate", "Preserve required permission integer.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "isUsernameIndex", V_17_18, "command_username_argument_index", "Command#isUsernameIndex", "commands", "automatic_rename_candidate", "Preserve argument indexes that receive player-name tab completion.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "compareTo", V_ALL, "command_ordering", "Command ordering / command manager", "commands", "automatic_rename_candidate", "Preserve registration ordering and command-name comparison semantics.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "checkPermission", V_112, "command_check_permission", "Command#checkPermission", "commands", "automatic_rename_candidate", "Preserve server permission and source-specific checks.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "getTabCompletions", V_112, "command_tab_completion", "Command#suggest", "commands", "adapter_required", "Preserve argument position, cursor position, source and suggestion ordering.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "getName", V_112, "command_name", "Command#getName", "commands", "automatic_rename_candidate", "Preserve literal command name.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "getUsage", V_112, "command_usage", "Command#getUsage", "commands", "automatic_rename_candidate", "Preserve usage translation key.", "net/minecraft/command/ICommand.html"),
+    d!("ICommand", "getAliases", V_112, "command_aliases", "Command#getAliases", "commands", "automatic_rename_candidate", "Preserve alias ordering and duplicate behavior.", "net/minecraft/command/ICommand.html"),
+
+    d!("CommandBase", "parseInt", V_ALL, "command_parse_integer", "IntegerArgumentType / command argument parsing", "commands", "adapter_required", "Preserve min/max validation and exact invalid-token exception behavior.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "parseDouble", V_ALL, "command_parse_double", "DoubleArgumentType / command argument parsing", "commands", "adapter_required", "Preserve finite-value checks, bounds and decimal parsing.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "parseBoolean", V_17_18, "command_parse_boolean", "BoolArgumentType / command argument parsing", "commands", "adapter_required", "Preserve accepted legacy boolean literals and exception behavior.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "parseBlockPos", V_ALL, "command_parse_block_pos", "BlockPosArgument / coordinate parsing", "commands", "adapter_required", "Preserve relative coordinates, source position and world-border checks.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "parseCoordinate", V_17_18, "command_parse_coordinate", "CoordinateArgument / relative coordinate parsing", "commands", "adapter_required", "Preserve relative marker, centering and coordinate base.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getPlayer", V_ALL, "command_get_player", "EntityArgument#getPlayer", "commands", "adapter_required", "Preserve player name/selector resolution and not-found exception.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getEntity", V_18, "command_get_entity", "EntityArgument#getEntity", "commands", "adapter_required", "Preserve selector expansion and single-entity enforcement.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getItemByText", V_17_18, "command_get_item", "ItemArgument / item registry lookup", "commands", "adapter_required", "Preserve registry name, metadata and invalid item errors.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getBlockByText", V_17_18, "command_get_block", "BlockStateArgument / block registry lookup", "commands", "adapter_required", "Preserve block registry resolution and metadata/property parsing.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getTabCompletionCoordinate", V_17_18, "command_coordinate_completion", "CoordinateArgument suggestions", "commands", "adapter_required", "Preserve coordinate completion based on sender position and relative input.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "notifyCommandListener", V_ALL, "command_notify_listener", "CommandSourceStack#sendSuccess", "commands", "adapter_required", "Preserve translation key, argument formatting and broadcast-to-ops flag.", "net/minecraft/command/CommandBase.html"),
+    d!("CommandBase", "getCommandSenderAsPlayer", V_17_18, "command_sender_as_player", "CommandSourceStack#getPlayerOrException", "commands", "adapter_required", "Preserve player-only validation and error message.", "net/minecraft/command/CommandBase.html"),
+
+    d!("CommandHandler", "registerCommand", V_ALL, "command_register", "Commands#register / command dispatcher registration", "commands", "registration_adapter_required", "Preserve command name, aliases, permission checks and conflict replacement policy.", "net/minecraft/command/CommandHandler.html"),
+    d!("CommandHandler", "executeCommand", V_17_18, "command_execute_dispatch", "Commands#performCommand", "commands", "adapter_required", "Preserve raw input, sender, exception handling and permission checks.", "net/minecraft/command/CommandHandler.html"),
+    d!("CommandHandler", "getPossibleCommands", V_17_18, "command_completion_candidates", "CommandDispatcher#parse / suggestions", "commands", "adapter_required", "Preserve prefix filtering, sender permissions and command aliases.", "net/minecraft/command/CommandHandler.html"),
+    d!("CommandHandler", "getCommands", V_17_18, "command_registry_list", "CommandDispatcher root children", "commands", "adapter_required", "Preserve command registration order and alias visibility.", "net/minecraft/command/CommandHandler.html"),
+    d!("CommandHandler", "getCommand", V_112, "command_lookup", "CommandDispatcher#getRoot / command lookup", "commands", "automatic_rename_candidate", "Preserve name/alias lookup and missing-command behavior.", "net/minecraft/command/CommandHandler.html"),
+
+    d!("ICommandSender", "getDisplayName", V_ALL, "command_sender_display_name", "CommandSourceStack#getDisplayName", "commands", "adapter_required", "Preserve formatted chat component rather than reducing it to plain text.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "getPosition", V_ALL, "command_sender_block_position", "CommandSourceStack#getPosition", "commands", "automatic_rename_candidate", "Preserve integer source block position and dimension context.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "getPositionVector", V_17_18, "command_sender_vector_position", "CommandSourceStack#getPosition", "commands", "automatic_rename_candidate", "Preserve double-precision source coordinates.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "getCommandSenderEntity", V_ALL, "command_sender_entity", "CommandSourceStack#getEntity", "commands", "automatic_rename_candidate", "Preserve optional backing entity and console/command-block sender distinction.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "sendMessage", V_ALL, "command_sender_send_message", "CommandSourceStack#sendSuccess / sendFailure", "commands", "adapter_required", "Preserve chat component formatting, command feedback gamerule and broadcast semantics.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "canCommandSenderUseCommand", V_17_18, "command_sender_permission", "CommandSourceStack#hasPermission", "commands", "adapter_required", "Preserve permission level and sender-specific policy.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "getServer", V_ALL, "command_sender_server", "CommandSourceStack#getServer", "commands", "automatic_rename_candidate", "Preserve server reference and null/client context behavior.", "net/minecraft/command/ICommandSender.html"),
+    d!("ICommandSender", "getCommandStats", V_17_18, "command_sender_stats", "CommandResultStats / command result tracking", "commands", "adapter_required", "Preserve success-count and affected-entity/block/item statistics.", "net/minecraft/command/ICommandSender.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7728,6 +7772,41 @@ mod tests {
         assert!(has(&v112,"Ingredient","apply"));
         assert!(has(&v112,"OreIngredient","getMatchingStacks"));
         assert!(has(&v18,"RecipeSorter","register"));
+    }
+
+
+    #[test]
+    fn configuration_dictionary_preserves_defaults_validation_and_restart_flags() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["load","save","get","getCategory","hasCategory","getBoolean","getInt","getFloat","getDouble","getString","hasChanged"] {
+                assert!(has(version,"Configuration",method),"missing Configuration#{method}");
+            }
+            for method in ["getString","getBoolean","getInt","getDouble","getType","isDefault","getName","getComment","set","setToDefault"] {
+                assert!(has(version,"Property",method),"missing Property#{method}");
+            }
+        }
+        assert!(has(&v112,"Configuration","getChangedConfigFile"));
+    }
+
+    #[test]
+    fn command_dictionary_preserves_execution_permission_and_suggestions() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["registerCommand"] {assert!(has(version,"CommandHandler",method));}
+            for method in ["getName","getDisplayName","getPosition","getCommandSenderEntity","sendMessage","getServer"] {assert!(has(version,"ICommandSender",method));}
+            for method in ["parseInt","parseDouble","parseBlockPos","getPlayer","notifyCommandListener"] {assert!(has(version,"CommandBase",method));}
+        }
+        assert!(has(&v17,"ICommand","processCommand"));
+        assert!(has(&v18,"ICommand","getCommandAliases"));
+        assert!(has(&v112,"ICommand","getTabCompletions"));
+        assert!(has(&v112,"CommandHandler","getCommand"));
     }
 
     #[test]
