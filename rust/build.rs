@@ -43,7 +43,7 @@ fn main() {
     for (relative, absolute) in &files {
         let content = fs::read_to_string(absolute)
             .unwrap_or_else(|error| panic!("Read {}: {error}", absolute.display()));
-        let relative = relative.to_string_lossy().replace('\\\\', "/");
+        let relative = relative.to_string_lossy().replace('\\', "/");
         source.push_str(&format!("    ({relative:?}, {content:?}),\n"));
         println!("cargo:rerun-if-changed={}", absolute.display());
     }
