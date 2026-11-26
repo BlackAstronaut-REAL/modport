@@ -183,11 +183,11 @@ def audit_version(
     # Keep the full JavaDoc class-page path in the coverage key. Class simple
     # names are not globally unique (for example client/server or Forge/Minecraft
     # packages), so collapsing them can falsely inflate the coverage percentage.
-    docs_by_owner: dict[str, list[str]] = defaultdict(list)
+    docs_by_owner: dict[str, set[str]] = defaultdict(set)
     methods_by_page: dict[str, set[str]] = defaultdict(set)
     for page, method in documented:
         methods_by_page[page].add(method)
-        docs_by_owner[Path(page).stem].append(page)
+        docs_by_owner[Path(page).stem].add(page)
 
     duplicate_counter: Counter[tuple[str, str]] = Counter()
     mapped_pages: set[tuple[str, str]] = set()
