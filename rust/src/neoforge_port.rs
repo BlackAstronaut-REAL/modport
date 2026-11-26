@@ -150,6 +150,7 @@ pub struct NeoForgePortReport {
     pub block_entities: Vec<NativeBlockEntityPlan>,
     pub entities: Vec<NativeEntityPlan>,
     pub armor_sets: Vec<NativeArmorPlan>,
+    pub creative_tabs: BTreeMap<String, Vec<String>>,
     pub projectiles: Vec<String>,
     pub native_projectiles: Vec<NativeProjectilePlan>,
     pub resource_files_copied: usize,
@@ -726,6 +727,9 @@ pub fn port_to_neoforge(
         block_entities: native_block_entities,
         entities,
         armor_sets,
+        creative_tabs: creative_tab_assignments.iter()
+            .map(|(tab, fields)| (tab.clone(), fields.iter().cloned().collect()))
+            .collect(),
         projectiles,
         native_projectiles,
         resource_files_copied,
@@ -774,6 +778,8 @@ pub fn port_to_neoforge(
             "block_entity_placeholders": report.block_entities.iter().filter(|entity| !entity.associated_blocks.is_empty()).count(),
             "armor_sets": report.armor_sets.len(),
             "armor_pieces": report.armor_sets.iter().map(|armor| armor.registry_names.len()).sum::<usize>(),
+            "creative_tab_groups": report.creative_tabs.len(),
+            "creative_tab_items": report.creative_tabs.values().map(Vec::len).sum::<usize>(),
             "entity_placeholders": report.entities.len(),
             "throwable_projectiles": report.native_projectiles.len(),
             "recipes": report.native_recipes.generated.len(),
@@ -789,6 +795,7 @@ pub fn port_to_neoforge(
             "custom_projectile_impact_logic": report.native_projectiles.len(),
             "non_throwable_projectile_families": report.projectiles.len().saturating_sub(report.native_projectiles.len())
         },
+        "creative_tabs": report.creative_tabs,
         "documentation_domains": report.detected_domains,
         "notes": [
             "Registered simple items and blocks are emitted as native NeoForge registrations.",
