@@ -29,12 +29,14 @@ Or run it through Cargo:
 cargo run --release --manifest-path rust/Cargo.toml -- port-neoforge output/converted path/to/legacy-mod.jar
 ```
 
-The generated project contains Gradle files, a NeoForge `@Mod` entrypoint, Java content registries, resources, and reports at `modport/port-analysis.json` and `modport/port-status.json`. Build it with Java 21 and Gradle:
+The generated project contains Gradle files and launchers (`gradlew.bat` on Windows, `gradlew` on Linux/macOS), a NeoForge `@Mod` entrypoint, Java content registries, resources, creative-tab assignments, and reports at `modport/port-analysis.json` and `modport/port-status.json`. Build it with Java 21:
 
 ```powershell
 cd output/converted
-gradle build
+.\gradlew.bat build
 ```
+
+The launcher downloads Gradle 9.2.1 into the user cache on its first run; no separate Gradle installation is required.
 
 ## Current conversion limits
 
