@@ -3069,6 +3069,75 @@ const DEFINITIONS: &[Definition] = &[
     d!("ModifiableAttributeInstance", "setBaseValue", V_ALL, "attribute_base_value_write", "AttributeInstance#setBaseValue", "attributes", "automatic_rename_candidate", "Preserve base value update and dirty synchronization.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
     d!("ModifiableAttributeInstance", "getAttributeModifiers", V_17_18, "attribute_modifiers_by_operation", "AttributeInstance#getModifiers", "attributes", "adapter_required", "Preserve operation-specific modifier grouping.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
 
+    d!("MapGenBase", "generate", V_ALL, "mapgen_generate", "MapGenBase#generate / ChunkGenerator structure pass", "world_generation", "adapter_required", "Preserve world, Random state and chunk X/Z traversal order.", "net/minecraft/world/gen/MapGenBase.html"),
+    d!("MapGenBase", "recursiveGenerate", V_ALL, "mapgen_recursive_generate", "MapGenBase#recursiveGenerate / structure candidate traversal", "world_generation", "adapter_required", "Preserve origin chunk, target chunk and seeded Random state for deterministic generation.", "net/minecraft/world/gen/MapGenBase.html"),
+    d!("MapGenBase", "range", V_ALL, "mapgen_search_range", "MapGenBase generation radius", "world_generation", "automatic_rename_candidate", "Preserve chunk search radius and generation bounds.", "net/minecraft/world/gen/MapGenBase.html"),
+    d!("MapGenBase", "func_151538_a", V_17_18, "mapgen_legacy_recursive_generate_srg", "MapGenBase#recursiveGenerate", "world_generation", "signature_adapter_required", "Legacy SRG alias for recursive generation; preserve its exact world/chunk coordinates and random state.", "net/minecraft/world/gen/MapGenBase.html"),
+
+    d!("MapGenStructure", "generate", V_ALL, "structure_mapgen_generate", "Structure placement / StructureManager", "structures", "adapter_required", "Preserve structure start creation, chunk traversal and deterministic placement.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "recursiveGenerate", V_ALL, "structure_mapgen_recursive_generate", "StructureManager structure placement", "structures", "adapter_required", "Preserve per-chunk structure start lookup and random seed.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "getStructureStart", V_17_18, "structure_start_lookup", "StructureManager#getStructureAt / structure starts", "structures", "adapter_required", "Preserve origin ChunkPos and legacy structure start index.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "getStructureAt", V_112, "structure_start_lookup_pos", "StructureManager#getStructureAt", "structures", "automatic_rename_candidate", "Preserve target BlockPos and structure start identity.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "isInsideStructure", V_17_18, "structure_inside_predicate", "StructureManager#hasAnyStructureAt", "structures", "adapter_required", "Preserve structure-specific inclusion tests separate from bounding-box containment.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "isPositionInStructure", V_112, "structure_position_predicate", "StructureManager#hasAnyStructureAt", "structures", "automatic_rename_candidate", "Preserve modern BlockPos lookup and structure registry identity.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "getClosestStrongholdPos", V_ALL, "structure_closest_location", "ChunkGenerator#findNearestMapStructure", "structures", "adapter_required", "Preserve origin coordinates, structure type and maximum search behavior.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "getCoordList", V_17_18, "structure_legacy_coordinate_list", "StructureManager structure start index", "structures", "adapter_required", "Preserve structure origin ordering and coordinate list mutation semantics.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "getStructureName", V_ALL, "structure_name", "StructureType registry key / structure name", "structures", "automatic_rename_candidate", "Preserve stable structure identifier independent from localized display name.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+    d!("MapGenStructure", "canSpawnStructureAtCoords", V_17_18, "structure_spawn_chunk_predicate", "Structure placement predicate / ChunkGenerator", "structures", "adapter_required", "Preserve chunk coordinates, world seed and spacing/separation algorithm.", "net/minecraft/world/gen/structure/MapGenStructure.html"),
+
+    d!("StructureStart", "generateStructure", V_ALL, "structure_start_generate", "StructureStart#placeInChunk / structure placement", "structures", "adapter_required", "Preserve component iteration order, clipping box, random seed and placement side effects.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "isSizeableStructure", V_ALL, "structure_start_size_predicate", "StructureStart validity / structure size validation", "structures", "automatic_rename_candidate", "Preserve minimum component/size validation before a structure is indexed.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "getComponents", V_ALL, "structure_start_components", "StructureStart piece list", "structures", "adapter_required", "Preserve piece ordering and component identity for multiblock structures.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "getBoundingBox", V_ALL, "structure_start_bounds", "StructureStart bounding box", "structures", "automatic_rename_candidate", "Preserve aggregate bounds after all child components are added.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "updateBoundingBox", V_ALL, "structure_start_recalculate_bounds", "StructureStart bounding box recalculation", "structures", "adapter_required", "Preserve piece expansion and vertical offset calculations.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "notifyPostProcessAt", V_112, "structure_start_post_process", "StructureManager post-processing marker", "structures", "adapter_required", "Preserve chunk-specific post-process notification and duplicate prevention.", "net/minecraft/world/gen/structure/StructureStart.html"),
+    d!("StructureStart", "writeStructureComponentsToNBT", V_17_18, "structure_start_nbt_write", "StructureStart#save", "persistence", "adapter_required", "Preserve start ID, chunk origin and each child component NBT payload.", "net/minecraft/world/gen/structure/StructureStart.html"),
+
+    d!("StructureComponent", "addComponentParts", V_ALL, "structure_component_place", "StructurePiece#postProcess", "structures", "adapter_required", "Preserve World, Random, chunk clip box and component placement result.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "buildComponent", V_ALL, "structure_component_build", "StructurePiece#addChildren", "structures", "adapter_required", "Preserve parent component, structure manager and deterministic child-piece selection.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "offset", V_ALL, "structure_component_offset", "StructurePiece bounding-box offset", "structures", "automatic_rename_candidate", "Preserve XYZ offset applied to component bounds and subsequent block placement.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "fillWithBlocks", V_ALL, "structure_component_fill_blocks", "StructurePiece#generateBox", "structures", "adapter_required", "Preserve clip box, boundary/interior block states and metadata conversion.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "fillWithRandomizedBlocks", V_17_18, "structure_component_randomized_fill", "StructurePiece#generateMaybeBox", "structures", "adapter_required", "Preserve Random state and per-position replacement predicate.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "getXWithOffset", V_ALL, "structure_component_x_transform", "StructurePiece local-to-world coordinate transform", "structures", "automatic_rename_candidate", "Preserve component orientation and mirror/rotation mapping.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "getYWithOffset", V_ALL, "structure_component_y_transform", "StructurePiece local-to-world coordinate transform", "structures", "automatic_rename_candidate", "Preserve vertical origin and terrain offset.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "getZWithOffset", V_ALL, "structure_component_z_transform", "StructurePiece local-to-world coordinate transform", "structures", "automatic_rename_candidate", "Preserve component orientation and mirror/rotation mapping.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "getAverageGroundLevel", V_17_18, "structure_component_average_ground", "StructurePiece#moveBelowSeaLevel / terrain adaptation", "structures", "adapter_required", "Preserve component footprint and liquid/terrain sampling before vertical adjustment.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "generateChestContents", V_17_18, "structure_component_loot_chest", "LootTable / container loot generation", "structures", "adapter_required", "Preserve loot table identity, random seed, facing, slot count and one-time generation flag.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "generateDispenserContents", V_17_18, "structure_component_loot_dispenser", "LootTable / dispenser loot generation", "structures", "adapter_required", "Preserve loot table identity, random seed and one-time placement semantics.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "isLiquidInStructureBoundingBox", V_17_18, "structure_component_liquid_check", "StructurePiece liquid collision validation", "structures", "adapter_required", "Preserve clipped bounding volume and fluid material predicate.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "getBoundingBox", V_ALL, "structure_component_bounds", "StructurePiece#getBoundingBox", "structures", "automatic_rename_candidate", "Preserve component-local bounds and transformed world-space bounds.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+    d!("StructureComponent", "writeStructureToNBT", V_17_18, "structure_component_nbt_write", "StructurePiece#save", "persistence", "adapter_required", "Preserve component ID, orientation, bounding box and custom subclass data.", "net/minecraft/world/gen/structure/StructureComponent.html"),
+
+    d!("StructureBoundingBox", "intersectsWith", V_ALL, "structure_bounds_intersection", "BoundingBox#intersects", "structures", "automatic_rename_candidate", "Preserve inclusive min/max coordinate intersection semantics.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "isVecInside", V_17_18, "structure_bounds_contains", "BoundingBox#isInside", "structures", "automatic_rename_candidate", "Preserve inclusive coordinate containment.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "offset", V_ALL, "structure_bounds_offset", "BoundingBox#move", "structures", "automatic_rename_candidate", "Preserve all six min/max coordinate changes.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "expandTo", V_17_18, "structure_bounds_expand", "BoundingBox#encapsulate", "structures", "automatic_rename_candidate", "Preserve component-wise min/max expansion.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "getXSize", V_ALL, "structure_bounds_x_size", "BoundingBox#getXSpan", "structures", "automatic_rename_candidate", "Preserve inclusive width calculation.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "getYSize", V_ALL, "structure_bounds_y_size", "BoundingBox#getYSpan", "structures", "automatic_rename_candidate", "Preserve inclusive height calculation.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "getZSize", V_ALL, "structure_bounds_z_size", "BoundingBox#getZSpan", "structures", "automatic_rename_candidate", "Preserve inclusive depth calculation.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+    d!("StructureBoundingBox", "getCenter", V_18, "structure_bounds_center", "BoundingBox center calculation", "structures", "automatic_rename_candidate", "Preserve integer center rounding and coordinate overflow behavior.", "net/minecraft/world/gen/structure/StructureBoundingBox.html"),
+
+    d!("BiomeDecorator", "decorate", V_ALL, "biome_decorator_run", "Biome#generate / biome feature decoration", "world_generation", "adapter_required", "Preserve random stream, chunk origin, feature order, Forge decoration stages and cancellation.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateOres", V_ALL, "biome_decorator_ores", "Configured ore features / feature placement", "world_generation", "adapter_required", "Preserve ore generator order, attempt count, height distribution and Random consumption.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateTrees", V_ALL, "biome_decorator_trees", "Configured tree features", "world_generation", "adapter_required", "Preserve tree feature weights, random selection and per-biome overrides.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateGrass", V_ALL, "biome_decorator_grass", "Configured vegetation features", "world_generation", "adapter_required", "Preserve grass feature count and placement distribution.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateFlowers", V_ALL, "biome_decorator_flowers", "Configured flower features", "world_generation", "adapter_required", "Preserve flower selection and random placement ordering.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateBigMushrooms", V_ALL, "biome_decorator_big_mushrooms", "Configured mushroom features", "world_generation", "adapter_required", "Preserve mushroom attempts and placement algorithm.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateCacti", V_ALL, "biome_decorator_cacti", "Configured cactus feature", "world_generation", "adapter_required", "Preserve cacti count, random attempts and placement conditions.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateWater", V_17_18, "biome_decorator_water_springs", "Configured spring feature", "world_generation", "adapter_required", "Preserve water/lava spring placement counts and world-generation ordering.", "net/minecraft/world/biome/BiomeDecorator.html"),
+    d!("BiomeDecorator", "generateLakes", V_18, "biome_decorator_lakes", "Configured lake feature", "world_generation", "adapter_required", "Preserve lake attempt counts, liquid type and biome-specific gating.", "net/minecraft/world/biome/BiomeDecorator.html"),
+
+    d!("WorldGenAbstractTree", "setScale", V_17_18, "tree_generator_scale", "TreeFeature configuration / feature placement", "world_generation", "adapter_required", "Preserve horizontal/vertical scale parameters and their effect on generated geometry.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "isReplaceable", V_17_18, "tree_generator_replaceable", "TreeFeature#setDirtAt / replaceability predicate", "world_generation", "adapter_required", "Preserve block-specific replacement rules including leaves, plants, logs and modded blocks.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "setDirtAt", V_ALL, "tree_generator_soil_write", "TreeFeature soil placement", "world_generation", "adapter_required", "Preserve soil conversion and block update flags.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "setBlockAndNotifyAdequately", V_17_18, "tree_generator_block_write", "WorldGenLevel#setBlock", "world_generation", "adapter_required", "Preserve block state, update flags, neighbor updates and chunk clipping.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "placeLogAt", V_17_18, "tree_generator_log_placement", "TreeFeature trunk placement", "world_generation", "adapter_required", "Preserve log orientation axis and placement bounds.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+    d!("WorldGenAbstractTree", "placeLeavesAt", V_17_18, "tree_generator_leaves_placement", "TreeFeature foliage placement", "world_generation", "adapter_required", "Preserve leaf state, distance properties and decay flags.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
+
+    d!("WorldGenMinable", "generateOre", V_17_18, "ore_generator_vein", "OreFeature placement algorithm", "world_generation", "adapter_required", "Preserve random vein geometry, vein size and per-block replaceability.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
+    d!("WorldGenMinable", "isReplaceableOreGen", V_18, "ore_replaceability_predicate", "OreFeature target state predicate", "world_generation", "adapter_required", "Preserve target block state matching and ore generation target rule.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
+    d!("WorldGenMinable", "getOreBlock", V_112, "ore_generator_state", "OreFeature configured block state", "world_generation", "automatic_rename_candidate", "Preserve generated ore BlockState and metadata/property values.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7546,6 +7615,32 @@ mod tests {
             for method in ["registerAttribute","getAttributeInstance","getAllAttributes"] {assert!(has(version,"AttributeMap",method));}
             for method in ["applyModifier","removeModifier","removeAllModifiers","getModifier","getModifiers","getAttributeValue","getBaseValue","setBaseValue"] {assert!(has(version,"ModifiableAttributeInstance",method));}
         }
+    }
+
+
+    #[test]
+    fn structure_and_feature_generation_apis_preserve_worldgen_order() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for (owner,methods) in [
+                ("MapGenBase",&["generate","recursiveGenerate","range"][..]),
+                ("MapGenStructure",&["generate","recursiveGenerate","getClosestStrongholdPos","getStructureName","canSpawnStructureAtCoords"][..]),
+                ("StructureStart",&["generateStructure","isSizeableStructure","getComponents","getBoundingBox","updateBoundingBox"][..]),
+                ("StructureComponent",&["addComponentParts","buildComponent","offset","fillWithBlocks","getXWithOffset","getYWithOffset","getZWithOffset","getBoundingBox"][..]),
+                ("StructureBoundingBox",&["intersectsWith","offset","getXSize","getYSize","getZSize"][..]),
+                ("BiomeDecorator",&["decorate","generateOres","generateTrees","generateGrass","generateFlowers"][..]),
+                ("WorldGenAbstractTree",&["generate","setDirtAt"][..]),
+                ("WorldGenMinable",&["generate"][..])
+            ] {for method in methods {assert!(has(version,owner,method),"missing {owner}#{method}");}}
+        }
+        assert!(has(&v112,"MapGenStructure","getStructureAt"));
+        assert!(has(&v112,"MapGenStructure","isPositionInStructure"));
+        assert!(has(&v17,"MapGenStructure","getStructureStart"));
+        assert!(has(&v18,"StructureComponent","generateChestContents"));
+        assert!(has(&v112,"WorldGenMinable","getOreBlock"));
     }
 
     #[test]
