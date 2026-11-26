@@ -586,11 +586,15 @@ pub fn port_to_neoforge(
         waterloggable: block.properties.get("waterloggable").and_then(Value::as_bool).unwrap_or(false),
         has_gravity: block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false),
         recovered_properties: block.properties.clone(),
-        generated_as: match block.shape.as_str() {
-            "cross" => "native non-colliding plant Block + cross model".to_owned(),
-            "slab" => "native SlabBlock + slab state variants and models".to_owned(),
-            "stairs" => "native StairBlock + stair state variants and models".to_owned(),
-            _ => "native Block + BlockItem with recovered properties and datapack loot/tags".to_owned(),
+        generated_as: if block.class_name == "ResourceBlockstateFallback" {
+            "native Block + BlockItem inferred from source blockstate; properties defaulted".to_owned()
+        } else {
+            match block.shape.as_str() {
+                "cross" => "native non-colliding plant Block + cross model".to_owned(),
+                "slab" => "native SlabBlock + slab state variants and models".to_owned(),
+                "stairs" => "native StairBlock + stair state variants and models".to_owned(),
+                _ => "native Block + BlockItem with recovered properties and datapack loot/tags".to_owned(),
+            }
         },
         warnings: block.warnings.clone(),
     }).collect();
@@ -1522,6 +1526,9 @@ fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<Bl
         });
         if plant_like {
             block_warnings.push("Plant-like source detected; a cross-model and non-collision fallback is emitted, but growth and special placement behavior remain pending.".to_owned());
+        }
+        if source.class_name == "ResourceBlockstateFallback" {
+            block_warnings.push("Only a source blockstate resource was found; a basic Block and BlockItem were synthesized. Original constructor properties, loot behavior, interactions, and special state logic were unavailable.".to_owned());
         }
         let id = normalized_id(&source.registry_name);
         if id.is_empty() {
