@@ -1,6 +1,6 @@
 # MojModelBridge Native Desktop
 
-This is the standalone Rust desktop application. It depends on the shared mojmodelbridge library and does not load or launch oldVer/.
+This is the standalone Rust desktop application. It depends on the shared mojmodelbridge library and runs without a Python engine.
 
 ## Build and run
 
@@ -19,6 +19,8 @@ cargo build --release --manifest-path rust/desktop/Cargo.toml
 The desktop executable is written to rust/desktop/target/release/mojmodelbridge-desktop.exe on Windows.
 
 ## Current desktop prototype
+
+The desktop app is currently a project browser and model/animation preview. The navigation entries for Porter and Build & Test are placeholders; actual NeoForge conversion and generated-mod compilation are currently exposed through the Rust CLI documented in the repository root README.
 
 - Persistent far-left navigation rail with a collapse control.
 - Content browser with mobs, registered blocks, weapons, tools, armor, items, food, and standalone models.
@@ -46,7 +48,7 @@ The desktop executable is written to rust/desktop/target/release/mojmodelbridge-
 
 The first browser scan accepts an extracted project/mod directory. Raw JAR/ZIP browser indexing is still in progress. Registered resource entries are preferred, but unrecognized/orphan assets remain incomplete; the browser is not yet a universal registry browser for every loader and legacy registration idiom.
 
-The viewport currently uses a CPU-side triangle rasterizer to produce the preview image, displayed inside the eframe window. It is a working 3D preview foundation, not yet the final GPU mesh renderer. Alpha cutout/translucent layer handling, multipart blockstate assembly, unusual geometry, pivots/rotations, and animation edge cases still need broader differential validation against Blockbench and oldVer/.
+The viewport currently uses a CPU-side triangle rasterizer to produce the preview image, displayed inside the eframe window. It is a working 3D preview foundation, not yet the final GPU mesh renderer. Alpha cutout/translucent layer handling, multipart blockstate assembly, unusual geometry, pivots/rotations, and animation edge cases still need broader differential validation against Blockbench and the committed Rust regression fixtures.
 
 The basic editor fields are draft-only in this prototype. They update the tooltip preview but are not yet written back to a Minecraft resource pack or MCreator workspace. Component JSON is loaded from item resource definitions where available; Java-constructed or runtime-generated component values are not yet comprehensively reconstructed. Translation keys are shown as their raw key because the desktop app does not yet load Minecraft language tables.
 

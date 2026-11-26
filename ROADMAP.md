@@ -2,8 +2,8 @@
 
 **Direction:** make the Rust rewrite the primary MojModelBridge engine and ship it as a standalone desktop application, while retaining a command-line interface for batch work and automation.
 
-**Current implementation branch:** `rust-rewrite`  
-**Behavioral reference:** `oldVer/` (MojModelBridge 3.4.0 Beta 12; preserve as the regression oracle until the Rust replacement is accepted).
+**Current implementation branch:** `main`  
+**Active engine:** native Rust library, CLI, and desktop application. The former Python engine is not part of this repository.
 
 This is the product and engineering roadmap. The lower-level module-by-module port map remains in [rust/docs/ENGINE_MIGRATION.md](rust/docs/ENGINE_MIGRATION.md).
 
@@ -11,7 +11,7 @@ This is the product and engineering roadmap. The lower-level module-by-module po
 
 ## 1. Product goals
 
-1. **One native Rust engine.** The CLI and desktop application must call the same Rust library. The desktop app must not import, spawn, or bundle the Python engine.
+1. **One native Rust engine.** The CLI and desktop application must call the same Rust library. No Python conversion engine is included.
 2. **Standalone desktop workflow.** Users can open a mod, inspect what was discovered, configure a port, run conversions, inspect warnings, validate/build the result, and reopen recent projects without living in a terminal.
 3. **Integrated model and animation viewer.** Users can browse models recovered from a mod, inspect part hierarchies and textures, and preview their animations inside MojModelBridge. This is a read-only viewer first; it does not need to become a full Blockbench replacement.
 4. **Parity before replacement.** Rust becomes the main implementation only after the legacy regression corpus and real workspace builds meet the acceptance gates in section 7.
@@ -22,7 +22,7 @@ This is the product and engineering roadmap. The lower-level module-by-module po
 - Keep the **CLI**. It is useful for automation, CI, batch conversion, and debugging even after the desktop app ships.
 - Keep the **viewer** separate from the parser and exporters. It consumes the engine's model/animation representation; it must not grow a second model parser.
 - Treat the **Mod Editor** as a later, separate feature. First make generated workspace content inspectable and buildable; then add focused native element editing. Procedure-graph editing is a much larger follow-on.
-- Preserve `oldVer/` as a read-only reference during the migration. Do not delete it as part of the first Rust desktop release.
+- Preserve legacy compatibility evidence as committed Rust fixtures, expected-output snapshots, and documented source/target API mappings.
 
 ---
 
@@ -127,7 +127,7 @@ This phase is intentionally scoped as a renderer, not a new parser.
 
 ### Phase C — Native desktop application shell
 
-**Goal:** replace the current Python/Tkinter shell with a Rust desktop app that calls the Rust library directly.
+**Goal:** complete the Rust desktop app so its Porter, Projects, Build & Test, and Viewer workflows call the shared Rust library directly.
 
 - [x] Add a separate Cargo package for the desktop application while keeping the engine/CLI headless.
 - [x] Build the initial application shell with persistent/collapsible navigation, content browser, viewer, and editor surfaces. Project management, settings, logs, and task progress remain open.
@@ -217,7 +217,7 @@ Use the legacy implementation as an oracle, but make tests deterministic and fix
 Add tests at three levels:
 1. Unit tests for parser/IR/transform/mesh/animation logic.
 2. Integration tests for mod discovery, export-all, workspace validation, and Gradle diagnostics.
-3. Differential tests against `oldVer/` output, classifying each mismatch as a parity bug, intentional difference, or unsupported behavior.
+3. Differential tests against committed legacy fixtures and recorded expected outputs, classifying each mismatch as a parity bug, intentional difference, or unsupported behavior.
 
 For the viewer, add CPU tests for mesh vertices/UVs, transform composition, and sampled animation poses; add a small set of deterministic screenshot/golden tests only after the rendering backend is stable.
 
@@ -253,7 +253,7 @@ Do not switch the default product path simply because the Rust executable builds
 - [ ] The CLI remains available and uses the same core library as the desktop app.
 - [ ] The legacy engine is retained as a read-only oracle until the first stable Rust release has been validated.
 
-**Promotion rule:** once these gates pass, make the Rust implementation the main/default path and move the legacy desktop shell out of the primary workflow. Keep `oldVer/` available for regression comparisons until there is a deliberate, separately reviewed archival decision.
+**Promotion rule:** the Rust implementation is already the main/default path on `main`. Continue closing the remaining parity gates using committed fixtures and explicit validation of generated NeoForge projects.
 
 ---
 

@@ -1,7 +1,6 @@
-# Beta 12 → Native Rust Engine Port Map
+# Legacy Engine → Native Rust Engine Port Map
 
-The immutable behavioral reference is oldVer/ (MojModelBridge 3.4.0 Beta 12).
-The Rust implementation is independent under rust/ and must not invoke Python.
+This document records the migration of historical engine behavior into the native Rust implementation. The old Python engine is not included in the repository; compatibility is maintained through Rust-owned fixtures, API dictionaries, and targeted regression tests.
 
 ## Current stage map
 

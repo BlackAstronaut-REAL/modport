@@ -2,9 +2,7 @@
 
 //! MojModelBridge native engine.
 //!
-//! The Python Beta 12 engine in ../oldVer remains a read-only behavioral
-//! reference. This crate does not invoke Python, import Python modules, or
-//! require a Python installation.
+//! This is the active native Rust engine. It does not invoke or depend on a Python engine.
 
 pub mod archive;
 pub mod animation;

@@ -1,10 +1,7 @@
 # MojModelBridge — Native Rust Rewrite
 
 This directory is the independent Rust implementation of MojModelBridge 4.x.
-The Python 3.4.0 Beta 12 engine under ../oldVer is a permanent, read-only
-behavioral reference. The Rust application does not spawn Python, import Python
-modules, or require a Python installation. The Windows release workflow compiles
-the engine into the native executable.
+The Rust library, CLI, and desktop app are the active implementation. The repository does not include or require a Python conversion engine. The Windows release workflow builds the native Rust engine and desktop executable.
 
 ## First source-driven NeoForge conversion pass
 
@@ -171,7 +168,7 @@ MCreator regeneration/Gradle diagnostic bridge with durable batch/resume reporti
 Preserve source/constructor selection, part order, hierarchy, geometry coordinates,
 pivots, rotations, UV offsets, inflate/mirror behavior, UUIDs, texture selection,
 animation formulas/timing/loop endpoints, warnings, reports and MCreator output.
-Differences must be documented and covered by regression tests against oldVer/.
+Unsupported behavior must be documented and covered by focused Rust regression tests using committed fixtures and expected output.
 Never silently simplify unsupported input; retain source evidence and warnings.
 
 

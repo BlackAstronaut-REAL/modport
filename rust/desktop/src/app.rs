@@ -571,7 +571,7 @@ impl MojModelBridgeApp {
                     if !self.sidebar_collapsed {
                         ui.separator();
                         ui.label(RichText::new("● Native Rust engine").size(10.0).color(Color32::from_rgb(105, 207, 151)));
-                        ui.label(RichText::new("oldVer retained as reference").size(9.0).color(MUTED));
+                        ui.label(RichText::new("Native Rust conversion engine").size(9.0).color(MUTED));
                     } else {
                         ui.label(RichText::new("●").color(Color32::from_rgb(105, 207, 151)));
                     }
