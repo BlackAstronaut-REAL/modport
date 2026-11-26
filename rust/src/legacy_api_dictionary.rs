@@ -401,7 +401,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("GameRegistry", "registerWorldGenerator", V_ALL, "register_worldgen", "BiomeModifier / Feature registration", "worldgen", "registration_adapter_required", "Reconstruct generation stage, biome filters and configured feature data.", ""),
     d!("GameRegistry", "registerFuelHandler", V_ALL, "register_fuel", "Fuel item extension / recipe integration", "fuel", "registration_adapter_required", "Move the fuel predicate and burn-time logic into a target hook or data-driven fuel definition.", ""),
     d!("OreDictionary", "registerOre", V_18, "ore_tag_membership", "TagKey / data pack tags", "tags", "registration_adapter_required", "Convert OreDictionary names to namespaced tags and preserve cross-mod interoperability.", ""),
-    
+
     d!("OreDictionary", "getOreID", V_18, "ore_name_id", "ResourceLocation / TagKey", "tags", "adapter_required", "Replace process-local integer IDs with stable namespaced tag identifiers.", ""),
     d!("OreDictionary", "getOreName", V_18, "ore_id_name", "ResourceLocation / TagKey", "tags", "adapter_required", "Recover the original tag string and namespace conversion rules.", ""),
     d!("OreDictionary", "getOreNames", V_18, "ore_registered_names", "Data pack tag enumeration", "tags", "adapter_required", "Dynamic data-pack tags cannot be enumerated at static initialization time.", ""),
@@ -503,7 +503,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("BiomeGenForest", "func_150557_a", V_17_18, "legacy_forest_biome_srg_func_150557_a", "Forest biome variant mutation override", "worldgen", "manual_adapter_required", "Preserve the forest override independently from the base biome method until the decompiled body is inspected.", "net/minecraft/world/biome/BiomeGenForest.html"),
     d!("BiomeGenBase", "getTemperature", V_112, "biome_temperature", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Temperature is climate settings and may be position-adjusted.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getRainfall", V_112, "biome_downfall", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Map rainfall to downfall and preserve precipitation type.", "net/minecraft/world/biome/BiomeGenBase.html"),
-    
+
     d!("BiomeGenBase", "getSpawnableList", V_17_18, "biome_spawn_list", "Biome spawner settings / biome modifiers", "biomes", "manual_adapter_required", "Rebuild weighted spawn entries as biome spawner data or biome modifier additions.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getGrassColorAtPos", V_18, "biome_grass_color", "Biome#getGrassColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getFoliageColorAtPos", V_18, "biome_foliage_color", "Biome#getFoliageColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
