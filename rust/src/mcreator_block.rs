@@ -241,14 +241,83 @@ fn is_block_class(superclass: &str, parents: &BTreeMap<String, String>, depth: u
     if depth > 12 { return false; }
     let parent = simple_name(superclass);
     let lower = parent.to_ascii_lowercase();
-    if lower == "block" || lower.ends_with("block")
-        || ["blockflower","blockbush","blockcrops","blocksapling","blocktallgrass","blockplant","blockreed","flowerblock","saplingblock","cropblock","bushblock","tallgrassblock"].iter().any(|token| lower.contains(token)) {
+
+    // Legacy Forge mods frequently introduce intermediate bases named
+    // BlockBase, BlockOre, BlockFluid, BlockContainer, etc. They do not end
+    // with "Block", so the former suffix-only check silently discarded every
+    // registered subclass that extended one of these bases.
+    if lower.starts_with("itemblock")
+        || lower.contains("blockentity")
+        || lower.contains("blockstate")
+        || lower.contains("blockpos")
+        || lower.contains("blockbehaviour")
+        || lower.contains("blockbehavior")
+    {
+        return false;
+    }
+    if lower == "block"
+        || lower.starts_with("block")
+        || lower.ends_with("block")
+        || ["blockflower","blockbush","blockcrops","blocksapling","blocktallgrass","blockplant","blockreed","flowerblock","saplingblock","cropblock","bushblock","tallgrassblock"].iter().any(|token| lower.contains(token))
+    {
         return true;
     }
     parents.get(&parent).is_some_and(|next| is_block_class(next, parents, depth + 1))
 }
 
+/// Resolve a Block constructor or registered static field from one argument
+/// of a legacy registerBlock call. Some mods register inline instances, while
+/// others wrap them in helper expressions or pass name/instance in reverse order.
+fn registered_block_class(expression: &str, field_classes: &BTreeMap<String, String>) -> Option<String> {
+    let constructor = Regex::new(r"\\bnew\\s+([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\(").ok()?;
+    if let Some(class) = constructor.captures(expression)
+        .and_then(|capture| capture.get(1))
+        .map(|value| simple_name(value.as_str()))
+    {
+        return Some(class);
+    }
+
+    let class_literal = Regex::new(r"\\b([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\.\\s*class\\b").ok()?;
+    if let Some(class) = class_literal.captures(expression)
+        .and_then(|capture| capture.get(1))
+        .map(|value| simple_name(value.as_str()))
+    {
+        return Some(class);
+    }
+
+    let field = expression.trim().trim_end_matches(';').rsplit('.').next()?.trim();
+    field_classes.get(field).cloned()
+}
+
+/// Recover registrations whose block instance is passed directly rather than
+/// first being assigned to a static field. The normal field map remains useful
+/// for legacy drop recovery, so this augments rather than replaces it.
+fn legacy_block_registrations(
+    source: &str,
+    field_classes: &BTreeMap<String, String>,
+) -> Vec<(String, String)> {
+    use crate::source::java::split_top_level;
+    let mut output = Vec::new();
+    for (_, raw_arguments) in java_registration_calls(source, &["registerBlock"]) {
+        let arguments = split_top_level(&raw_arguments, ',');
+        let registry = arguments.iter()
+            .flat_map(|argument| quoted_values(argument))
+            .find_map(|value| {
+                let normalized = normalize_registry(&value);
+                (!normalized.is_empty()).then_some(normalized)
+            });
+        let Some(registry) = registry else { continue };
+        let class_name = arguments.iter()
+            .find_map(|argument| registered_block_class(argument, field_classes));
+        if let Some(class_name) = class_name {
+            output.push((class_name, registry));
+        }
+    }
+    output
+}
+
 /// Discover registered Java Block subclasses from legacy GameRegistry and modern BLOCKS.register calls.
+pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSource>> {/// Discover registered Java Block subclasses from legacy GameRegistry and modern BLOCKS.register calls.
 pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSource>> {
     let files = files_java(source_roots);
     let mut texts = Vec::<String>::new();
@@ -280,10 +349,13 @@ pub fn discover_block_sources(source_roots: &[PathBuf]) -> Result<Vec<BlockSourc
     let field_ids = field_registry_map(&combined);
     let mut class_ids = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for (field, class) in field_classes {
-        if let Some(registry) = field_ids.get(&field) {
-            class_ids.entry(class).or_default().insert(registry.clone());
+    for (field, class) in &field_classes {
+        if let Some(registry) = field_ids.get(field) {
+            class_ids.entry(class.clone()).or_default().insert(registry.clone());
         }
+    }
+    for (class, registry) in legacy_block_registrations(&combined, &field_classes) {
+        class_ids.entry(class).or_default().insert(registry);
     }
     for (class, registry) in modern_block_registrations(&combined) {
         class_ids.entry(class).or_default().insert(registry);
