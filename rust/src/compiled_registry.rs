@@ -695,6 +695,73 @@ mod tests {
     }
 
     #[test]
+    fn recovers_block_registrations_when_registry_values_are_stored_in_locals() {
+        let class = ClassFile {
+            minor_version: 0,
+            major_version: 52,
+            access_flags: 0,
+            this_class: 2,
+            super_class: 0,
+            interfaces: Vec::new(),
+            constant_pool: vec![
+                None,
+                Some(ConstantPoolEntry::Utf8("com/example/Registry".to_owned())),
+                Some(ConstantPoolEntry::Class { name_index: 1 }),
+                Some(ConstantPoolEntry::Utf8("com/example/BlockRegistry".to_owned())),
+                Some(ConstantPoolEntry::Class { name_index: 3 }),
+                Some(ConstantPoolEntry::Utf8("RUBY".to_owned())),
+                Some(ConstantPoolEntry::Utf8("Lnet/minecraft/block/Block;".to_owned())),
+                Some(ConstantPoolEntry::NameAndType { name_index: 5, descriptor_index: 6 }),
+                Some(ConstantPoolEntry::Fieldref { class_index: 4, name_and_type_index: 7 }),
+                Some(ConstantPoolEntry::Utf8("registerBlock".to_owned())),
+                Some(ConstantPoolEntry::Utf8("(Lnet/minecraft/block/Block;Ljava/lang/String;)V".to_owned())),
+                Some(ConstantPoolEntry::NameAndType { name_index: 9, descriptor_index: 10 }),
+                Some(ConstantPoolEntry::Utf8("net/minecraftforge/common/registry/GameRegistry".to_owned())),
+                Some(ConstantPoolEntry::Class { name_index: 12 }),
+                Some(ConstantPoolEntry::Methodref { class_index: 13, name_and_type_index: 11 }),
+                Some(ConstantPoolEntry::Utf8("ruby_ore".to_owned())),
+                Some(ConstantPoolEntry::String { string_index: 15 }),
+            ],
+            fields: Vec::new(),
+            methods: vec![MemberInfo {
+                access_flags: 0x0008,
+                name: "register".to_owned(),
+                descriptor: "()V".to_owned(),
+                attributes: Vec::new(),
+                code: Some(crate::bytecode::classfile::CodeAttribute {
+                    max_stack: 2,
+                    max_locals: 3,
+                    code: vec![
+                        0xb2, 0x00, 0x08, // getstatic BlockRegistry.RUBY
+                        0x4c,             // astore_1
+                        0x12, 0x10,       // ldc "ruby_ore"
+                        0x4d,             // astore_2
+                        0x2b,             // aload_1
+                        0x2c,             // aload_2
+                        0xb8, 0x00, 0x0e, // invokestatic GameRegistry.registerBlock
+                        0xb1,             // return
+                    ],
+                    ..Default::default()
+                }),
+            }],
+            attributes: Vec::new(),
+            bootstrap_methods: Vec::new(),
+        };
+        let fields = BTreeMap::from([(
+            "com/example/BlockRegistry#RUBY".to_owned(),
+            "RubyBlock".to_owned(),
+        )]);
+        let mut output = BTreeMap::new();
+
+        scan_registrations(&class, &fields, &HashMap::new(), &mut output);
+
+        assert_eq!(
+            output.get("RubyBlock").and_then(|ids| ids.iter().next()).map(String::as_str),
+            Some("ruby_ore"),
+        );
+    }
+
+    #[test]
     fn indexes_compiled_registrations_directly_from_a_mod_jar() {
         let temp = tempfile::tempdir().unwrap();
         let archive_path = temp.path().join("compiled-only-mod.jar");
