@@ -494,12 +494,12 @@ const DEFINITIONS: &[Definition] = &[
     d!("Chunk", "addEntity", V_ALL, "chunk_add_entity", "ServerLevel#addFreshEntity / Level#addFreshEntity", "chunk", "adapter_required", "Entity insertion is controlled by the level/entity manager, not direct chunk lists.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "onLoad", V_ALL, "chunk_load_lifecycle", "ChunkEvent.Load / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move work to chunk load events/ticking lifecycle and preserve once-only execution.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "onUnload", V_ALL, "chunk_unload_lifecycle", "ChunkEvent.Unload / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move cleanup to unload events and invalidate attached capabilities.", "net/minecraft/world/chunk/Chunk.html"),
-    d!("BiomeGenBase", "getTemperature", V_ALL, "biome_temperature", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Temperature is climate settings and may be position-adjusted.", "net/minecraft/world/biome/BiomeGenBase.html"),
-    d!("BiomeGenBase", "getRainfall", V_ALL, "biome_downfall", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Map rainfall to downfall and preserve precipitation type.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getTemperature", V_112, "biome_temperature", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Temperature is climate settings and may be position-adjusted.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getRainfall", V_112, "biome_downfall", "Biome#getModifiedClimateSettings", "biomes", "adapter_required", "Map rainfall to downfall and preserve precipitation type.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getBiomeName", V_ALL, "biome_display_name", "Biome registry key / Component localization", "biomes", "adapter_required", "Use registry identity for logic and Component localization for display.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "getSpawnableList", V_ALL, "biome_spawn_list", "Biome spawner settings / biome modifiers", "biomes", "manual_adapter_required", "Rebuild weighted spawn entries as biome spawner data or biome modifier additions.", "net/minecraft/world/biome/BiomeGenBase.html"),
-    d!("BiomeGenBase", "getGrassColorAtPos", V_ALL, "biome_grass_color", "Biome#getGrassColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
-    d!("BiomeGenBase", "getFoliageColorAtPos", V_ALL, "biome_foliage_color", "Biome#getFoliageColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getGrassColorAtPos", V_18, "biome_grass_color", "Biome#getGrassColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getFoliageColorAtPos", V_18, "biome_foliage_color", "Biome#getFoliageColor", "biomes", "client_adapter_required", "Preserve position tinting through biome color resolvers.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("Block", "getBlockFaceShape", V_112, "block_face_shape", "BlockState#isFaceSturdy / SupportType", "block_shape", "adapter_required", "Map EnumBlockFaceShape to modern face-sturdiness support queries.", "net/minecraft/block/Block.html"),
     d!("Block", "isSideSolid", V_ALL, "block_side_solid", "BlockState#isFaceSturdy", "block_shape", "adapter_required", "Translate direction and support type; old boolean solidity combined multiple meanings.", "net/minecraft/block/Block.html"),
     d!("Block", "isSideInvisible", V_18, "block_face_culling", "Block#skipRendering", "block_rendering", "adapter_required", "Preserve neighbor-state culling and face-specific render behavior.", "net/minecraft/block/Block.html"),
@@ -889,7 +889,7 @@ const DEFINITIONS: &[Definition] = &[
 
     // Dimension/world generation, model animation and renderer extension points.
     d!("BiomeGenBase", "getSpawningChance", V_ALL, "biome_spawn_chance", "Biome spawn settings / MobSpawnSettings", "worldgen", "adapter_required", "Preserve biome-specific spawn probability and category rules.", "net/minecraft/world/biome/BiomeGenBase.html"),
-    d!("BiomeGenBase", "getRandomWorldGenForTrees", V_ALL, "biome_tree_feature", "BiomeGenerationSettings / placed tree feature", "worldgen", "manual_adapter_required", "Recover selected tree feature, random selection and biome placement constraints.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getRandomWorldGenForTrees", V_17_18, "biome_tree_feature", "BiomeGenerationSettings / placed tree feature", "worldgen", "manual_adapter_required", "Recover selected tree feature, random selection and biome placement constraints.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "decorate", V_ALL, "biome_decoration", "BiomeGenerationSettings / placed features", "worldgen", "manual_adapter_required", "Recover decoration stage, feature ordering, count/chance and biome/dimension predicates.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("WorldGenerator", "generate", V_ALL, "world_generator_feature", "Feature#place / ConfiguredFeature", "worldgen", "manual_adapter_required", "Translate legacy WorldGenerator placement into a configured placed feature with exact block/height/random rules.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
     d!("ChunkProviderGenerate", "populate", V_ALL, "chunk_population", "ChunkGenerator / placed feature generation", "worldgen", "manual_adapter_required", "Reconstruct population phase ordering, chunk seed, neighboring-chunk access and event timing.", "net/minecraft/world/gen/ChunkProviderGenerate.html"),
@@ -2628,7 +2628,6 @@ const DEFINITIONS: &[Definition] = &[
     d!("ItemStack", "getIsItemStackEqual", V_18, "item_stack_full_equality_predicate", "ItemStack.matches / ItemStack.isSameItemSameComponents", "inventory", "adapter_required", "Preserve the exact stack-equality contract, including count, damage and NBT/capability state; the name is absent from the 1.12.2 API.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "hitEntity", V_ALL, "item_stack_entity_hit_callback", "Item#hurtEnemy / LivingDamageEvent", "combat", "adapter_required", "Preserve the target LivingEntity, attacking Player and durability/effect side effects performed after a successful hit.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "interactWithEntity", V_ALL, "item_stack_entity_interaction", "Item#interactLivingEntity / entity interaction events", "item_interaction", "adapter_required", "Preserve player, clicked LivingEntity and interaction result; the 1.12.2 signature additionally includes InteractionHand.", "net/minecraft/item/ItemStack.html"),
-    d!("ItemStack", "loadItemStackFromNBT", V_17_18, "item_stack_nbt_factory", "ItemStack#of / ItemStack NBT codec", "persistence", "adapter_required", "Migrate the static NBT-to-stack factory; 1.12.2 uses the NBT ItemStack constructor and registry-aware parsing instead.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "onFoodEaten", V_17, "item_stack_food_consumed", "Item#finishUsingItem / food completion callback", "food", "adapter_required", "1.7.10-specific consumed-stack callback; preserve world/player context, stack replacement and side-effect order. Later versions expose onItemUseFinish.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "tryPlaceItemIntoWorld", V_17, "item_stack_block_use", "ItemStack#onItemUse / UseOnContext", "item_interaction", "signature_adapter_required", "1.7.10 legacy placement method uses integer coordinates and hit fractions; convert to UseOnContext while preserving hand, result and stack mutation.", "net/minecraft/item/ItemStack.html"),
     d!("ItemStack", "setItem", V_18, "item_stack_item_reference_write", "ItemStack item identity / component-safe stack reconstruction", "items", "adapter_required", "Translate Item replacement while preserving count, damage, NBT and capability state; 1.7.10 exposes the corresponding func_150996_a SRG name.", "net/minecraft/item/ItemStack.html"),
@@ -2664,6 +2663,41 @@ const DEFINITIONS: &[Definition] = &[
     d!("Block", "func_149730_j", V_17, "block_legacy_srg_boolean_hook", "Manual Block behavior reconstruction", "blocks", "manual_review", "SRG-only 1.7.10 method without a descriptive MCP alias in the JavaDocs summary; retain for bytecode/source analysis instead of guessing behavior.", "net/minecraft/block/Block.html"),
     d!("Block", "func_149735_b", V_17, "block_legacy_side_metadata_icon", "Block#getIcon / Block model face texture", "blocks_render", "resource_adapter_required", "SRG-only 1.7.10 IIcon lookup by side and metadata; preserve the texture selected for each metadata state.", "net/minecraft/block/Block.html"),
     d!("Block", "onPostBlockPlaced", V_17, "block_post_placement_metadata", "Block#setPlacedBy / placement state adapter", "block_state", "adapter_required", "Legacy post-placement world/coordinates/metadata callback mapped into placement-state construction and setPlacedBy with call order preserved.", "net/minecraft/block/Block.html"),
+
+    d!("BiomeGenBase", "getBiome", V_ALL, "biome_numeric_id_lookup", "Biome registry numeric lookup / ResourceLocation", "biomes", "adapter_required", "Preserve fallback behavior and registry-key identity.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBiomeGenArray", V_17_18, "biome_legacy_id_array", "Biome registry / biome source mapping", "biomes_worldgen", "adapter_required", "Preserve numeric biome array order for old world-generation and save data.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBiomeFoliageColor", V_17, "biome_legacy_foliage_color", "Biome#getFoliageColor", "biomes_render", "client_adapter_required", "1.7 integer-coordinate foliage tint with X/Y/Z sampling.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBiomeGrassColor", V_17, "biome_legacy_grass_color", "Biome#getGrassColor", "biomes_render", "client_adapter_required", "1.7 integer-coordinate grass tint with X/Y/Z sampling.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getFloatRainfall", V_17_18, "biome_legacy_rainfall_float", "Biome#getDownfall", "biomes_weather", "automatic_rename_candidate", "1.7/1.8 floating rainfall getter, distinct from integer rainfall and 1.12 getRainfall.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getFloatTemperature", V_17_18, "biome_legacy_temperature_float", "Biome#getTemperature", "biomes_weather", "adapter_required", "1.7/1.8 position-sensitive temperature; preserve altitude and biome modifiers.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getIntRainfall", V_17_18, "biome_legacy_rainfall_integer", "Biome#getDownfall", "biomes_weather", "automatic_rename_candidate", "Preserve legacy integer-scaled rainfall separately from float rainfall.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getSkyColorByTemp", V_ALL, "biome_sky_color_temperature", "Biome#getSkyColor", "biomes_render", "adapter_required", "Preserve temperature-to-sky-RGB calculation.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getRandomWorldGenForGrass", V_ALL, "biome_random_grass_feature", "BiomeGenerationSettings / placed vegetation feature", "biomes_worldgen", "adapter_required", "Preserve Random consumption and selected grass generator for deterministic world generation.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getEnableSnow", V_18, "biome_snow_enable_flag", "Biome#hasPrecipitation", "biomes_weather", "automatic_rename_candidate", "Preserve snowfall enablement separately from temperature and current weather.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "createBiomeDecorator", V_ALL, "biome_decorator_factory", "BiomeGenerationSettings / biome decoration pipeline", "biomes_worldgen", "adapter_required", "Preserve decorator class selection and feature ordering.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "createMutation", V_17_18, "biome_mutation_factory", "Biome mutation registration", "biomes_worldgen", "adapter_required", "Preserve parent biome and mutation ID offset; 1.12 uses getMutationForBiome.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "createMutatedBiome", V_189, "biome_mutated_variant_factory", "Biome mutation registration", "biomes_worldgen", "adapter_required", "1.8.9 mutated-biome constructor with ID and parent association.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBiomeFromBiomeList", V_189, "biome_legacy_list_lookup", "Biome registry lookup", "biomes", "automatic_rename_candidate", "1.8.9 fallback-aware numeric lookup; preserve supplied fallback biome.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setBiomeName", V_17_18, "biome_legacy_name_write", "Biome registry path and language resources", "localization", "property_recovery", "Convert unlocalized name into stable registry path and translation key.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setColor", V_17_18, "biome_legacy_map_color_write", "Biome map color / biome map rendering", "biomes_render", "property_recovery", "Preserve packed RGB map tint independently from grass, foliage and water tint.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setDisableRain", V_17_18, "biome_disable_rain_write", "Biome precipitation settings", "biomes_weather", "property_recovery", "Preserve explicit no-rain flag and its interaction with temperature and snow.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setEnableSnow", V_17_18, "biome_enable_snow_write", "Biome precipitation settings", "biomes_weather", "property_recovery", "Preserve snowfall initialization separately from runtime precipitation.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setHeight", V_17_18, "biome_height_profile_write", "Biome generation depth/scale profile", "biomes_worldgen", "property_recovery", "Translate legacy Height depth/scale values into modern generation settings.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setTemperatureRainfall", V_17_18, "biome_climate_write", "Biome climate settings", "biomes_weather", "property_recovery", "Preserve both climate values and mutation order.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "setFillerBlockMetadata", V_189, "biome_filler_metadata_write", "Biome filler BlockState", "biomes_worldgen", "property_recovery", "1.8 metadata setter for filler layer; convert metadata to concrete IBlockState.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "genBigTreeChance", V_189, "biome_big_tree_chance", "Biome#getRandomTreeFeature / configured tree feature", "biomes_worldgen", "adapter_required", "Preserve Random-based tree selection and variant behavior.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getModdedBiomeDecorator", V_18, "biome_forge_decorator_event", "BiomeGenerationSettings / Forge biome decorator event", "biomes_worldgen", "adapter_required", "Preserve the Forge-modified decorator returned from original decorator input.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getModdedBiomeFoliageColor", V_18, "biome_forge_foliage_color_event", "Biome#getFoliageColor / color resolver", "biomes_render", "client_adapter_required", "Preserve original foliage tint as Forge event input and event-modified RGB result.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getModdedBiomeGrassColor", V_18, "biome_forge_grass_color_event", "Biome#getGrassColor / color resolver", "biomes_render", "client_adapter_required", "Preserve original grass tint as Forge event input and event-modified RGB result.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "pickRandomFlower", V_18, "biome_random_flower_selection", "Biome flower feature selection", "biomes_worldgen", "adapter_required", "Preserve Random state, position and selected flower type.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBaseHeight", V_112, "biome_base_height", "Biome generation depth/base height", "biomes_worldgen", "automatic_rename_candidate", "Preserve base generation height separately from height variation.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getHeightVariation", V_112, "biome_height_variation", "Biome generation scale / depth variation", "biomes_worldgen", "automatic_rename_candidate", "Preserve height variation separately from base height.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getIdForBiome", V_112, "biome_numeric_id_reverse_lookup", "Biome registry numeric identity", "biomes", "automatic_rename_candidate", "Preserve registry-to-numeric-ID lookup for legacy metadata migration.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getBiomeForId", V_112, "biome_numeric_id_lookup", "Biome registry numeric lookup", "biomes", "automatic_rename_candidate", "Preserve 1.12 numeric ID lookup and fallback behavior.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getMutationForBiome", V_112, "biome_mutation_lookup", "Biome mutation registry / parent biome association", "biomes_worldgen", "automatic_rename_candidate", "Preserve mutated-biome-to-base-biome mapping.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "getWaterColor", V_112, "biome_water_color", "Biome water color / water tint resolver", "biomes_render", "automatic_rename_candidate", "Preserve packed RGB water color separately from legacy multiplier.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "ignorePlayerSpawnSuitability", V_112, "biome_spawn_suitability_override", "Biome spawn suitability policy", "biomes_spawning", "adapter_required", "Preserve override that bypasses player spawn-suitability checks.", "net/minecraft/world/biome/BiomeGenBase.html"),
+    d!("BiomeGenBase", "isMutation", V_112, "biome_is_mutation", "Biome mutation parent relationship", "biomes_worldgen", "automatic_rename_candidate", "Preserve mutation-variant state and parent mapping.", "net/minecraft/world/biome/BiomeGenBase.html"),
 
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
@@ -3488,15 +3522,15 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldProvider", "updateWeather", V_18, "dimension_weather_update", "World#updateWeather / ServerLevel weather tick", "dimension_weather", "adapter_required", "Preserve provider-specific weather update hook and server-side update order.", "net/minecraft/world/WorldProvider.html"),
 
     // BiomeGenBase public gameplay, color, spawn and feature hooks.
-    d!("BiomeGenBase", "addDefaultFlowers", V_112, "biome_default_flower_registration", "Biome default flower feature registration", "biomes_worldgen", "adapter_required", "Preserve weighted flower state/weight list and decoration order.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "addDefaultFlowers", V_18, "biome_default_flower_registration", "Biome default flower feature registration", "biomes_worldgen", "adapter_required", "Preserve weighted flower state/weight list and decoration order.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "addDefaultExtraVegetation", V_112, "biome_extra_vegetation_registration", "Biome extra vegetation feature registration", "biomes_worldgen", "adapter_required", "Preserve vegetation feature list and decorator priority.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "addDefaultCarvers", V_112, "biome_default_carver_registration", "Biome cave/ravine carver registration", "biomes_worldgen", "adapter_required", "Preserve carver configuration and generation stage order.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "addSpawn", V_ALL, "biome_spawn_entry_add", "Biome creature spawn list entry", "biomes_worldgen", "adapter_required", "Preserve EntityEntry, weight and min/max group size and creature category.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "addStructure", V_112, "biome_structure_feature_add", "Biome structure feature registration", "biomes_worldgen", "adapter_required", "Preserve StructureFeature identity and biome generation-stage ordering.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "canRain", V_ALL, "biome_precipitation_rain_predicate", "Biome rain precipitation check", "biomes_weather", "automatic_rename_candidate", "Preserve temperature/biome precipitation logic independently from rainfall strength.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "canSpawnLightningBolt", V_112, "biome_lightning_predicate", "Biome lightning generation eligibility", "biomes_weather", "automatic_rename_candidate", "Preserve temperature and precipitation type logic for thunder generation.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "canRain", V_18, "biome_precipitation_rain_predicate", "Biome rain precipitation check", "biomes_weather", "automatic_rename_candidate", "Preserve temperature/biome precipitation logic independently from rainfall strength.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "canSpawnLightningBolt", V_ALL, "biome_lightning_predicate", "Biome lightning generation eligibility", "biomes_weather", "automatic_rename_candidate", "Preserve temperature and precipitation type logic for thunder generation.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "doesWaterFreeze", V_ALL, "biome_water_freeze_predicate", "Water freezing at biome/position", "biomes_weather", "automatic_rename_candidate", "Preserve world, position and check-neighbor flag for ice generation.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "getBiomeClass", V_112, "biome_runtime_class", "Biome implementation class", "biomes", "automatic_rename_candidate", "Preserve exact subclass identity for custom biome dispatch.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getBiomeClass", V_18, "biome_runtime_class", "Biome implementation class", "biomes", "automatic_rename_candidate", "Preserve exact subclass identity for custom biome dispatch.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getBiomeProvider", V_112, "biome_provider", "BiomeProvider associated with world biome", "biomes_worldgen", "automatic_rename_candidate", "Preserve provider identity and exact world-specific biome mapping.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getBiomeSize", V_112, "biome_size_setting", "Biome size generation parameter", "biomes_worldgen", "automatic_rename_candidate", "Preserve biome generator size separate from base weight and biome edge blending.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getDefaultTemperature", V_112, "biome_default_temperature", "Base biome temperature value", "biomes_weather", "automatic_rename_candidate", "Preserve raw temperature independently from position-adjusted getTemperature.", "net/minecraft/world/biome/Biome.html"),
@@ -3505,12 +3539,12 @@ const DEFINITIONS: &[Definition] = &[
     d!("BiomeGenBase", "getRegistryName", V_112, "biome_registry_name", "Biome ResourceLocation registry identity", "biomes", "automatic_rename_candidate", "Preserve stable namespaced biome identifier for world save and registry lookups.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getSpawns", V_112, "biome_spawn_list", "Biome creature category spawn list", "biomes_worldgen", "automatic_rename_candidate", "Preserve EnumCreatureType, current mutable list and category-specific spawn entries.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getTempCategory", V_ALL, "biome_temperature_category", "Biome TempCategory classification", "biomes_weather", "automatic_rename_candidate", "Preserve COLD/MEDIUM/WARM threshold classification used by precipitation and snow.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "getWaterColorMultiplier", V_112, "biome_water_color_multiplier", "Biome water tint color", "biomes_render", "automatic_rename_candidate", "Preserve packed RGB water color multiplier used by water models.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "getWaterColorMultiplier", V_18, "biome_water_color_multiplier", "Biome water tint color", "biomes_render", "automatic_rename_candidate", "Preserve packed RGB water color multiplier used by water models.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "getWaterfallSound", V_112, "biome_waterfall_sound", "Biome waterfall ambient sound", "audio", "automatic_rename_candidate", "Preserve biome-specific ambient waterfall event selection.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "isHighHumidity", V_ALL, "biome_high_humidity_predicate", "Biome high humidity classification", "biomes_weather", "automatic_rename_candidate", "Preserve explicit humidity flag separately from rainfall amount.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "isSnowyBiome", V_ALL, "biome_snowy_predicate", "Biome snow precipitation classification", "biomes_weather", "automatic_rename_candidate", "Preserve temperature and precipitation type behavior for snowfall.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "isSnowyBiome", V_18, "biome_snowy_predicate", "Biome snow precipitation classification", "biomes_weather", "automatic_rename_candidate", "Preserve temperature and precipitation type behavior for snowfall.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "isValidBiome", V_112, "biome_validity_predicate", "Biome registry/generation validity", "biomes_worldgen", "automatic_rename_candidate", "Preserve world generation validity check for a position and biome provider.", "net/minecraft/world/biome/Biome.html"),
-    d!("BiomeGenBase", "plantFlower", V_112, "biome_plant_flower", "Biome flower placement feature", "biomes_worldgen", "adapter_required", "Preserve Random, BlockPos and flower list selection.", "net/minecraft/world/biome/Biome.html"),
+    d!("BiomeGenBase", "plantFlower", V_18, "biome_plant_flower", "Biome flower placement feature", "biomes_worldgen", "adapter_required", "Preserve Random, BlockPos and flower list selection.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "plantGrass", V_112, "biome_plant_grass", "Biome grass/vegetation placement feature", "biomes_worldgen", "adapter_required", "Preserve Random and BlockPos placement calls including tall-grass variants.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "registerBiome", V_112, "biome_registry_register", "Biome registry registration", "registration", "registration_adapter_required", "Preserve ResourceLocation identity and duplicate registration failure behavior.", "net/minecraft/world/biome/Biome.html"),
     d!("BiomeGenBase", "setRegistryName", V_112, "biome_registry_name_write", "Biome registry key registration", "registration", "registration_adapter_required", "Preserve namespace/path and registry entry naming constraints.", "net/minecraft/world/biome/Biome.html"),
@@ -6537,6 +6571,61 @@ mod tests {
         assert!(!has(&v112, "getWelcomeMessage"));
         assert!(!has(&v17, "getWorldTime"));
         assert!(!has(&v17, "setWorld"));
+    }
+
+
+    #[test]
+    fn biome_dictionary_matches_legacy_and_112_forge_javadocs() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| {
+            entries.iter().any(|entry| entry.source_owner == "BiomeGenBase" && entry.source_method == method)
+        };
+        for method in [
+            "canSpawnLightningBolt", "createBiomeDecorator", "createMutation", "decorate",
+            "func_150557_a", "func_150559_j", "func_150563_c", "func_150567_a",
+            "func_150572_a", "func_76733_a", "genBiomeTerrain", "genTerrainBlocks",
+            "getBiome", "getBiomeClass", "getBiomeFoliageColor", "getBiomeGenArray",
+            "getBiomeGrassColor", "getEnableSnow", "getFloatRainfall", "getFloatTemperature",
+            "getIntRainfall", "getRandomWorldGenForGrass", "getSkyColorByTemp",
+            "getSpawnableList", "getSpawningChance", "getTempCategory", "isEqualTo",
+            "isHighHumidity", "setBiomeName", "setColor", "setDisableRain", "setEnableSnow",
+            "setHeight", "setTemperatureRainfall",
+        ] { assert!(has(&v17, method), "missing 1.7.10 BiomeGenBase#{method}"); }
+        for method in [
+            "addDefaultFlowers", "addFlower", "canSpawnLightningBolt", "createBiomeDecorator",
+            "createMutatedBiome", "createMutation", "decorate", "func_150557_a",
+            "func_150563_c", "genBigTreeChance", "generateBiomeTerrain", "genTerrainBlocks",
+            "getBiome", "getBiomeClass", "getBiomeFromBiomeList", "getBiomeGenArray",
+            "getEnableSnow", "getFloatRainfall", "getFloatTemperature", "getFoliageColorAtPos",
+            "getGrassColorAtPos", "getIntRainfall", "getModdedBiomeDecorator",
+            "getModdedBiomeFoliageColor", "getModdedBiomeGrassColor", "getRandomWorldGenForGrass",
+            "getSkyColorByTemp", "getSpawnableList", "getSpawningChance", "getTempCategory",
+            "getWaterColorMultiplier", "isEqualTo", "isHighHumidity", "isSnowyBiome",
+            "pickRandomFlower", "plantFlower", "setBiomeName", "setColor", "setDisableRain",
+            "setEnableSnow", "setFillerBlockMetadata", "setHeight", "setTemperatureRainfall",
+        ] { assert!(has(&v18, method), "missing 1.8.9 BiomeGenBase#{method}"); }
+        for method in [
+            "canRain", "canSpawnLightningBolt", "createBiomeDecorator", "decorate",
+            "generateBiomeTerrain", "genTerrainBlocks", "getBaseHeight", "getBiome",
+            "getBiomeClass", "getBiomeForId", "getBiomeName", "getDefaultTemperature",
+            "getEnableSnow", "getFoliageColorAtPos", "getGrassColorAtPos", "getHeightVariation",
+            "getIdForBiome", "getModdedBiomeDecorator", "getModdedBiomeFoliageColor",
+            "getModdedBiomeGrassColor", "getMutationForBiome", "getRainfall",
+            "getRandomTreeFeature", "getRandomWorldGenForGrass", "getSkyColorByTemp",
+            "getSpawnableList", "getSpawningChance", "getTempCategory", "getTemperature",
+            "getWaterColor", "getWaterColorMultiplier", "ignorePlayerSpawnSuitability",
+            "isHighHumidity", "isMutation", "isSnowyBiome", "pickRandomFlower", "plantFlower",
+            "registerBiome", "registerBiomes", "getRegistryName", "setRegistryName",
+        ] { assert!(has(&v112, method), "missing 1.12.2 Biome#{method}"); }
+        assert!(!has(&v17, "getTemperature"));
+        assert!(!has(&v17, "getRainfall"));
+        assert!(!has(&v17, "getGrassColorAtPos"));
+        assert!(!has(&v112, "getFloatTemperature"));
+        assert!(!has(&v112, "getFloatRainfall"));
+        assert!(!has(&v112, "setBiomeName"));
+        assert!(!has(&v17, "getRegistryName"));
     }
 
     #[test]
