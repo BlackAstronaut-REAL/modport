@@ -25,6 +25,7 @@ use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex
 use crate::native_recipe_bridge::{export_native_recipes, NativeRecipeReport};
 use crate::native_block_entity::discover_block_entities;
 use crate::native_lore::{extract_legacy_lore, lore_component_expressions, LegacyLanguageLoreIndex};
+use crate::localization::CreativeTabCatalog;
 use crate::item_method_dictionary::{map_legacy_item_methods, ItemMethodMapping};
 use crate::legacy_api_dictionary::{map_legacy_api_methods, map_legacy_api_usages, LegacyApiMethodMapping};
 use crate::source_version::{detect_source_version, SourceVersionDetection};
@@ -1514,6 +1515,231 @@ fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<Bl
     }
     blocks
 }
+/// Infer only a minimal native block when the source has a namespaced blockstate
+/// JSON but the legacy registration syntax could not be resolved. Prefer the
+/// source mod's own namespace so resource remapping stays aligned.
+fn discover_blockstate_fallbacks(
+    roots: &[PathBuf],
+    source_mod_id: &str,
+    warnings: &mut Vec<String>,
+) -> Vec<BlockSource> {
+    let mut output = Vec::new();
+    let mut seen = BTreeSet::new();
+    let excluded_namespaces = ["minecraft", "forge", "neoforge", "fabric", "quilt", "c", "builtin"];
+
+    for root in roots {
+        if !root.is_dir() { continue; }
+        let metadata = crate::metadata::infer_mod_metadata(root);
+        let preferred = if !metadata.modid.trim().is_empty() {
+            metadata.modid.trim().to_owned()
+        } else if let Some(namespace) = infer_namespace(root) {
+            namespace
+        } else {
+            source_mod_id.to_owned()
+        };
+
+        let mut assets_roots = Vec::<PathBuf>::new();
+        for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+            if entry.file_type().is_dir()
+                && entry.file_name().to_string_lossy().eq_ignore_ascii_case("assets")
+            {
+                assets_roots.push(entry.into_path());
+            }
+        }
+        assets_roots.sort();
+
+        for assets_root in assets_roots {
+            let Ok(entries) = fs::read_dir(&assets_root) else { continue };
+            let mut candidates = Vec::<(String, PathBuf)>::new();
+            for entry in entries.flatten() {
+                if !entry.path().is_dir() { continue; }
+                let namespace = entry.file_name().to_string_lossy().to_string();
+                if excluded_namespaces.iter().any(|value| value.eq_ignore_ascii_case(&namespace)) {
+                    continue;
+                }
+                let states = entry.path().join("blockstates");
+                if states.is_dir() {
+                    candidates.push((namespace, states));
+                }
+            }
+
+            let selected: Vec<(String, PathBuf)> = if !preferred.is_empty() {
+                candidates.iter()
+                    .filter(|(namespace, _)| namespace.eq_ignore_ascii_case(&preferred))
+                    .cloned()
+                    .collect()
+            } else if candidates.len() == 1 {
+                candidates.clone()
+            } else {
+                Vec::new()
+            };
+            if selected.is_empty() && !candidates.is_empty() {
+                warnings.push(format!(
+                    "Found {} non-vanilla blockstate namespace(s) under {} but none matched source mod ID '{}'; left those resources unregistered rather than importing dependency blocks.",
+                    candidates.len(), assets_root.display(), preferred
+                ));
+                continue;
+            }
+
+            for (namespace, states_root) in selected {
+                let Ok(files) = fs::read_dir(&states_root) else { continue };
+                let mut state_files: Vec<PathBuf> = files.flatten().map(|entry| entry.path())
+                    .filter(|path| path.is_file()
+                        && path.extension().and_then(|value| value.to_str())
+                            .is_some_and(|extension| extension.eq_ignore_ascii_case("json")))
+                    .collect();
+                state_files.sort();
+                for path in state_files {
+                    let Ok(bytes) = fs::read(&path) else { continue };
+                    if !serde_json::from_slice::<Value>(&bytes).is_ok_and(|value| value.is_object()) {
+                        continue;
+                    }
+                    let Some(id) = path.file_stem().and_then(|value| value.to_str()).map(str::to_owned) else { continue };
+                    let key = format!("{}:{}", namespace.to_ascii_lowercase(), id.to_ascii_lowercase());
+                    if !seen.insert(key) { continue; }
+                    output.push(BlockSource {
+                        class_name: "ResourceBlockstateFallback".to_owned(),
+                        superclass: "Block".to_owned(),
+                        registry_name: id,
+                        source_path: path.to_string_lossy().replace('\\', "/"),
+                        source_text: String::new(),
+                    });
+                }
+            }
+        }
+    }
+
+    if !output.is_empty() {
+        warnings.push(format!(
+            "{} block(s) were inferred from the mod's blockstate JSON because their Java/bytecode registration could not be recovered. They receive basic Block + BlockItem registrations; source-specific properties and behavior remain unknown.",
+            output.len()
+        ));
+    }
+    output
+}
+
+fn creative_mode_tab_key(legacy_tab: &str) -> &'static str {
+    match legacy_tab {
+        "BUILDING_BLOCKS" => "BUILDING_BLOCKS",
+        "DECORATIONS" => "NATURAL_BLOCKS",
+        "REDSTONE" => "REDSTONE_BLOCKS",
+        "TRANSPORTATION" => "FUNCTIONAL_BLOCKS",
+        "TOOLS" => "TOOLS_AND_UTILITIES",
+        "COMBAT" => "COMBAT",
+        "FOOD" => "FOOD_AND_DRINKS",
+        "OP_BLOCKS" => "OP_BLOCKS",
+        // Modern Minecraft no longer has the old Misc / Materials / Brewing
+        // tabs. Ingredients is the closest built-in home for those entries.
+        "MISC" | "MATERIALS" | "BREWING" => "INGREDIENTS",
+        _ => "INGREDIENTS",
+    }
+}
+
+fn add_creative_tab_assignment(
+    assignments: &mut BTreeMap<String, BTreeSet<String>>,
+    catalog: &CreativeTabCatalog,
+    class_name: &str,
+    source_text: &str,
+    fallback_tab: &str,
+    item_field: String,
+) {
+    let legacy_tab = catalog.resolve(class_name, source_text)
+        .unwrap_or_else(|| fallback_tab.to_owned());
+    assignments.entry(creative_mode_tab_key(&legacy_tab).to_owned())
+        .or_default()
+        .insert(item_field);
+}
+
+fn native_creative_tab_assignments(
+    catalog: &CreativeTabCatalog,
+    items: &[ItemRecord],
+    tools: &[ToolRecord],
+    blocks: &[BlockRecord],
+    armors: &[ArmorSetRecord],
+    equipment: &[EquipmentSource],
+    block_sources: &[BlockSource],
+) -> BTreeMap<String, BTreeSet<String>> {
+    let mut assignments = BTreeMap::<String, BTreeSet<String>>::new();
+
+    for item in items {
+        let fallback = if item.food.is_some() { "FOOD" } else { "MISC" };
+        add_creative_tab_assignment(
+            &mut assignments, catalog, &item.class_name, &item.source_text, fallback,
+            java_field_name(&item.id, "ITEM"),
+        );
+    }
+    for tool in tools {
+        let source_text = equipment.iter()
+            .find(|source| source.class_name == tool.class_name)
+            .map(|source| source.source_text.as_str())
+            .unwrap_or("");
+        let fallback = if matches!(tool.kind.as_str(), "Sword" | "Axe" | "Bow") {
+            "COMBAT"
+        } else {
+            "TOOLS"
+        };
+        add_creative_tab_assignment(
+            &mut assignments, catalog, &tool.class_name, source_text, fallback,
+            java_field_name(&tool.id, "ITEM"),
+        );
+    }
+    for block in blocks {
+        let source_text = block_sources.iter()
+            .find(|source| source.class_name == block.class_name)
+            .map(|source| source.source_text.as_str())
+            .unwrap_or("");
+        add_creative_tab_assignment(
+            &mut assignments, catalog, &block.class_name, source_text, "BUILDING_BLOCKS",
+            java_field_name(&block.id, "BLOCK_ITEM"),
+        );
+    }
+    for armor in armors {
+        for piece in &armor.pieces {
+            let source_text = equipment.iter()
+                .find(|source| source.class_name == piece.class_name)
+                .map(|source| source.source_text.as_str())
+                .unwrap_or("");
+            add_creative_tab_assignment(
+                &mut assignments, catalog, &piece.class_name, source_text, "COMBAT",
+                java_field_name(&piece.id, "ARMOR"),
+            );
+        }
+    }
+    assignments
+}
+
+fn generate_creative_tabs_java(
+    package: &str,
+    assignments: &BTreeMap<String, BTreeSet<String>>,
+) -> String {
+    let mut body = format!(r#"package {package}.registry;
+
+import {package}.NeoForgeMod;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+
+@EventBusSubscriber(modid = NeoForgeMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
+public final class ModCreativeTabs {{
+    private ModCreativeTabs() {{}}
+
+    @SubscribeEvent
+    public static void addConvertedItems(BuildCreativeModeTabContentsEvent event) {{
+"#);
+    for (tab, fields) in assignments {
+        body.push_str(&format!(
+            "        if (event.getTabKey().equals(CreativeModeTabs.{tab})) {{\n"
+        ));
+        for field in fields {
+            body.push_str(&format!("            event.accept(ModItems.{field}.get());\n"));
+        }
+        body.push_str("        }\n");
+    }
+    body.push_str("    }\n}\n");
+    body
+}
+
 
 fn deduplicate_items(items: &mut Vec<ItemRecord>, warnings: &mut Vec<String>) {
     items.sort_by(|a, b| a.id.cmp(&b.id).then(a.class_name.cmp(&b.class_name)));
