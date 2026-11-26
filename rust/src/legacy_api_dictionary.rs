@@ -393,13 +393,11 @@ const DEFINITIONS: &[Definition] = &[
     d!("Container", "onContainerClosed", V_ALL, "menu_close", "AbstractContainerMenu#removed", "menus", "adapter_required", "Preserve item return/drop behavior when the player closes the menu.", "net/minecraft/inventory/Container.html"),
 
     // Forge registries, ore dictionary and legacy networking call sites.
-    d!("GameRegistry", "registerItem", V_ALL, "register_item", "DeferredRegister<Item> / RegisterEvent", "registration", "registration_adapter_required", "Translate registry names and constructor timing into deferred target registration.", ""),
-    d!("GameRegistry", "registerBlock", V_ALL, "register_block", "DeferredRegister<Block> / RegisterEvent", "registration", "registration_adapter_required", "Recover block item registration separately and preserve registry names.", ""),
+    d!("GameRegistry", "registerItem", V_17_18, "register_item", "DeferredRegister<Item> / RegisterEvent", "registration", "registration_adapter_required", "Translate registry names and constructor timing into deferred target registration.", ""),
+    d!("GameRegistry", "registerBlock", V_17_18, "register_block", "DeferredRegister<Block> / RegisterEvent", "registration", "registration_adapter_required", "Recover block item registration separately and preserve registry names.", ""),
     d!("GameRegistry", "registerTileEntity", V_ALL, "register_block_entity_type", "DeferredRegister<BlockEntityType<?>>", "registration", "registration_adapter_required", "Resolve associated blocks and block-entity factory before registration.", ""),
-    d!("GameRegistry", "registerEntity", V_ALL, "register_entity_type", "DeferredRegister<EntityType<?>>", "registration", "registration_adapter_required", "Translate legacy numeric IDs, tracking range, update frequency and factory.", ""),
     d!("GameRegistry", "registerWorldGenerator", V_ALL, "register_worldgen", "BiomeModifier / Feature registration", "worldgen", "registration_adapter_required", "Reconstruct generation stage, biome filters and configured feature data.", ""),
     d!("GameRegistry", "registerFuelHandler", V_ALL, "register_fuel", "Fuel item extension / recipe integration", "fuel", "registration_adapter_required", "Move the fuel predicate and burn-time logic into a target hook or data-driven fuel definition.", ""),
-    d!("GameRegistry", "register", V_112, "registry_object_register", "DeferredRegister / RegisterEvent", "registration", "registration_adapter_required", "Map the registry instance and supplier lifecycle, not just the registry name.", ""),
     d!("OreDictionary", "registerOre", V_ALL, "ore_tag_membership", "TagKey / data pack tags", "tags", "registration_adapter_required", "Convert OreDictionary names to namespaced tags and preserve cross-mod interoperability.", ""),
     d!("OreDictionary", "getOre", V_ALL, "ore_tag_query", "HolderLookup / tag membership query", "tags", "adapter_required", "Resolve tag contents at runtime rather than storing a frozen ItemStack list.", ""),
     d!("OreDictionary", "getOreID", V_ALL, "ore_name_id", "ResourceLocation / TagKey", "tags", "adapter_required", "Replace process-local integer IDs with stable namespaced tag identifiers.", ""),
@@ -711,7 +709,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("Property", "getString", V_ALL, "config_string_read", "ConfigValue<String>#get", "config", "automatic_rename_candidate", "Preserve allowed values and localization/comment behavior.", "net/minecraftforge/common/config/Property.html"),
     d!("Property", "getStringList", V_ALL, "config_string_list_read", "ConfigValue<List<String>>#get", "config", "adapter_required", "Preserve list ordering and element validation.", "net/minecraftforge/common/config/Property.html"),
     d!("EntityRegistry", "registerModEntity", V_ALL, "entity_type_registration", "DeferredRegister<EntityType<?>> / EntityType.Builder", "registration", "registration_adapter_required", "Translate tracking range, update frequency, velocity updates and entity factory.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
-    d!("EntityRegistry", "registerGlobalEntityID", V_ALL, "global_entity_id_registration", "EntityType registry registration", "registration", "manual_adapter_required", "Remove numeric global IDs and register a stable ResourceLocation entity type.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "registerGlobalEntityID", V_17_18, "global_entity_id_registration", "EntityType registry registration", "registration", "manual_adapter_required", "Remove numeric global IDs and register a stable ResourceLocation entity type.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
     d!("EntityRegistry", "addSpawn", V_ALL, "entity_biome_spawn_registration", "BiomeModifier / biome spawn settings", "worldgen", "registration_adapter_required", "Translate weighted spawn entry, creature category, min/max group size and biome filters.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
     d!("EntityRegistry", "removeSpawn", V_ALL, "entity_biome_spawn_removal", "BiomeModifier spawn removal", "worldgen", "registration_adapter_required", "Remove matching biome spawn entries through biome modifier data.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
     d!("NetworkRegistry", "newSimpleChannel", V_18, "network_channel_create", "RegisterPayloadHandlersEvent / PayloadRegistrar", "networking", "registration_adapter_required", "Replace channel protocol strings and discriminators with typed payload IDs/codecs.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
@@ -1855,15 +1853,15 @@ const DEFINITIONS: &[Definition] = &[
     d!("ForgeHooksClient", "shouldCauseBlockBreakReset", V_112, "forge_block_break_reset_predicate", "ItemStack#shouldCauseBlockBreakReset / mining progress", "client_render", "automatic_rename_candidate", "Preserve from/to stack identity and reset decision for continuous mining.", "net/minecraftforge/client/ForgeHooksClient.html"),
 
     // Remaining public GameRegistry compatibility helpers.
-    d!("GameRegistry", "addShapedRecipe", V_112, "game_registry_shaped_recipe", "ShapedRecipe registry / RecipeManager", "recipes", "registration_adapter_required", "Preserve recipe ResourceLocation/group, output stack and heterogeneous pattern/key varargs.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "addShapelessRecipe", V_112, "game_registry_shapeless_recipe", "ShapelessRecipe registry / RecipeManager", "recipes", "registration_adapter_required", "Preserve recipe key/group, output stack and Ingredient ordering.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "addSmelting", V_112, "game_registry_smelting_recipe", "Furnace recipe registry", "recipes", "registration_adapter_required", "Overloads accept Block, Item or ItemStack; preserve input metadata/tags and XP output.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "addShapedRecipe", V_ALL, "game_registry_shaped_recipe", "ShapedRecipe registry / RecipeManager", "recipes", "registration_adapter_required", "Preserve recipe ResourceLocation/group, output stack and heterogeneous pattern/key varargs.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "addShapelessRecipe", V_ALL, "game_registry_shapeless_recipe", "ShapelessRecipe registry / RecipeManager", "recipes", "registration_adapter_required", "Preserve recipe key/group, output stack and Ingredient ordering.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "addSmelting", V_ALL, "game_registry_smelting_recipe", "Furnace recipe registry", "recipes", "registration_adapter_required", "Overloads accept Block, Item or ItemStack; preserve input metadata/tags and XP output.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
     d!("GameRegistry", "createEntitySelectors", V_112, "game_registry_entity_selectors", "Entity selector argument factories / command parsing", "commands", "adapter_required", "Preserve argument map, selector, sender and Vec3d position when composing custom entity selector predicates.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
     d!("GameRegistry", "findRegistry", V_112, "game_registry_find_registry", "ForgeRegistries typed registry lookup", "registration", "automatic_rename_candidate", "Preserve class-to-registry lookup and cache stable non-null registry per type.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "generateWorld", V_112, "game_registry_generate_world", "IWorldGenerator world generation callback", "worldgen", "adapter_required", "Preserve chunk coordinates, World, IChunkGenerator and IChunkProvider and generator weight ordering.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "getFuelValue", V_112, "game_registry_fuel_value", "ForgeEventFactory#getItemBurnTime / fuel event", "items", "automatic_rename_candidate", "Deprecated helper; preserve legacy fuel lookup and stack-sensitive item burn-time behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "generateWorld", V_ALL, "game_registry_generate_world", "IWorldGenerator world generation callback", "worldgen", "adapter_required", "Preserve chunk coordinates, World, IChunkGenerator and IChunkProvider and generator weight ordering.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "getFuelValue", V_ALL, "game_registry_fuel_value", "ForgeEventFactory#getItemBurnTime / fuel event", "items", "automatic_rename_candidate", "Deprecated helper; preserve legacy fuel lookup and stack-sensitive item burn-time behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
     d!("GameRegistry", "getFuelValueLegacy", V_112, "game_registry_fuel_value_legacy", "Legacy furnace fuel handler value", "items", "adapter_required", "Deprecated fallback fuel lookup; preserve legacy IFuelHandler order and item-specific override precedence.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "makeItemStack", V_112, "game_registry_make_stack", "ItemStack registry-name and JSON NBT construction", "items", "adapter_required", "Preserve null for missing registry entries, metadata/count and JsonToNBT parse failure behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "makeItemStack", V_ALL, "game_registry_make_stack", "ItemStack registry-name and JSON NBT construction", "items", "adapter_required", "Preserve null for missing registry entries, metadata/count and JsonToNBT parse failure behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
     d!("GameRegistry", "registerEntitySelector", V_112, "game_registry_entity_selector_register", "Forge selector argument factory registration", "commands", "registration_adapter_required", "Preserve factory identity and all registered selector argument names, including namespaced arguments.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
 
     // Missing registry mappings are explicit migration decisions, not lookup aliases.
@@ -1879,10 +1877,10 @@ const DEFINITIONS: &[Definition] = &[
 
     // EntityRegistry: spawn tables, registry entry resolution and FML tracking.
     d!("EntityRegistry", "getEntry", V_112, "entity_registry_entry_lookup", "EntityEntry / Forge entity registry lookup", "registration", "automatic_rename_candidate", "Preserve exact entity class-to-entry mapping and null for unregistered classes.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
-    d!("EntityRegistry", "instance", V_112, "entity_registry_singleton", "EntityRegistry singleton access", "registration", "automatic_rename_candidate", "Preserve global registry identity; prefer registry event/DeferredRegister for new content.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
-    d!("EntityRegistry", "lookupModSpawn", V_112, "entity_registry_spawn_lookup", "EntityRegistry.EntityRegistration lookup", "entities", "adapter_required", "Overloads resolve a class with keepLooking or a mod container/entity ID; preserve lookup scope and registration identity.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
-    d!("EntityRegistry", "registerEgg", V_112, "entity_registry_spawn_egg", "Spawn egg registration / EntityEntry egg colors", "registration", "registration_adapter_required", "Preserve namespaced entity key and primary/secondary egg colors.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
-    d!("EntityRegistry", "tryTrackingEntity", V_112, "entity_registry_tracking", "EntityTracker tracking registration", "networking", "adapter_required", "Preserve tracking range, update frequency and velocity update flag; false indicates registration was not accepted.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "instance", V_ALL, "entity_registry_singleton", "EntityRegistry singleton access", "registration", "automatic_rename_candidate", "Preserve global registry identity; prefer registry event/DeferredRegister for new content.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "lookupModSpawn", V_ALL, "entity_registry_spawn_lookup", "EntityRegistry.EntityRegistration lookup", "entities", "adapter_required", "Overloads resolve a class with keepLooking or a mod container/entity ID; preserve lookup scope and registration identity.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "registerEgg", V_18, "entity_registry_spawn_egg", "Spawn egg registration / EntityEntry egg colors", "registration", "registration_adapter_required", "Preserve namespaced entity key and primary/secondary egg colors.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "tryTrackingEntity", V_ALL, "entity_registry_tracking", "EntityTracker tracking registration", "networking", "adapter_required", "Preserve tracking range, update frequency and velocity update flag; false indicates registration was not accepted.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
 
     // NetworkRegistry: channel lifecycle and GUI handler dispatch.
     d!("NetworkRegistry", "channelNamesFor", V_112, "network_channel_names_for_side", "FML channel protocol negotiation", "networking", "automatic_rename_candidate", "Preserve side-specific registered channel names and insertion/iteration semantics.", "net/minecraftforge/fml/common/network/NetworkRegistry.html"),
@@ -2760,6 +2758,29 @@ const DEFINITIONS: &[Definition] = &[
     d!("Chunk", "populate", V_112, "chunk_population_pipeline", "ChunkGenerator / ChunkStatus population", "worldgen", "adapter_required", "Preserve both IChunkGenerator and IChunkProvider overloads.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "read", V_112, "chunk_network_packet_read", "ClientboundLevelChunkPacketData / PacketBuffer", "networking", "adapter_required", "Preserve section mask, ground-up flag and packet-buffer consumption.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "wasTicked", V_112, "chunk_ticked_state", "Chunk tick lifecycle state", "world_chunks", "automatic_rename_candidate", "Preserve whether the chunk has been ticked for current tick scheduling.", "net/minecraft/world/chunk/Chunk.html"),
+
+    d!("GameRegistry", "addSubstitutionAlias", V_17_18, "game_registry_substitution_alias", "Forge registry alias / item-block replacement", "registration", "adapter_required", "Preserve forced persistent name substitution and reject conflicting/incompatible aliases.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "findBlock", V_17_18, "game_registry_find_block", "ForgeRegistries.BLOCKS / ResourceLocation lookup", "registration", "automatic_rename_candidate", "Preserve mod-id plus local name lookup and null-on-missing behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "findItem", V_17_18, "game_registry_find_item", "ForgeRegistries.ITEMS / ResourceLocation lookup", "registration", "automatic_rename_candidate", "Preserve mod-id plus local name lookup and null-on-missing behavior.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "findItemStack", V_17, "game_registry_find_item_stack", "ItemStack registry lookup", "items", "adapter_required", "1.7.10-specific stack lookup; preserve mod ID, item name, metadata and requested stack count.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "findUniqueIdentifierFor", V_17_18, "game_registry_legacy_identifier_lookup", "ResourceLocation / Forge registry key", "registration", "adapter_required", "Preserve legacy UniqueIdentifier namespace/path extraction; migrate registry key lookup without display-name substitution.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "registerCustomItemStack", V_17, "game_registry_custom_item_stack_registration", "ItemStack holder / item registry mapping", "registration", "adapter_required", "1.7.10 custom named stack registration; preserve item metadata, count and stack NBT.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+
+
+
+    d!("EntityRegistry.EntityRegistration", "doCustomSpawning", V_ALL, "entity_registration_custom_spawn", "Entity spawn message factory / custom spawn callback", "networking", "adapter_required", "Preserve custom spawn message reconstruction and thrown exception behavior.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getContainer", V_ALL, "entity_registration_mod_container", "ModContainer ownership metadata", "registration", "automatic_rename_candidate", "Preserve the owning mod container identity.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getEntityClass", V_ALL, "entity_registration_entity_class", "EntityType / entity factory class", "registration", "automatic_rename_candidate", "Legacy registered entity class accessor; deprecated in 1.12 but still present.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getEntityName", V_ALL, "entity_registration_legacy_name", "EntityType registry key / entity legacy name", "registration", "adapter_required", "Preserve the legacy display/internal entity name separately from registry identity.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getModEntityId", V_ALL, "entity_registration_legacy_numeric_id", "EntityType registry identity / compatibility ID map", "registration", "adapter_required", "Preserve mod-local numeric entity ID where old spawn packets or saves still depend on it.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getTrackingRange", V_ALL, "entity_registration_tracking_range", "EntityType client tracking range", "networking", "automatic_rename_candidate", "Preserve entity tracking distance in blocks.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getUpdateFrequency", V_ALL, "entity_registration_update_frequency", "EntityType update interval / tracking parameters", "networking", "automatic_rename_candidate", "Preserve tracking update interval in ticks.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "hasCustomSpawning", V_ALL, "entity_registration_custom_spawning_flag", "EntityType spawn packet factory", "networking", "adapter_required", "Preserve whether this registration replaces the normal spawn reconstruction path.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "sendsVelocityUpdates", V_ALL, "entity_registration_velocity_updates", "EntityType update velocity tracking", "networking", "automatic_rename_candidate", "Preserve whether entity velocity is synchronized to tracking clients.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "setCustomSpawning", V_ALL, "entity_registration_custom_spawning_write", "EntityType custom spawn factory", "networking", "adapter_required", "Preserve custom spawn callback and usesVanillaSpawning flag.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "usesVanillaSpawning", V_ALL, "entity_registration_vanilla_spawning_flag", "EntityType spawn lifecycle", "networking", "adapter_required", "Preserve whether vanilla spawn initialization remains enabled alongside the custom factory.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "getRegistryName", V_112, "entity_registration_resource_location", "EntityType registry key / ResourceLocation", "registration", "automatic_rename_candidate", "Preserve namespaced entity registry identity; this replaces reliance on global numeric IDs.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
+    d!("EntityRegistry.EntityRegistration", "newInstance", V_112, "entity_registration_entity_factory", "EntityType#create / entity factory", "entities", "adapter_required", "Preserve World argument, factory output and null/failure behavior.", "net/minecraftforge/fml/common/registry/EntityRegistry.EntityRegistration.html"),
 
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
@@ -3980,13 +4001,13 @@ const DEFINITIONS: &[Definition] = &[
     d!("IChunkProvider", "unloadQueuedChunks", V_ALL, "chunk_provider_unload_queued", "Chunk unload queue processing", "world_chunks", "adapter_required", "Preserve queue mutation and return value that indicates pending unload work.", "net/minecraft/world/chunk/IChunkProvider.html"),
 
     // EntityRegistry registration and spawn egg metadata.
-    d!("EntityRegistry", "findGlobalUniqueEntityId", V_ALL, "entity_registry_unique_numeric_id", "Legacy unique entity numeric ID allocation", "registration", "registration_adapter_required", "Preserve global numeric ID allocation order only for old save/network compatibility; use ResourceLocation identity for modern registry.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
+    d!("EntityRegistry", "findGlobalUniqueEntityId", V_17_18, "entity_registry_unique_numeric_id", "Legacy unique entity numeric ID allocation", "registration", "registration_adapter_required", "Preserve global numeric ID allocation order only for old save/network compatibility; use ResourceLocation identity for modern registry.", "net/minecraftforge/fml/common/registry/EntityRegistry.html"),
 
     // Spawn packet extension interface for custom synchronized entity state.
 
     // GameRegistry registration, item stacks, recipes, fuel, and tile entities.
     d!("GameRegistry", "addRecipe", V_ALL, "game_registry_add_recipe", "Crafting recipe registration", "registration_recipes", "registration_adapter_required", "Overloads accept IRecipe or shaped/shapeless object arrays; preserve registry name, recipe order and custom recipe serializers.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
-    d!("GameRegistry", "registerTileEntityWithAlternatives", V_112, "game_registry_tile_entity_alternatives", "TileEntity registry aliases for old IDs", "registration", "registration_adapter_required", "Preserve primary registry ID plus all legacy aliases used by existing world saves.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
+    d!("GameRegistry", "registerTileEntityWithAlternatives", V_17_18, "game_registry_tile_entity_alternatives", "TileEntity registry aliases for old IDs", "registration", "registration_adapter_required", "Preserve primary registry ID plus all legacy aliases used by existing world saves.", "net/minecraftforge/fml/common/registry/GameRegistry.html"),
 
     // DimensionManager numeric dimension registration and runtime lifecycle.
     d!("DimensionManager", "shouldLoadSpawn", V_112, "dimension_manager_spawn_chunk_policy", "Dimension spawn chunk loading policy", "dimensions", "automatic_rename_candidate", "Preserve per-dimension spawn chunk loading option.", "net/minecraftforge/common/DimensionManager.html"),
@@ -6754,6 +6775,86 @@ mod tests {
         assert!(!has(&v17, "getPos"));
         assert!(!has(&v17, "markDirty"));
         assert!(!has(&v18, "markDirty"));
+    }
+
+
+    #[test]
+    fn game_registry_dictionary_matches_legacy_and_112_forge_surfaces() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        for method in [
+            "addRecipe", "addShapedRecipe", "addShapelessRecipe", "addSmelting",
+            "addSubstitutionAlias", "findBlock", "findItem", "findItemStack",
+            "findUniqueIdentifierFor", "generateWorld", "getFuelValue", "makeItemStack",
+            "registerBlock", "registerCustomItemStack", "registerFuelHandler", "registerItem",
+            "registerTileEntity", "registerTileEntityWithAlternatives", "registerWorldGenerator",
+        ] { assert!(has(&v17, "GameRegistry", method), "missing 1.7.10 GameRegistry#{method}"); }
+        for method in [
+            "addRecipe", "addShapedRecipe", "addShapelessRecipe", "addSmelting",
+            "addSubstitutionAlias", "findBlock", "findItem", "findUniqueIdentifierFor",
+            "generateWorld", "getFuelValue", "makeItemStack", "registerBlock",
+            "registerFuelHandler", "registerItem", "registerTileEntity",
+            "registerTileEntityWithAlternatives", "registerWorldGenerator",
+        ] { assert!(has(&v18, "GameRegistry", method), "missing 1.8.9 GameRegistry#{method}"); }
+        for method in [
+            "addRecipe", "addShapedRecipe", "addShapelessRecipe", "addSmelting",
+            "createEntitySelectors", "findRegistry", "generateWorld", "getFuelValue",
+            "getFuelValueLegacy", "makeItemStack", "registerEntitySelector",
+            "registerFuelHandler", "registerTileEntity", "registerWorldGenerator",
+        ] { assert!(has(&v112, "GameRegistry", method), "missing 1.12.2 GameRegistry#{method}"); }
+        assert!(!has(&v18, "GameRegistry", "findItemStack"));
+        assert!(!has(&v112, "GameRegistry", "findBlock"));
+        assert!(!has(&v112, "GameRegistry", "registerBlock"));
+        assert!(!has(&v112, "GameRegistry", "registerItem"));
+        assert!(!has(&v112, "GameRegistry", "registerTileEntityWithAlternatives"));
+        assert!(!has(&v112, "GameRegistry", "register"));
+        assert!(!has(&v112, "GameRegistry", "registerEntity"));
+    }
+
+    #[test]
+    fn entity_registry_dictionary_matches_versioned_entity_registration() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        for method in [
+            "addSpawn", "findGlobalUniqueEntityId", "instance", "lookupModSpawn",
+            "registerGlobalEntityID", "registerModEntity", "removeSpawn", "tryTrackingEntity",
+        ] { assert!(has(&v17, "EntityRegistry", method), "missing 1.7.10 EntityRegistry#{method}"); }
+        for method in [
+            "addSpawn", "findGlobalUniqueEntityId", "instance", "lookupModSpawn",
+            "registerEgg", "registerGlobalEntityID", "registerModEntity", "removeSpawn",
+            "tryTrackingEntity",
+        ] { assert!(has(&v18, "EntityRegistry", method), "missing 1.8.9 EntityRegistry#{method}"); }
+        for method in [
+            "addSpawn", "getEntry", "instance", "lookupModSpawn", "registerEgg",
+            "registerModEntity", "removeSpawn", "tryTrackingEntity",
+        ] { assert!(has(&v112, "EntityRegistry", method), "missing 1.12.2 EntityRegistry#{method}"); }
+        assert!(!has(&v112, "EntityRegistry", "registerGlobalEntityID"));
+        assert!(!has(&v112, "EntityRegistry", "findGlobalUniqueEntityId"));
+        assert!(!has(&v17, "EntityRegistry", "registerEgg"));
+        for version_entries in [&v17, &v18, &v112] {
+            for method in [
+                "doCustomSpawning", "getContainer", "getEntityClass", "getEntityName",
+                "getModEntityId", "getTrackingRange", "getUpdateFrequency", "hasCustomSpawning",
+                "sendsVelocityUpdates", "setCustomSpawning", "usesVanillaSpawning",
+            ] {
+                assert!(has(version_entries, "EntityRegistry.EntityRegistration", method),
+                    "missing EntityRegistry.EntityRegistration#{method}");
+            }
+        }
+        for method in ["getRegistryName", "newInstance"] {
+            assert!(has(&v112, "EntityRegistry.EntityRegistration", method),
+                "missing 1.12.2 EntityRegistry.EntityRegistration#{method}");
+            assert!(!has(&v17, "EntityRegistry.EntityRegistration", method));
+            assert!(!has(&v18, "EntityRegistry.EntityRegistration", method));
+        }
     }
 
     #[test]
