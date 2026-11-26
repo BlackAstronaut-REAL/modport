@@ -36,7 +36,7 @@ API_PACKAGE_PREFIXES = (
     "net/minecraftforge/",
     "cpw/mods/fml/",
 )
-METHOD_KIND = re.compile(r"\bMethod in (?:class|interface|enum|annotation type)\b")
+METHOD_KIND = re.compile(r"\b(?:(?:Static|Default)\s+)?Method in (?:class|interface|enum|annotation type)\b", re.IGNORECASE)
 
 
 class JavaDocIndexParser(HTMLParser):
@@ -78,22 +78,35 @@ class JavaDocIndexParser(HTMLParser):
             self.current_link = None
 
     def _finish_entry(self) -> None:
-        text = re.sub(r"\s+", " ", "".join(self.entry_text)).strip()
-        if not METHOD_KIND.search(text):
+        text = re.sub(r"\\s+", " ", "".join(self.entry_text)).strip()
+        kind_match = METHOD_KIND.search(text)
+        if kind_match is None:
             return
 
-        method_link = next(
-            (item for item in self.links if "(" in item["text"] and item["href"]),
+        # Javadoc sometimes links member names and sometimes emits the member
+        # signature as plain text. Parse the text in both cases; requiring a
+        # member anchor silently discarded large groups of documented methods.
+        member_link = next(
+            (
+                item for item in self.links
+                if item["href"] and "#" in item["href"] and item["text"].strip()
+            ),
             None,
         )
-        if method_link is None:
+        member_display = (
+            member_link["text"].strip()
+            if member_link is not None
+            else text[:kind_match.start()].strip()
+        )
+        member_display = re.sub(r"^(?:(?:public|protected|static|default)\\s+)+", "", member_display)
+        method_name = member_display.split("(", 1)[0].strip().split()[-1] if member_display else ""
+        if not re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", method_name):
             return
 
         owner_link = next(
             (
                 item for item in reversed(self.links)
-                if item is not method_link
-                and item["href"]
+                if item["href"]
                 and ".html" in item["href"].lower()
                 and "#" not in item["href"]
             ),
@@ -101,8 +114,23 @@ class JavaDocIndexParser(HTMLParser):
         )
         if owner_link is not None:
             owner_url = urljoin(self.index_url, owner_link["href"])
+        elif member_link is not None:
+            owner_url = urljoin(self.index_url, member_link["href"].split("#", 1)[0])
         else:
-            owner_url = urljoin(self.index_url, method_link["href"].split("#", 1)[0])
+            # A few generated index rows have no class anchor. Recover the
+            # fully qualified owner from the descriptive text without guessing
+            # nested-class package separators.
+            owner_match = re.search(
+                r"\\bMethod in (?:class|interface|enum|annotation type)\\s+([A-Za-z_$][A-Za-z0-9_$.]*)",
+                text,
+                re.IGNORECASE,
+            )
+            if owner_match is None:
+                return
+            owner_name = owner_match.group(1)
+            package_owner = owner_name.replace(".", "/") + ".html"
+            self._add_method_path(package_owner, method_name, None)
+            return
 
         index_path = urlparse(self.index_url).path
         base_path = index_path.rsplit("/", 1)[0].rstrip("/") + "/"
@@ -110,14 +138,21 @@ class JavaDocIndexParser(HTMLParser):
         if not owner_path.startswith(base_path):
             return
         relative_path = owner_path[len(base_path):].lstrip("/")
-        if not relative_path.startswith(API_PACKAGE_PREFIXES):
-            return
+        self._add_method_path(relative_path, method_name, base_path)
 
-        method_display = re.sub(r"\s+", "", method_link["text"])
-        method_name = method_display.split("(", 1)[0]
-        if not method_name or not re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", method_name):
+    def _add_method_path(
+        self,
+        relative_path: str,
+        method_name: str,
+        base_path: str | None,
+    ) -> None:
+        if base_path is None:
+            if not relative_path.startswith(API_PACKAGE_PREFIXES):
+                return
+            self.methods.add((relative_path, method_name))
             return
-        self.methods.add((relative_path, method_name))
+        if relative_path.startswith(API_PACKAGE_PREFIXES):
+            self.methods.add((relative_path, method_name))
 
 
 def parse_javadoc_index(html: str, index_url: str) -> set[tuple[str, str]]:
@@ -364,7 +399,9 @@ def self_test() -> None:
     html = """
     <dl>
       <dt><span class="memberNameLink"><a href="net/minecraft/block/Block.html#addDestroyEffects()">addDestroyEffects()</a></span> - Method in class <a href="net/minecraft/block/Block.html">net.minecraft.block.Block</a></dt>
-      <dt><span class="memberNameLink"><a href="net/minecraft/world/IWorld.html#getHeight()">getHeight()</a></span> - Method in interface <a href="net/minecraft/world/IWorld.html">net.minecraft.world.IWorld</a></dt>
+      <dt><span class="memberNameLink"><a href="net/minecraft/world/IWorld.html#getHeight()">getHeight()</a></span> - Default method in interface <a href="net/minecraft/world/IWorld.html">net.minecraft.world.IWorld</a></dt>
+      <dt>isFullCube(IBlockState) - Method in class <a href="net/minecraft/block/Block.html">net.minecraft.block.Block</a></dt>
+      <dt><a href="net/minecraft/util/MathHelper.html#floor(double)">floor(double)</a> - Static method in class <a href="net/minecraft/util/MathHelper.html">net.minecraft.util.MathHelper</a></dt>
       <dt><span class="memberNameLink"><a href="net/minecraft/block/Block.html#Block()">Block()</a></span> - Constructor for class <a href="net/minecraft/block/Block.html">net.minecraft.block.Block</a></dt>
       <dt><span class="memberNameLink"><a href="java/lang/Object.html#toString()">toString()</a></span> - Method in class <a href="java/lang/Object.html">java.lang.Object</a></dt>
     </dl>
@@ -373,11 +410,12 @@ def self_test() -> None:
     expected = {
         ("net/minecraft/block/Block.html", "addDestroyEffects"),
         ("net/minecraft/world/IWorld.html", "getHeight"),
+        ("net/minecraft/block/Block.html", "isFullCube"),
+        ("net/minecraft/util/MathHelper.html", "floor"),
     }
     if parsed != expected:
-        raise AssertionError(f"JavaDoc parser self-test failed: {parsed!r}")
+        raise AssertionError(f"JavaDoc index parser self-test failed: {parsed!r}")
     print("JavaDoc index parser self-test passed.")
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
