@@ -1817,8 +1817,8 @@ fn workspace_descriptor_file(root: &Path) -> Result<PathBuf> {
 
 fn load_equipment_template(root: &Path, element_type: &str) -> Result<Value> {
     let embedded = match element_type {
-        "tool" => include_str!("../../oldVer/mcreator_templates/ToolSchema.mod.json"),
-        _ => include_str!("../../oldVer/mcreator_templates/ItemSchema.mod.json"),
+        "tool" => include_str!("../assets/mcreator_templates/ToolSchema.mod.json"),
+        _ => include_str!("../assets/mcreator_templates/ItemSchema.mod.json"),
     };
     let entries = root.join("elements");
     if entries.is_dir() {

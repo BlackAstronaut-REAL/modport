@@ -705,7 +705,7 @@ mod position_field_tests {
         let source = temp.path().join("ModelTheKing.class");
         fs::write(
             &source,
-            include_bytes!("../../../oldVer/tests/fixtures/ModelTheKing.class"),
+            include_bytes!("../../tests/fixtures/ModelTheKing.class"),
         ).unwrap();
 
         let model = parse_legacy_class_file(&source, &[]).unwrap();

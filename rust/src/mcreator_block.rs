@@ -329,7 +329,7 @@ fn definition_template(root: &Path) -> Result<Value> {
             }
         }
     }
-    serde_json::from_str(include_str!("../../oldVer/mcreator_templates/BlockSchema.mod.json"))
+    serde_json::from_str(include_str!("../assets/mcreator_templates/BlockSchema.mod.json"))
         .context("Parsing embedded MCreator block schema")
 }
 
@@ -989,7 +989,7 @@ mod tests{
             source_path:"DemoBlock.java".to_owned(),
             source_text:"new BlockBehaviour.Properties().strength(2.5F, 6.0F).lightLevel(() -> 12).requiresCorrectToolForDrops();".to_owned()
         };
-        let template:Value=serde_json::from_str(include_str!("../../oldVer/mcreator_templates/BlockSchema.mod.json")).unwrap();
+        let template:Value=serde_json::from_str(include_str!("../assets/mcreator_templates/BlockSchema.mod.json")).unwrap();
         let info=json!({"renderType":11,"customModelName":"Single texture","texture":"demo_block","modelPath":"block.json"});
         let textures=BTreeMap::from([("texture".to_owned(),"demo_block".to_owned())]);
         let (element,warnings)=build_block_element(&template,&source,&info,&textures,89,&BTreeMap::new());
@@ -1069,7 +1069,7 @@ mod tests{
             BTreeSet::from(["ruby_gem".to_owned()]),
         )]);
         let template: Value = serde_json::from_str(include_str!(
-            "../../oldVer/mcreator_templates/BlockSchema.mod.json"
+            "../assets/mcreator_templates/BlockSchema.mod.json"
         )).unwrap();
         let (element, warnings) = build_block_element(
             &template,

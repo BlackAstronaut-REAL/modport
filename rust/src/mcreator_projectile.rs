@@ -122,7 +122,7 @@ fn template_for(root: &Path) -> Result<Value> {
             }
         }
     }
-    serde_json::from_str(include_str!("../../oldVer/mcreator_templates/ProjectileSchema.mod.json"))
+    serde_json::from_str(include_str!("../assets/mcreator_templates/ProjectileSchema.mod.json"))
         .context("Parsing embedded MCreator projectile schema")
 }
 

@@ -128,7 +128,7 @@ fn converts_compiled_legacy_model_class_without_javap() {
     let output = temp.path().join("compiled/ModelDeviantPiglin.bbmodel");
     fs::write(
         &source,
-        include_bytes!("../../oldVer/tests/fixtures/ModelDeviantPiglin.class"),
+        include_bytes!("fixtures/ModelDeviantPiglin.class"),
     ).unwrap();
 
     let converted = convert_model_source(&source, &output, &[], false).unwrap();

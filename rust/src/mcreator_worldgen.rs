@@ -130,8 +130,8 @@ fn template_for(root: &Path, element_type: &str) -> Result<Value> {
         }
     }
     let embedded = match element_type {
-        "biome" => include_str!("../../oldVer/mcreator_templates/BiomeSchema.mod.json"),
-        "dimension" => include_str!("../../oldVer/mcreator_templates/DimensionSchema.mod.json"),
+        "biome" => include_str!("../assets/mcreator_templates/BiomeSchema.mod.json"),
+        "dimension" => include_str!("../assets/mcreator_templates/DimensionSchema.mod.json"),
         _ => anyhow::bail!("Unsupported worldgen element type {element_type}"),
     };
     serde_json::from_str(embedded).context("Parsing embedded MCreator worldgen schema")

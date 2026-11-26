@@ -505,7 +505,7 @@ fn armor_template(workspace_root: &Path) -> Result<Value> {
             }
         }
     }
-    serde_json::from_str(include_str!("../../oldVer/mcreator_templates/ArmorSchema.mod.json"))
+    serde_json::from_str(include_str!("../assets/mcreator_templates/ArmorSchema.mod.json"))
         .context("Parsing embedded MCreator armor schema")
 }
 
@@ -583,7 +583,7 @@ pub fn build_armor_element(
     imported_fv: i64,
 ) -> (Value, Vec<String>) {
     let template = template.cloned().unwrap_or_else(|| {
-        serde_json::from_str(include_str!("../../oldVer/mcreator_templates/ArmorSchema.mod.json"))
+        serde_json::from_str(include_str!("../assets/mcreator_templates/ArmorSchema.mod.json"))
             .expect("embedded armor template is valid JSON")
     });
     let mut definition = template.get("definition").and_then(Value::as_object).cloned().unwrap_or_default();

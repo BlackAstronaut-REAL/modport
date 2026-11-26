@@ -104,7 +104,7 @@ fn plant_template(root: &Path) -> Result<Value> {
             }
         }
     }
-    serde_json::from_str(include_str!("../../oldVer/mcreator_templates/PlantSchema.mod.json"))
+    serde_json::from_str(include_str!("../assets/mcreator_templates/PlantSchema.mod.json"))
         .context("Parsing embedded MCreator plant schema")
 }
 
@@ -415,7 +415,7 @@ mod tests {
             source_path:"RubyFlower.java".to_owned(),
             source_text:String::new(),
         };
-        let template:Value=serde_json::from_str(include_str!("../../oldVer/mcreator_templates/PlantSchema.mod.json")).unwrap();
+        let template:Value=serde_json::from_str(include_str!("../assets/mcreator_templates/PlantSchema.mod.json")).unwrap();
         let info=json!({"renderType":12,"customModelName":"Cross model","texture":"demo:block/ruby_flower"});
         let (element,warnings)=build_plant_element(&template,&source,&info,"ruby_flower",89);
         assert_eq!(element["_type"],"plant");
