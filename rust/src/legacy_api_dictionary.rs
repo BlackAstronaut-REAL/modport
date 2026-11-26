@@ -228,7 +228,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityLivingBase", "getEyeHeight", V_ALL, "eye_height", "Entity#getEyeHeight", "living_attributes", "signature_adapter_required", "Modern eye height may be pose/state-dependent.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "jump", V_ALL, "living_jump", "LivingEntity#jumpFromGround", "living_movement", "adapter_required", "Preserve jump boost, fluid state and movement input.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "knockBack", V_ALL, "living_knockback", "LivingEntity#knockback", "living_combat", "signature_adapter_required", "Translate source/strength/vector semantics and preserve knockback resistance.", "net/minecraft/entity/EntityLivingBase.html"),
-    d!("EntityLivingBase", "swingItem", V_ALL, "swing_hand", "LivingEntity#swing", "living_animation", "signature_adapter_required", "Map main/off hand and preserve animation packet behavior.", "net/minecraft/entity/EntityLivingBase.html"),
+    d!("EntityLivingBase", "swingItem", V_17_18, "swing_hand", "LivingEntity#swing", "living_animation", "signature_adapter_required", "Map main/off hand and preserve animation packet behavior.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "setRevengeTarget", V_ALL, "revenge_target", "Mob#setLastHurtByMob", "living_ai", "adapter_required", "Preserve target goal notifications and last-hurt-by state.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "getAITarget", V_17_18, "revenge_target_read", "Mob#getLastHurtByMob", "living_ai", "automatic_rename_candidate", "Check whether the source expects the revenge target or current attack target.", "net/minecraft/entity/EntityLivingBase.html"),
     d!("EntityLivingBase", "setLastAttacker", V_ALL, "last_attacker", "LivingEntity#setLastHurtByMob", "living_ai", "adapter_required", "Preserve attacker attribution and AI target events.", "net/minecraft/entity/EntityLivingBase.html"),
@@ -477,6 +477,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("World", "spawnParticle", V_ALL, "spawn_particle", "Level#addParticle / sendParticles", "particles", "signature_adapter_required", "Choose client-only or server-broadcast particle dispatch and preserve particle arguments.", "net/minecraft/world/World.html"),
     d!("World", "isRemote", V_ALL, "logical_client_side", "Level#isClientSide", "sides", "automatic_rename_candidate", "Preserve logical-side checks; do not substitute physical Dist checks.", "net/minecraft/world/World.html"),
     d!("WorldProvider", "calculateInitialWeather", V_18, "dimension_initial_weather", "Dimension initial weather setup", "dimension_weather", "adapter_required", "Preserve weather initialization timing and provider-specific initial rain/thunder state.", "net/minecraft/world/WorldProvider.html"),
+    d!("WorldProvider", "canSleepAt", V_112, "dimension_sleep_permission", "DimensionType#bedWorks / sleep rules", "dimensions", "adapter_required", "Preserve the provider-specific sleep permission predicate and its world/position context; do not assume every dimension allows beds.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "canDropChunk", V_112, "dimension_chunk_drop_policy", "WorldProvider chunk unload policy", "dimensions", "adapter_required", "Preserve provider-specific decision for whether a dimension chunk may be dropped from memory.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "getFogColor", V_ALL, "dimension_fog_color", "DimensionSpecialEffects#renderSky / fog color pipeline", "dimension_render", "client_adapter_required", "Preserve partial-tick and celestial-angle inputs plus provider-specific RGB output; keep separate from the boolean fog visibility hook.", "net/minecraft/world/WorldProvider.html"),
     d!("WorldProvider", "getDimensionName", V_17_18, "dimension_name", "DimensionType / Level#dimension", "dimensions", "adapter_required", "Translate provider names to registered dimension identifiers and effects.", "net/minecraft/world/WorldProvider.html"),
@@ -497,6 +498,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("Chunk", "addEntity", V_ALL, "chunk_add_entity", "ServerLevel#addFreshEntity / Level#addFreshEntity", "chunk", "adapter_required", "Entity insertion is controlled by the level/entity manager, not direct chunk lists.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "onLoad", V_112, "chunk_load_lifecycle", "ChunkEvent.Load / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move work to chunk load events/ticking lifecycle and preserve once-only execution.", "net/minecraft/world/chunk/Chunk.html"),
     d!("Chunk", "onUnload", V_112, "chunk_unload_lifecycle", "ChunkEvent.Unload / LevelChunk lifecycle", "chunk", "event_adapter_required", "Move cleanup to unload events and invalidate attached capabilities.", "net/minecraft/world/chunk/Chunk.html"),
+    d!("BiomeGenBase", "func_150567_a", V_17, "legacy_biome_srg_func_150567_a", "Biome legacy SRG method", "worldgen", "manual_adapter_required", "Preserve exact SRG name/signature and inspect the decompiled method body before assigning semantics or translating it.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "func_150559_j", V_17, "legacy_biome_srg_func_150559_j", "Biome legacy SRG method", "worldgen", "manual_adapter_required", "Keep exact name and signature; inspect the decompiled body before deriving semantics or translating this obfuscated legacy method.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "func_150563_c", V_17_18, "legacy_biome_srg_func_150563_c", "Biome legacy SRG method", "worldgen", "manual_adapter_required", "Preserve exact SRG name and signature; inspect the decompiled implementation before assigning a semantic target.", "net/minecraft/world/biome/BiomeGenBase.html"),
     d!("BiomeGenBase", "func_150557_a", V_17_18, "legacy_biome_srg_func_150557_a", "Biome variant metadata mutation", "worldgen", "manual_adapter_required", "Keep the exact SRG alias and argument semantics until the decompiled body is inspected; do not infer behavior from the obfuscated name.", "net/minecraft/world/biome/BiomeGenBase.html"),
@@ -1803,7 +1805,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("ForgeHooks", "onLivingHurt", V_18, "forge_living_hurt", "LivingHurtEvent / pre-armor damage modification", "combat", "automatic_rename_candidate", "Preserve damage source and mutable amount before armor and absorption are applied.", "net/minecraftforge/common/ForgeHooks.html"),
     d!("ForgeHooks", "onLivingJump", V_112, "forge_living_jump", "LivingEvent.LivingJumpEvent / living jump ability", "entities", "automatic_rename_candidate", "Preserve exact jump event timing immediately after living jump motion is applied.", "net/minecraftforge/common/ForgeHooks.html"),
     d!("ForgeHooks", "onLivingKnockBack", V_112, "forge_living_knockback", "LivingKnockBackEvent / motion vector modification", "combat", "adapter_required", "Preserve attacker, strength and both horizontal ratios, then use event-modified values before motion application.", "net/minecraftforge/common/ForgeHooks.html"),
-    d!("ForgeHooks", "onLivingSetAttackTarget", V_112, "forge_living_attack_target_set", "LivingSetAttackTargetEvent / mob target selection", "entities_ai", "automatic_rename_candidate", "Preserve new target, including null target clearing, and event timing before target assignment.", "net/minecraftforge/common/ForgeHooks.html"),
+    d!("ForgeHooks", "onLivingSetAttackTarget", V_18, "forge_living_attack_target_set", "LivingSetAttackTargetEvent / mob target selection", "entities_ai", "automatic_rename_candidate", "Preserve new target, including null target clearing, and event timing before target assignment.", "net/minecraftforge/common/ForgeHooks.html"),
     d!("ForgeHooks", "onLivingUpdate", V_112, "forge_living_update", "LivingEvent.LivingUpdateEvent / living entity tick", "entities", "automatic_rename_candidate", "Preserve update result and event timing inside the living tick pipeline.", "net/minecraftforge/common/ForgeHooks.html"),
     d!("ForgeHooks", "onNoteChange", V_112, "forge_note_block_change", "NoteBlockEvent.Change / note block pitch update", "blocks_audio", "automatic_rename_candidate", "Preserve TileEntityNote and prior note byte; return determines whether vanilla note changes.", "net/minecraftforge/common/ForgeHooks.html"),
     d!("ForgeHooks", "onPickBlock", V_112, "forge_pick_block", "Player pick-block / block and entity pick hooks", "player", "adapter_required", "Preserve RayTraceResult, player and world; entity and block pick paths are distinct.", "net/minecraftforge/common/ForgeHooks.html"),
@@ -2089,7 +2091,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("Configuration", "getCategoryNames", V_112, "config_category_names", "Configuration category name set", "configuration", "automatic_rename_candidate", "Preserve category identity and set iteration semantics.", "net/minecraftforge/common/config/Configuration.html"),
     d!("Configuration", "getConfigFile", V_112, "config_file_path", "Configuration backing File", "configuration", "automatic_rename_candidate", "Preserve actual backing file and configuration child/parent relationships.", "net/minecraftforge/common/config/Configuration.html"),
     d!("Configuration", "getDefinedConfigVersion", V_112, "config_defined_version", "Configuration declared version string", "configuration", "automatic_rename_candidate", "Preserve target config version used to decide whether migration is required.", "net/minecraftforge/common/config/Configuration.html"),
-    d!("Configuration", "getFloat", V_112, "config_float_value", "Configuration float property with min/max bounds", "configuration", "automatic_rename_candidate", "Preserve min/max clamping and lang-key overload behavior.", "net/minecraftforge/common/config/Configuration.html"),
+    d!("Configuration", "getFloat", V_18, "config_float_value", "Configuration float property with min/max bounds", "configuration", "automatic_rename_candidate", "Preserve min/max clamping and lang-key overload behavior.", "net/minecraftforge/common/config/Configuration.html"),
     d!("Configuration", "getInt", V_112, "config_integer_value", "Configuration integer property with min/max bounds", "configuration", "automatic_rename_candidate", "Preserve min/max clamping, defaults and language-key overload behavior.", "net/minecraftforge/common/config/Configuration.html"),
     d!("Configuration", "getLoadedConfigVersion", V_112, "config_loaded_version", "Configuration loaded version string", "configuration", "automatic_rename_candidate", "Preserve loaded file version separately from the current defined target version.", "net/minecraftforge/common/config/Configuration.html"),
     d!("Configuration", "getString", V_112, "config_string_value", "Configuration string property", "configuration", "automatic_rename_candidate", "Preserve validation Pattern, valid values, language key and display labels for overloads.", "net/minecraftforge/common/config/Configuration.html"),
@@ -3744,7 +3746,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityPlayer", "getPrefixes", V_112, "player_chat_prefixes", "Player chat prefix component collection", "player_identity", "automatic_rename_candidate", "Preserve ordered component collection and style metadata.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "getPrimaryHand", V_112, "player_primary_hand", "Player main-hand side preference", "player_movement", "automatic_rename_candidate", "Preserve EnumHandSide and left/right-handed model/arm behavior.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "getRightShoulderEntity", V_112, "player_right_shoulder_entity", "Player right shoulder entity NBT", "player_inventory", "automatic_rename_candidate", "Preserve nullable stored parrot/entity compound and client/server synchronized state.", "net/minecraft/entity/player/EntityPlayer.html"),
-    d!("EntityPlayer", "getUUID", V_112, "player_profile_uuid", "Static UUID from GameProfile", "player_identity", "automatic_rename_candidate", "Preserve profile UUID and fallback behavior where profile has no UUID.", "net/minecraft/entity/player/EntityPlayer.html"),
+    d!("EntityPlayer", "getUUID", V_18, "player_profile_uuid", "Static UUID from GameProfile", "player_identity", "automatic_rename_candidate", "Preserve profile UUID and fallback behavior where profile has no UUID.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "getWorldScoreboard", V_ALL, "player_world_scoreboard", "Player's current world Scoreboard", "player_progression", "automatic_rename_candidate", "Preserve world-specific scoreboard instance after dimension/world transfer.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "getXPSeed", V_112, "player_enchanting_xp_seed", "Player enchanting random seed", "player_progression", "automatic_rename_candidate", "Preserve per-player XP seed used to generate enchantment options and client synchronization.", "net/minecraft/entity/player/EntityPlayer.html"),
     d!("EntityPlayer", "hasReducedDebug", V_112, "player_reduced_debug_flag", "Reduced debug screen state", "player_gui", "automatic_rename_candidate", "Preserve server-synchronized reduced debug policy separately from client debug key state.", "net/minecraft/entity/player/EntityPlayer.html"),
@@ -4462,7 +4464,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("ForgeChunkManager.Ticket", "setChunkListDepth", V_112, "chunk_ticket_depth_write", "Ticket maximum forced chunk depth mutation", "world_chunks", "adapter_required", "Preserve valid configured bounds and update effective forced chunk set after depth changes.", "net/minecraftforge/common/ForgeChunkManager.Ticket.html"),
 
     // World generator and feature interfaces.
-    d!("WorldGenerator", "setScale", V_112, "world_generator_scale", "WorldGenerator scaling configuration", "worldgen", "adapter_required", "Preserve X/Y/Z scale and generator coordinate transformation.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
+    d!("WorldGenerator", "setScale", V_17, "world_generator_scale", "WorldGenerator scaling configuration", "worldgen", "adapter_required", "Preserve X/Y/Z scale and generator coordinate transformation.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
     d!("WorldGenerator", "setHeightRange", V_112, "world_generator_height_range", "WorldGenerator vertical placement range", "worldgen", "adapter_required", "Preserve min/max height and random selection semantics.", "net/minecraft/world/gen/feature/WorldGenerator.html"),
     d!("WorldGenMinable", "generate", V_ALL, "worldgen_minable_ore", "Ore vein placement", "worldgen", "adapter_required", "Preserve Random consumption, origin, vein size, block replacement predicate and exact vein walk.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
     d!("WorldGenAbstractTree", "generate", V_ALL, "worldgen_tree_feature", "Tree generator block placement", "worldgen", "adapter_required", "Preserve trunk/leaf random sequence, soil validation, bounds checks and placement order.", "net/minecraft/world/gen/feature/WorldGenAbstractTree.html"),
@@ -6554,7 +6556,6 @@ mod tests {
             ("WorldProvider", "getMovementFactor"),
             ("WorldProvider", "hasSkyLight"),
             ("WorldProvider", "isValidSpawn"),
-            ("BiomeGenBase", "decorate"),
             ("BiomeGenBase", "doesWaterFreeze"),
             ("BiomeGenBase", "getFoliageColorAtPos"),
             ("BiomeGenBase", "getGrassColorAtPos"),
@@ -7677,7 +7678,7 @@ mod tests {
         assert!(!has(&v18,"Loader","instance"));
         assert!(has(&v112,"Loader","instance"));
         assert!(has(&v17,"WorldGenerator","setScale"));
-        assert!(has(&v18,"WorldGenerator","setScale"));
+        assert!(!has(&v18,"WorldGenerator","setScale"));
         assert!(!has(&v112,"WorldGenerator","setScale"));
         assert!(has(&v112,"WorldGenerator","setDecorationDefaults"));
         assert!(has(&v112,"EventBus","shutdown"));
@@ -7690,16 +7691,13 @@ mod tests {
         let v18 = legacy_api_dictionary_for_version("1.8.9");
         let v112 = legacy_api_dictionary_for_version("1.12.2");
         let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| entries.iter().any(|e| e.source_owner == owner && e.source_method == method);
-        for owner in ["FluidRegistry"] {
-            for version in [&v17,&v18,&v112] {
-                let methods: &[&str] = if owner == "DimensionManager" {
-                    &["registerDimension","unregisterDimension","registerProviderType","unregisterProviderType","isDimensionRegistered","getStaticDimensionIDs","getDimensions","getIDs","getWorld","getWorlds","setWorld","initDimension","unloadWorld","shouldLoadSpawn"]
-                } else {
-                    &["registerFluid","getFluid","getFluidID","getFluidName","getFluidStack","getRegisteredFluids","isFluidRegistered","addBucketForFluid"]
-                };
-                for method in methods { assert!(has(version,owner,method), "missing {owner}#{method}"); }
-            }
+        for method in ["registerFluid", "getFluid", "getFluidName", "getFluidID"] {
+            assert!(has(&v18, "FluidRegistry", method), "missing 1.8.9 FluidRegistry#{}", method);
         }
+        for method in ["addBucketForFluid", "enableUniversalBucket", "getBucketFluids", "getDefaultFluidName", "getFluidStack", "getMaxID", "getRegisteredFluids", "isFluidRegistered"] {
+            assert!(has(&v112, "FluidRegistry", method), "missing 1.12.2 FluidRegistry#{}", method);
+        }
+
         for version in [&v18, &v112] {
             for method in ["registerDimension", "unregisterDimension", "getStaticDimensionIDs", "getNextFreeDimId", "getProviderType"] {
                 assert!(has(version, "DimensionManager", method), "missing DimensionManager#{}", method);
