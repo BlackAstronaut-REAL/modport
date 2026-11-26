@@ -7440,9 +7440,9 @@ mod tests {
             "removePotionEffectClient", "setArrowCountInEntity", "setHealth", "swingArm",
             "updatePotionEffects",
         ] { assert!(has(&v112, "EntityLivingBase", method), "missing 1.12.2 EntityLivingBase#{method}"); }
-        assert!(!has(&v112, "getAITarget"));
-        assert!(!has(&v112, "swingItem"));
-        assert!(!has(&v17, "swingArm"));
+        assert!(!has(&v112, "EntityLivingBase", "getAITarget"));
+        assert!(!has(&v112, "EntityLivingBase", "swingItem"));
+        assert!(!has(&v17, "EntityLivingBase", "swingArm"));
     }
 
     #[test]
