@@ -12,7 +12,10 @@ use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 use walkdir::WalkDir;
+
+include!(concat!(env!("OUT_DIR"), "/bundled_neoforge_docs.rs"));
 
 const STOP_WORDS: &[&str] = &[
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is",
@@ -258,11 +261,61 @@ impl NeoForgeDocsIndex {
 
 }
 
-/// Override the bundled corpus location with MODPORT_NEOFORGE_DOCS.
+/// Materialize the compile-time documentation snapshot when the application is
+/// running outside its source checkout. This keeps desktop/CLI binaries portable.
+fn materialize_embedded_docs() -> PathBuf {
+    static ROOT: OnceLock<PathBuf> = OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = env::temp_dir().join(format!(
+            "modport-neoforge-docs-1.21.1-{}",
+            std::process::id()
+        ));
+
+        for (relative, contents) in BUNDLED_DOC_FILES {
+            let destination = root.join(relative);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)
+                    .unwrap_or_else(|error| panic!("Create embedded docs directory {}: {error}", parent.display()));
+            }
+            let already_current = fs::read_to_string(&destination)
+                .map(|existing| existing == *contents)
+                .unwrap_or(false);
+            if !already_current {
+                fs::write(&destination, contents)
+                    .unwrap_or_else(|error| panic!("Materialize embedded docs {}: {error}", destination.display()));
+            }
+        }
+        root
+    }).clone()
+}
+
+/// Resolve the version-pinned docs corpus.
+///
+/// An explicit MODPORT_NEOFORGE_DOCS override wins. Development builds use
+/// the checked-out corpus; packaged builds fall back to the copy embedded in
+/// the executable, so they never depend on the original Cargo build path.
 pub fn default_docs_root() -> PathBuf {
-    env::var_os("MODPORT_NEOFORGE_DOCS")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/neoforge/1.21.1"))
+    if let Some(root) = env::var_os("MODPORT_NEOFORGE_DOCS") {
+        return PathBuf::from(root);
+    }
+
+    let checkout_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/neoforge/1.21.1");
+    if checkout_root.join("manifest.json").is_file() {
+        return checkout_root;
+    }
+
+    if let Ok(executable) = env::current_exe() {
+        for ancestor in executable.ancestors() {
+            for relative in ["docs/neoforge/1.21.1", "rust/docs/neoforge/1.21.1"] {
+                let candidate = ancestor.join(relative);
+                if candidate.join("manifest.json").is_file() {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    materialize_embedded_docs()
 }
 
 fn safe_page_path(root: &Path, relative: &str) -> Result<PathBuf> {
@@ -505,6 +558,15 @@ mod tests {
     #[test]
     fn bundled_neoforge_docs_are_complete_and_version_pinned() {
         let index = NeoForgeDocsIndex::load(default_docs_root()).expect("load bundled docs");
+        assert_eq!(index.page_count(), 63);
+        assert_eq!(index.manifest().minecraft_version, "1.21.1");
+        assert_eq!(index.manifest().category_count, 15);
+    }
+
+    #[test]
+    fn embedded_neoforge_docs_are_self_contained_for_packaged_binaries() {
+        let root = materialize_embedded_docs();
+        let index = NeoForgeDocsIndex::load(root).expect("load embedded docs without checkout");
         assert_eq!(index.page_count(), 63);
         assert_eq!(index.manifest().minecraft_version, "1.21.1");
         assert_eq!(index.manifest().category_count, 15);
