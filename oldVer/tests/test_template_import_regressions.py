@@ -510,3 +510,41 @@ class GenericBlade extends Item {
     )[0]["definition"]
     assert (bronze["usageCount"], bronze["damageVsEntity"], bronze["enchantability"]) == (640, 11, 20)
     assert (royal["usageCount"], royal["damageVsEntity"], royal["enchantability"]) == (1800, 17, 50)
+
+
+
+def test_registered_constructor_lore_and_tool_superclass_damage_are_recovered(tmp_path) -> None:
+    from mcreator_content_export import (
+        _apply_source_constructor_values,
+        _extract_tooltip_strings,
+        _recover_tool_stats,
+    )
+
+    lore_source = """
+class GenericRelic extends Item {
+  String description;
+  public GenericRelic(String description) { this.description = description; }
+  void appendHoverText(List tooltip) { tooltip.add(this.description); }
+}
+"""
+    resolved = _apply_source_constructor_values(
+        lore_source, "GenericRelic", [{"args": ['"A relic unique to this variant"']}]
+    )
+    assert _extract_tooltip_strings(resolved) == ["A relic unique to this variant"]
+
+    tool_source = """
+class TieredBlade extends SwordItem {
+  public TieredBlade(Tier tier, float damage, float speed, Item.Properties properties) {
+    super(tier, damage, speed, properties);
+  }
+}
+"""
+    resolved_tool = _apply_source_constructor_values(
+        tool_source, "TieredBlade",
+        [{"args": ["Tiers.DIAMOND", "5.0F", "-2.4F", "new Item.Properties()"]}],
+    )
+    durability, damage, _efficiency, _enchantability, _warnings = _recover_tool_stats(
+        resolved_tool, "Sword", {"damage": 3.0, "uses": 1561, "efficiency": 8.0, "enchantability": 10}
+    )
+    assert damage == 8.0
+    assert durability == 1561

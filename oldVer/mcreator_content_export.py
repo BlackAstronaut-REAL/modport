@@ -665,6 +665,21 @@ def _recover_tool_stats(
     if damage_value is None:
         returned = _extract_method_return_number(text, ("getDamageVsEntity", "getAttackDamage", "func_150931_i"))
         damage_value = int(returned) if returned is not None else None
+    # Some modern tool constructors pass an explicit damage modifier to the
+    # superclass (Tier, damage modifier, speed modifier, Properties). When the
+    # source tier is recoverable, combine its bonus with that constructor modifier.
+    if damage_value is None:
+        for _name, raw_args, _offset in _iter_java_calls(text, {"super"}):
+            args = _split_java_arguments(raw_args)
+            if len(args) < 3:
+                continue
+            bonus = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*[fFdD]?\s*", args[1])
+            if not bonus:
+                continue
+            damage_bonus = float(bonus.group(1))
+            tier_damage = float(material_stats.get("damage", 0.0)) if material_stats else 0.0
+            damage_value = tier_damage + damage_bonus
+            break
     # Material-backed vanilla tools often do not store an explicit value in the
     # subclass. Preserve a conservative vanilla-equivalent baseline rather than
     # misreading durability/use-duration constants as thousands of damage.
@@ -2399,6 +2414,17 @@ def _extract_tooltip_strings(text: str) -> list[str]:
     # Handles tooltip.add(TextFmt.Gold + "text") and direct string calls in
     # both MCP and obfuscated method names. Preserve formatting constants when
     # the source already provides them so MCreator can keep colored lore.
+    string_fields: dict[str, str] = {}
+    for assignment in re.finditer(
+        r"\b(?:this\s*\.\s*)?([A-Za-z_$][\w$]*)\s*=\s*"
+        r'"((?:\\.|[^"\\])*)"\s*;',
+        text,
+    ):
+        try:
+            string_fields[assignment.group(1)] = bytes(assignment.group(2), "utf-8").decode("unicode_escape")
+        except Exception:
+            string_fields[assignment.group(1)] = assignment.group(2)
+
     for match in re.finditer(r"\b(?:tooltip|list|par\d+List)\s*\.\s*add\s*\((.*?)\)\s*;", text, re.DOTALL):
         expr = match.group(1)
         for name, escape in _TOOLTIP_FORMATTING_CODES.items():
@@ -2408,9 +2434,11 @@ def _extract_tooltip_strings(text: str) -> list[str]:
                 expr,
             )
         pieces = re.findall(r'"((?:\\.|[^"\\])*)"', expr)
-        if not pieces:
-            continue
-        value = "".join(bytes(piece, "utf-8").decode("unicode_escape") for piece in pieces).strip()
+        if pieces:
+            value = "".join(bytes(piece, "utf-8").decode("unicode_escape") for piece in pieces).strip()
+        else:
+            field_match = re.search(r"\b(?:this\s*\.\s*)?([A-Za-z_$][\w$]*)\s*$", expr.strip())
+            value = string_fields.get(field_match.group(1), "") if field_match else ""
         if value and value not in result:
             result.append(value)
     return result
