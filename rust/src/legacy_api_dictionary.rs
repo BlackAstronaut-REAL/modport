@@ -3138,6 +3138,23 @@ const DEFINITIONS: &[Definition] = &[
     d!("WorldGenMinable", "isReplaceableOreGen", V_18, "ore_replaceability_predicate", "OreFeature target state predicate", "world_generation", "adapter_required", "Preserve target block state matching and ore generation target rule.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
     d!("WorldGenMinable", "getOreBlock", V_112, "ore_generator_state", "OreFeature configured block state", "world_generation", "automatic_rename_candidate", "Preserve generated ore BlockState and metadata/property values.", "net/minecraft/world/gen/feature/WorldGenMinable.html"),
 
+    d!("SimpleNetworkWrapper", "getDispatchHandler", V_17_18, "simple_network_dispatch_handler", "SimpleChannel packet dispatch pipeline", "networking", "adapter_required", "Preserve handler lookup and message discriminator mapping.", "net/minecraftforge/fml/common/network/simpleimpl/SimpleNetworkWrapper.html"),
+
+
+
+
+
+    d!("MessageContext", "getServerSide", V_17_18, "network_context_server_side", "LogicalSide#SERVER", "networking", "automatic_rename_candidate", "Preserve server/client side enum without confusing physical and logical side.", "net/minecraftforge/fml/common/network/simpleimpl/MessageContext.html"),
+
+    d!("FMLNetworkHandler", "openGui", V_ALL, "fml_network_open_gui", "NetworkHooks#openScreen / MenuProvider", "networking", "adapter_required", "Preserve mod container, GUI ID, player, world and XYZ; map server/client GUI factory behavior to menu opening.", "net/minecraftforge/fml/common/network/FMLNetworkHandler.html"),
+    d!("FMLNetworkHandler", "getEntitySpawningPacket", V_ALL, "fml_entity_spawn_packet", "Entity spawn packet / custom spawn data", "networking", "adapter_required", "Preserve entity registry identity, spawn coordinates, rotation, velocity and custom spawn payload.", "net/minecraftforge/fml/common/network/FMLNetworkHandler.html"),
+    d!("FMLNetworkHandler", "getGuiId", V_17_18, "fml_network_gui_id", "Container/menu type registration", "networking", "automatic_rename_candidate", "Preserve mod-scoped GUI numeric ID and lookup.", "net/minecraftforge/fml/common/network/FMLNetworkHandler.html"),
+    d!("FMLNetworkHandler", "getEntityTracker", V_17_18, "fml_network_entity_tracker", "ServerEntity tracking / chunk tracking", "networking", "adapter_required", "Preserve per-world entity tracker identity and tracking-distance policy.", "net/minecraftforge/fml/common/network/FMLNetworkHandler.html"),
+
+    d!("FMLEmbeddedChannel", "pipeline", V_ALL, "fml_channel_pipeline", "Netty ChannelPipeline / packet handler chain", "networking", "adapter_required", "Preserve handler ordering and channel-specific packet transformations.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+    d!("FMLEmbeddedChannel", "attr", V_ALL, "fml_channel_attribute", "Netty Channel attribute lookup", "networking", "adapter_required", "Preserve channel attribute key identity and value lifetime.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+    d!("FMLEmbeddedChannel", "writeAndFlush", V_ALL, "fml_channel_send", "Netty outbound packet dispatch", "networking", "adapter_required", "Preserve flush boundary and asynchronous network ordering.", "net/minecraftforge/fml/common/network/FMLEmbeddedChannel.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7641,6 +7658,26 @@ mod tests {
         assert!(has(&v17,"MapGenStructure","getStructureStart"));
         assert!(has(&v18,"StructureComponent","generateChestContents"));
         assert!(has(&v112,"WorldGenMinable","getOreBlock"));
+    }
+
+
+    #[test]
+    fn forge_simple_network_api_preserves_payload_and_routing_contracts() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["registerMessage","sendTo","sendToAll","sendToAllAround","sendToDimension","sendToServer"] {
+                assert!(has(version,"SimpleNetworkWrapper",method),"missing SimpleNetworkWrapper#{method}");
+            }
+            assert!(has(version,"IMessage","toBytes"));
+            assert!(has(version,"IMessage","fromBytes"));
+            assert!(has(version,"IMessageHandler","onMessage"));
+            assert!(has(version,"FMLNetworkHandler","openGui"));
+            assert!(has(version,"FMLNetworkHandler","getEntitySpawningPacket"));
+        }
+        assert!(has(&v112,"SimpleNetworkWrapper","sendToServer"));
     }
 
     #[test]
