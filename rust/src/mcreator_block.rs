@@ -247,6 +247,7 @@ fn is_block_class(superclass: &str, parents: &BTreeMap<String, String>, depth: u
     // with "Block", so the former suffix-only check silently discarded every
     // registered subclass that extended one of these bases.
     if lower.starts_with("itemblock")
+        || lower.contains("blockitem")
         || lower.contains("blockentity")
         || lower.contains("blockstate")
         || lower.contains("blockpos")
