@@ -985,6 +985,27 @@ mod tests{
     }
 
     #[test]
+    fn recognizes_intermediate_block_bases_and_inline_legacy_registrations() {
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join("Registry.java"), r#"
+            class Registry {
+                static void register() {
+                    GameRegistry.registerBlock(new RubyOre(), "ruby_ore");
+                    GameRegistry.registerBlock(BlockGem.class, "block_gem");
+                }
+            }
+            class BlockOre extends Block { }
+            class RubyOre extends BlockOre { }
+            class BlockGem extends Block { }
+        "#).unwrap();
+
+        let found = discover_block_sources(&[temp.path().to_path_buf()]).unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(found.iter().any(|block| block.class_name == "RubyOre" && block.registry_name == "ruby_ore"));
+        assert!(found.iter().any(|block| block.class_name == "BlockGem" && block.registry_name == "block_gem"));
+    }
+
+    #[test]
     fn plant_like_subclasses_are_not_emitted_as_regular_blocks() {
         let plant = BlockSource {
             class_name: "RubyFlower".to_owned(),
