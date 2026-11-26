@@ -180,26 +180,27 @@ def audit_version(
     documented: set[tuple[str, str]],
     mappings: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    # Keep the full JavaDoc class-page path in the coverage key. Class simple
+    # names are not globally unique (for example client/server or Forge/Minecraft
+    # packages), so collapsing them can falsely inflate the coverage percentage.
     docs_by_owner: dict[str, list[str]] = defaultdict(list)
     methods_by_page: dict[str, set[str]] = defaultdict(set)
     for page, method in documented:
         methods_by_page[page].add(method)
         docs_by_owner[Path(page).stem].append(page)
 
-    mapping_pairs: set[tuple[str, str]] = set()
     duplicate_counter: Counter[tuple[str, str]] = Counter()
+    mapped_pages: set[tuple[str, str]] = set()
     stale: list[dict[str, str]] = []
     doc_link_mismatches: list[dict[str, str]] = []
-    validated: set[tuple[str, str]] = set()
+    ambiguous: list[dict[str, str]] = []
 
     for item in mappings:
         owner = str(item.get("source_owner", ""))
         method = str(item.get("source_method", ""))
         if not owner or not method:
             continue
-        pair = (owner, method)
-        duplicate_counter[pair] += 1
-        mapping_pairs.add(pair)
+        duplicate_counter[(owner, method)] += 1
 
         urls = [
             str(url) for url in item.get("documentation_urls", [])
@@ -208,25 +209,40 @@ def audit_version(
         expected_pages = {
             page for page in (docs_page_path(url) for url in urls) if page
         }
-        exact_pages = [
+        exact_pages = sorted(
             page for page in expected_pages
-            if method in methods_by_page.get(page, set())
-            and Path(page).stem == owner
-        ]
-        fallback_pages = [
-            page for page in docs_by_owner.get(owner, [])
-            if method in methods_by_page.get(page, set())
-        ]
+            if Path(page).stem == owner
+            and method in methods_by_page.get(page, set())
+        )
 
         if exact_pages:
-            validated.add(pair)
-        elif fallback_pages:
-            validated.add(pair)
+            # Multiple exact URLs can occur when a shared mapping spans releases;
+            # this report is release-scoped, so the page set remains deduplicated.
+            mapped_pages.update((page, method) for page in exact_pages)
+            continue
+
+        # If the URL is wrong or absent, recover only when the JavaDoc index has
+        # exactly one class with this simple name and method. Never guess between
+        # same-named types in different packages.
+        fallback_pages = sorted(
+            page for page in docs_by_owner.get(owner, [])
+            if method in methods_by_page.get(page, set())
+        )
+        if len(fallback_pages) == 1:
+            page = fallback_pages[0]
+            mapped_pages.add((page, method))
             doc_link_mismatches.append({
                 "owner": owner,
                 "method": method,
                 "expected_pages": "; ".join(sorted(expected_pages)),
-                "actual_pages": "; ".join(sorted(fallback_pages)),
+                "actual_pages": page,
+            })
+        elif len(fallback_pages) > 1:
+            ambiguous.append({
+                "owner": owner,
+                "method": method,
+                "expected_pages": "; ".join(sorted(expected_pages)),
+                "candidate_pages": "; ".join(fallback_pages),
             })
         else:
             stale.append({
@@ -235,39 +251,37 @@ def audit_version(
                 "documentation_urls": "; ".join(urls),
             })
 
-    documented_owner_pairs = {
-        (Path(page).stem, method) for page, method in documented
-    }
-    mapped_documented_pairs = mapping_pairs & documented_owner_pairs
-    unmapped = sorted(
-        documented_owner_pairs - mapped_documented_pairs,
-        key=lambda pair: (pair[0].casefold(), pair[1].casefold()),
-    )
     duplicate_pairs = [
         {"owner": owner, "method": method, "count": count}
         for (owner, method), count in sorted(duplicate_counter.items())
         if count > 1
     ]
 
+    # The exact documented owner page and method form the denominator. This
+    # prevents a method in one package from covering a same-named class elsewhere.
+    unmapped = sorted(
+        documented - mapped_pages,
+        key=lambda pair: (pair[0].casefold(), pair[1].casefold()),
+    )
     return {
         "version": version,
-        "documented_method_owner_pairs": len(documented_owner_pairs),
+        "documented_method_owner_pairs": len(documented),
         "documented_class_pages": len(methods_by_page),
         "dictionary_records": len(mappings),
-        "unique_dictionary_owner_method_pairs": len(mapping_pairs),
-        "validated_dictionary_pairs": len(validated),
+        "unique_dictionary_owner_method_pairs": len(duplicate_counter),
+        "validated_dictionary_pairs": len(mapped_pages),
         "coverage_percent": round(
-            100.0 * len(mapped_documented_pairs) / len(documented_owner_pairs), 2
-        ) if documented_owner_pairs else 0.0,
+            100.0 * len(mapped_pages) / len(documented), 2
+        ) if documented else 0.0,
         "stale_or_undocumented_mappings": stale,
         "documentation_link_mismatches": doc_link_mismatches,
+        "ambiguous_owner_method_mappings": ambiguous,
         "duplicate_dictionary_pairs": duplicate_pairs,
         "unmapped_methods": [
-            {"owner": owner, "method": method}
-            for owner, method in unmapped
+            {"class_page": page, "owner": Path(page).stem, "method": method}
+            for page, method in unmapped
         ],
     }
-
 
 def render_markdown(reports: list[dict[str, Any]]) -> str:
     lines = [
