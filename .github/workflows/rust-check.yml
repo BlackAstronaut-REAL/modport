@@ -40,12 +40,16 @@ jobs:
       - name: Test engine
         run: cargo test --manifest-path rust/Cargo.toml --all-targets
       - name: Test desktop
+        if: always()
         run: cargo test --manifest-path rust/desktop/Cargo.toml
       - name: Build CLI
+        if: always()
         run: cargo build --release --manifest-path rust/Cargo.toml
       - name: Build desktop executable
+        if: always()
         run: cargo build --release --manifest-path rust/desktop/Cargo.toml
       - name: Generate and compile a real NeoForge port
+        if: always()
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -109,6 +113,7 @@ jobs:
           if ($null -eq $jar) { throw "Gradle succeeded without producing the converted mod JAR." }
           Write-Host "Generated smoke-test mod: $($jar.FullName)"
       - name: Upload Rust executables and compiled NeoForge smoke mod
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MojModelBridge-Rust-Windows-x64
