@@ -23,15 +23,15 @@ This is a partial converter, not a full behavior translator. Entity classes curr
 | Food | Nutrition, saturation, always-edible and fast-eating flags; custom effects pending |
 | Tools/weapons | Sword, axe, pickaxe, shovel, hoe, bow/crossbow, fishing rod, shears; recovered material stats where found |
 | Armor | Wearable armor materials/pieces, defense, durability, enchantability, layer textures; special effects/repair items pending |
-| Blocks | Basic blocks, BlockItems, hardness, resistance, light, sound, mining requirements, loot and simple fallback models |
+| Blocks | Registered legacy/modern block subclasses, inline and field-based registration recovery, resource-blockstate fallback registrations when source registrations are missing, BlockItems, hardness, resistance, light, sound, mining requirements, loot and fallback models; complex state/interaction logic remains pending |
 | Block entities | Source-detected BlockEntityType registrations, owning EntityBlock subclasses, and placeholder BlockEntity classes; storage/ticking/menus pending |
 | Plants | Cross-model/non-collision fallback; growth and special placement remain pending |
 | Entities | Registered living-entity placeholders with recovered attributes, conservative goals and fallback renderer |
 | Projectiles | Throwable-family entities, linked launchers, and thrown-item renderer; arrows/fireballs and custom impact logic pending |
 | Recipes/resources | JSON and common legacy Java recipes, namespace remapping, legacy result/ore recipe migration, asset/data import |
-| Lore/localization | Legacy § formatting codes, en_US language files, and Java localization strings |
+| Lore/localization | Legacy § formatting codes, en_US language files, Java localization strings, and recovered vanilla creative-tab placement |
 
-A generated Java project is not yet automatically compiled by Gradle against the NeoForge dependency inside the Rust unit-test suite. The current GitHub workflow verifies the Rust engine, desktop app, and CLI builds; test a generated mod with `gradle build` before distributing it.
+Generated projects include `gradlew.bat` (Windows), `gradlew` (Linux/macOS), and pinned wrapper properties. The self-bootstrapping launcher downloads Gradle 9.2.1 into the user's Gradle cache on first use; Java 21 and internet access for that initial download are still required. The GitHub smoke workflow runs the generated project's `gradlew.bat build`.
 
 ## Native NeoForge project generation
 
@@ -41,7 +41,7 @@ Modport can create a clean NeoForge 1.21.1 output project using the NeoGradle us
 cargo run --manifest-path rust/Cargo.toml -- create-neoforge-project output/converted --mod-id converted_mod --mod-name "Converted Mod" --package com.example.converted
 ```
 
-The generated workspace is explicitly marked scaffold-only until source-driven adapters populate it. It does not claim to have reconstructed legacy behavior. Use an installed Gradle with `gradle build`, or generate a wrapper with `gradle wrapper`.
+The generated workspace is explicitly marked scaffold-only until source-driven adapters populate it. It does not claim to have reconstructed legacy behavior. Run `.\\gradlew.bat build` on Windows or `./gradlew build` on Linux/macOS. Both launchers are generated automatically and bootstrap Gradle 9.2.1 on first use.
 
 ## NeoForge 1.21.1 documentation index
 
