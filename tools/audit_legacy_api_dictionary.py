@@ -327,6 +327,81 @@ def audit_version(
         ],
     }
 
+
+def build_scope_recommendations(
+    documented_by_version: dict[str, set[tuple[str, str]]],
+    dictionary: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Recommend exact release masks from owner-page/method presence in JavaDocs.
+
+    Recommendations are emitted only when the owner is unambiguous in every
+    release. They are evidence-backed scope fixes, not guessed API equivalences.
+    """
+    methods_by_page: dict[str, dict[str, set[str]]] = {}
+    pages_by_owner: dict[str, dict[str, set[str]]] = {}
+    for version, documented in documented_by_version.items():
+        methods_by_page[version] = defaultdict(set)
+        pages_by_owner[version] = defaultdict(set)
+        for page, method in documented:
+            methods_by_page[version][page].add(method)
+            pages_by_owner[version][Path(page).stem].add(page)
+
+    current_versions: dict[tuple[str, str], set[str]] = defaultdict(set)
+    url_pages: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for version, mappings in dictionary.items():
+        for item in mappings:
+            owner = str(item.get("source_owner", ""))
+            method = str(item.get("source_method", ""))
+            if not owner or not method:
+                continue
+            pair = (owner, method)
+            current_versions[pair].add(version)
+            for url in item.get("documentation_urls", []):
+                if isinstance(url, str):
+                    page = docs_page_path(url)
+                    if page:
+                        url_pages[pair].add(page)
+
+    recommendations: list[dict[str, Any]] = []
+    for (owner, method), current in sorted(current_versions.items()):
+        documented_versions: set[str] = set()
+        ambiguous: dict[str, list[str]] = {}
+        for version in documented_by_version:
+            page_matches = {
+                page for page in url_pages[(owner, method)]
+                if method in methods_by_page[version].get(page, set())
+                and Path(page).stem == owner
+            }
+            if len(page_matches) == 1:
+                documented_versions.add(version)
+                continue
+            # When a class page path has moved between releases or a row has no
+            # URL, recover only if owner + method identifies exactly one page.
+            fallback = sorted(
+                page for page in pages_by_owner[version].get(owner, set())
+                if method in methods_by_page[version].get(page, set())
+            )
+            if len(fallback) == 1:
+                documented_versions.add(version)
+            elif len(fallback) > 1:
+                ambiguous[version] = fallback
+
+        if ambiguous or documented_versions == current:
+            continue
+        if not documented_versions:
+            continue
+        recommendations.append({
+            "owner": owner,
+            "method": method,
+            "current_versions": sorted(current),
+            "documented_versions": sorted(documented_versions),
+            "remove_versions": sorted(current - documented_versions),
+            "add_versions": sorted(documented_versions - current),
+            "reason": "JavaDoc owner-page/method presence differs from the current dictionary release mask.",
+        })
+    return recommendations
+
+
 def render_markdown(reports: list[dict[str, Any]]) -> str:
     lines = [
         "# Legacy Forge API Dictionary Audit",
@@ -447,6 +522,7 @@ def main() -> int:
     )
     parser.add_argument("--write-markdown", type=Path, help="Write the Markdown report to this path.")
     parser.add_argument("--write-json", type=Path, help="Write complete audit findings as JSON.")
+    parser.add_argument("--write-scope-suggestions", type=Path, help="Write JavaDoc-derived release-mask correction suggestions as JSON.")
     parser.add_argument("--self-test", action="store_true", help="Run the parser self-test and exit.")
     args = parser.parse_args()
 
@@ -460,6 +536,10 @@ def main() -> int:
             version: load_index(version, args.cache_dir, args.offline)
             for version in VERSIONS
         }
+        scope_suggestions = build_scope_recommendations(
+            documented_by_version,
+            dictionary,
+        )
         reports = []
         for version in VERSIONS:
             mappings = dictionary.get(version)
@@ -488,6 +568,13 @@ def main() -> int:
             json.dumps(reports, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+    if args.write_scope_suggestions:
+        args.write_scope_suggestions.parent.mkdir(parents=True, exist_ok=True)
+        args.write_scope_suggestions.write_text(
+            json.dumps(scope_suggestions, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    print(f"JavaDoc release-scope correction candidates: {len(scope_suggestions)}")
     return 0
 
 
