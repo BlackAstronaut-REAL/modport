@@ -149,6 +149,11 @@ pub fn create_neoforge_project(
             fs::create_dir_all(parent)
                 .with_context(|| format!("creating project directory {}", parent.display()))?;
         }
+        let content = if relative == "gradlew.bat" {
+            content.replace('\n', "\r\n")
+        } else {
+            content
+        };
         fs::write(&destination, content)
             .with_context(|| format!("writing generated NeoForge project file {}", destination.display()))?;
         if relative == "gradlew" {
@@ -351,7 +356,7 @@ pub(crate) fn ensure_gradle_launcher(output_root: &Path) -> Result<()> {
     fs::create_dir_all(output_root)
         .with_context(|| format!("creating Gradle project directory {}", output_root.display()))?;
     #[cfg(windows)]
-    fs::write(&launcher, gradlew_bat())
+    fs::write(&launcher, gradlew_bat().replace('\n', "\r\n"))
         .with_context(|| format!("writing Gradle launcher {}", launcher.display()))?;
     #[cfg(not(windows))]
     {
