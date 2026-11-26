@@ -3016,6 +3016,59 @@ const DEFINITIONS: &[Definition] = &[
     d!("PathEntity", "isFinished", V_ALL, "path_finished_predicate", "Path#isDone", "entity_ai", "automatic_rename_candidate", "Preserve path completion state.", "net/minecraft/pathfinding/PathEntity.html"),
     d!("PathEntity", "isSamePath", V_17_18, "path_same_path_predicate", "Path equality / node sequence compare", "entity_ai", "adapter_required", "Preserve path point sequence comparison rather than object identity.", "net/minecraft/pathfinding/PathEntity.html"),
 
+    d!("Potion", "getName", V_ALL, "potion_translation_name", "Potion translation key / Component", "localization", "automatic_rename_candidate", "Preserve unlocalized key separately from localized display text.", "net/minecraft/potion/Potion.html"),
+    d!("Potion", "setRegistryName", V_112, "potion_registry_name_write", "Forge registry name / ResourceLocation", "registration", "automatic_rename_candidate", "Preserve namespace and path used to register a custom potion effect.", "net/minecraft/potion/Potion.html"),
+
+    d!("PotionEffect", "isPotionDurationMax", V_17_18, "potion_effect_infinite_duration", "MobEffectInstance infinite-duration sentinel", "potions", "automatic_rename_candidate", "Preserve max-duration sentinel separately from a long but finite effect duration.", "net/minecraft/potion/PotionEffect.html"),
+
+    d!("DataWatcher", "addObject", V_17_18, "data_watcher_register", "SynchedEntityData#defineId / define", "entity_data", "adapter_required", "Translate numeric watcher ID and legacy serializer type into a stable DataAccessor and EntityDataSerializer.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "updateObject", V_17_18, "data_watcher_write", "SynchedEntityData#set", "entity_data", "adapter_required", "Preserve watcher ID, serializer type and dirty synchronization state.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "getWatchableObject", V_17_18, "data_watcher_read", "SynchedEntityData#get", "entity_data", "adapter_required", "Translate legacy untyped watcher access into typed accessor reads while preserving null/default behavior.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "getAllWatched", V_17_18, "data_watcher_all_values", "SynchedEntityData#getNonDefaultValues", "entity_data", "adapter_required", "Preserve watcher registration order and include/exclude dirty values semantics.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "getChanged", V_17_18, "data_watcher_dirty_values", "SynchedEntityData#packDirty", "entity_data", "adapter_required", "Preserve dirty-only packet payload and dirty flag reset timing.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "hasObjectChanged", V_17_18, "data_watcher_dirty_predicate", "SynchedEntityData#isDirty", "entity_data", "automatic_rename_candidate", "Preserve whether any synchronized metadata field has changed.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "setObjectWatched", V_17_18, "data_watcher_mark_dirty", "SynchedEntityData#setDirty", "entity_data", "automatic_rename_candidate", "Mark the specified watcher entry for synchronization without changing its value.", "net/minecraft/entity/DataWatcher.html"),
+    d!("DataWatcher", "updateWatchedObjectsFromList", V_17_18, "data_watcher_apply_packet", "SynchedEntityData#assignValues", "networking", "adapter_required", "Preserve packet entry order, serializer decoding and client update callback timing.", "net/minecraft/entity/DataWatcher.html"),
+
+    d!("EntityDataManager", "createKey", V_112, "entity_data_accessor_create", "EntityDataAccessor / EntityDataSerializer registration", "entity_data", "adapter_required", "Preserve owning entity class, accessor ID allocation and serializer type.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "register", V_112, "entity_data_define", "SynchedEntityData#define", "entity_data", "automatic_rename_candidate", "Preserve default value and accessor serializer identity.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "get", V_112, "entity_data_read", "SynchedEntityData#get", "entity_data", "automatic_rename_candidate", "Preserve typed accessor and default value.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "set", V_112, "entity_data_write", "SynchedEntityData#set", "entity_data", "adapter_required", "Preserve dirty tracking, equality checks and client synchronization.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "isDirty", V_112, "entity_data_dirty_predicate", "SynchedEntityData#isDirty", "entity_data", "automatic_rename_candidate", "Preserve dirty-state flag.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "getDirty", V_112, "entity_data_pack_dirty", "SynchedEntityData#packDirty", "networking", "adapter_required", "Preserve dirty packet entry order and reset timing.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "getAll", V_112, "entity_data_all_values", "SynchedEntityData#getAll", "entity_data", "automatic_rename_candidate", "Preserve all synchronized values in registration order.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "setEntryValues", V_112, "entity_data_apply_packet", "SynchedEntityData#assignValues", "networking", "adapter_required", "Preserve accessor identity, serializer validation and notification order.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "clearDirty", V_112, "entity_data_clear_dirty", "SynchedEntityData#clearDirty", "entity_data", "automatic_rename_candidate", "Reset the dirty flag without modifying accessor values.", "net/minecraft/network/datasync/EntityDataManager.html"),
+    d!("EntityDataManager", "getEntry", V_112, "entity_data_entry_lookup", "SynchedEntityData#getItem", "entity_data", "automatic_rename_candidate", "Preserve accessor-key lookup and missing-entry behavior.", "net/minecraft/network/datasync/EntityDataManager.html"),
+
+    d!("AttributeModifier", "getID", V_17_18, "attribute_modifier_uuid", "AttributeModifier#getId / UUID", "attributes", "automatic_rename_candidate", "Preserve modifier UUID identity across save/load and equipment changes.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "getUUID", V_112, "attribute_modifier_uuid", "AttributeModifier#getId / UUID", "attributes", "automatic_rename_candidate", "Preserve UUID identity for modern attribute modifier mapping.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "getName", V_ALL, "attribute_modifier_name", "AttributeModifier#getName", "attributes", "automatic_rename_candidate", "Preserve debug/display modifier name separately from UUID.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "getAmount", V_ALL, "attribute_modifier_amount", "AttributeModifier#getAmount", "attributes", "automatic_rename_candidate", "Preserve raw modifier amount before operation-specific evaluation.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "getOperation", V_ALL, "attribute_modifier_operation", "AttributeModifier#getOperation", "attributes", "automatic_rename_candidate", "Preserve operation 0/1/2 semantics (add, multiply base, multiply total).", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "isSaved", V_ALL, "attribute_modifier_saved", "AttributeModifier#isSaved", "attributes", "automatic_rename_candidate", "Preserve whether modifier is persisted to entity attributes.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+    d!("AttributeModifier", "setSaved", V_112, "attribute_modifier_saved_write", "AttributeModifier#save", "attributes", "automatic_rename_candidate", "Preserve saved/persistent modifier flag.", "net/minecraft/entity/ai/attributes/AttributeModifier.html"),
+
+    d!("IAttribute", "getName", V_ALL, "attribute_name", "Attribute#getDescriptionId / attribute key", "attributes", "automatic_rename_candidate", "Preserve stable attribute key, not the localized display name.", "net/minecraft/entity/ai/attributes/IAttribute.html"),
+    d!("IAttribute", "getDefaultValue", V_ALL, "attribute_default_value", "Attribute#getDefaultValue", "attributes", "automatic_rename_candidate", "Preserve base default independently from entity's current base value.", "net/minecraft/entity/ai/attributes/IAttribute.html"),
+    d!("IAttribute", "getShouldWatch", V_17_18, "attribute_sync_flag", "Attribute#isClientSyncable", "attributes", "automatic_rename_candidate", "Preserve whether changes synchronize to clients.", "net/minecraft/entity/ai/attributes/IAttribute.html"),
+    d!("IAttribute", "getParent", V_17_18, "attribute_parent", "Attribute parent/derived attribute relation", "attributes", "automatic_rename_candidate", "Preserve parent attribute relation used for derived values.", "net/minecraft/entity/ai/attributes/IAttribute.html"),
+
+    d!("AttributeMap", "registerAttribute", V_ALL, "attribute_register", "AttributeSupplier / AttributeMap registration", "attributes", "adapter_required", "Preserve registry identity, default value and duplicate registration behavior.", "net/minecraft/entity/ai/attributes/AttributeMap.html"),
+    d!("AttributeMap", "getAttributeInstance", V_ALL, "attribute_instance_lookup", "AttributeMap#getInstance", "attributes", "automatic_rename_candidate", "Preserve identity lookup and missing-attribute null behavior.", "net/minecraft/entity/ai/attributes/AttributeMap.html"),
+    d!("AttributeMap", "getAllAttributes", V_ALL, "attribute_all_instances", "AttributeMap#getSyncableAttributes / all instances", "attributes", "adapter_required", "Preserve iteration order and all registered mutable attribute instances.", "net/minecraft/entity/ai/attributes/AttributeMap.html"),
+    d!("AttributeMap", "getAttributeInstanceByName", V_17_18, "attribute_instance_name_lookup", "AttributeMap#getInstance", "attributes", "adapter_required", "Translate legacy string lookup into the namespaced attribute key while retaining fallback names.", "net/minecraft/entity/ai/attributes/AttributeMap.html"),
+
+    d!("ModifiableAttributeInstance", "applyModifier", V_ALL, "attribute_modifier_apply", "AttributeInstance#addPermanentModifier / addTransientModifier", "attributes", "adapter_required", "Preserve modifier UUID replacement, operation and permanent/transient persistence behavior.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "removeModifier", V_ALL, "attribute_modifier_remove", "AttributeInstance#removeModifier", "attributes", "automatic_rename_candidate", "Remove by exact UUID and retain all unrelated modifiers.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "removeAllModifiers", V_ALL, "attribute_modifier_remove_all", "AttributeInstance#removeModifiers", "attributes", "adapter_required", "Preserve modifier set clearing and base-value retention.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "getModifier", V_ALL, "attribute_modifier_lookup", "AttributeInstance#getModifier", "attributes", "automatic_rename_candidate", "Preserve UUID lookup and missing modifier behavior.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "getModifiers", V_ALL, "attribute_modifiers_all", "AttributeInstance#getModifiers", "attributes", "adapter_required", "Preserve full modifier set and deterministic operation ordering.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "getAttributeValue", V_ALL, "attribute_computed_value", "AttributeInstance#getValue", "attributes", "automatic_rename_candidate", "Preserve operation pipeline and clamping after modifiers.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "getBaseValue", V_ALL, "attribute_base_value", "AttributeInstance#getBaseValue", "attributes", "automatic_rename_candidate", "Preserve unmodified base value.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "setBaseValue", V_ALL, "attribute_base_value_write", "AttributeInstance#setBaseValue", "attributes", "automatic_rename_candidate", "Preserve base value update and dirty synchronization.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+    d!("ModifiableAttributeInstance", "getAttributeModifiers", V_17_18, "attribute_modifiers_by_operation", "AttributeInstance#getModifiers", "attributes", "adapter_required", "Preserve operation-specific modifier grouping.", "net/minecraft/entity/ai/attributes/ModifiableAttributeInstance.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7449,6 +7502,50 @@ mod tests {
         assert!(has(&v17,"PathNavigate","tryMoveToEntityLiving"));
         assert!(has(&v18,"PathNavigate","tryMoveToXYZ"));
         assert!(has(&v112,"PathFinder","findPath"));
+    }
+
+
+    #[test]
+    fn potion_and_effect_dictionary_preserves_ability_behavior() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["getPotionById","getName","getLiquidColor","isReady","performEffect","isInstant","isBadEffect","applyAttributesModifiersToEntity","removeAttributesModifiersFromEntity"] {
+                assert!(has(version,"Potion",method),"missing Potion#{method}");
+            }
+            for method in ["getDuration","getAmplifier","getIsAmbient","combine","onUpdate","writeCustomPotionEffectToNBT","readCustomPotionEffectFromNBT"] {
+                assert!(has(version,"PotionEffect",method),"missing PotionEffect#{method}");
+            }
+        }
+        assert!(has(&v17,"PotionEffect","getPotionID"));
+        assert!(!has(&v112,"PotionEffect","getPotionID"));
+        assert!(has(&v112,"PotionEffect","doesShowParticles"));
+    }
+
+    #[test]
+    fn entity_data_and_attribute_dictionary_preserves_sync_and_modifier_semantics() {
+        let v17=legacy_api_dictionary_for_version("1.7.10");
+        let v18=legacy_api_dictionary_for_version("1.8.9");
+        let v112=legacy_api_dictionary_for_version("1.12.2");
+        let has=|entries:&[LegacyApiMethodMapping],owner:&str,method:&str| entries.iter().any(|e|e.source_owner==owner&&e.source_method==method);
+        for version in [&v17,&v18] {
+            for method in ["addObject","updateObject","getAllWatched","getChanged","hasObjectChanged","setObjectWatched","updateWatchedObjectsFromList"] {
+                assert!(has(version,"DataWatcher",method),"missing legacy DataWatcher#{method}");
+            }
+            assert!(has(version,"AttributeModifier","getID"));
+            assert!(has(version,"IAttribute","getShouldWatch"));
+        }
+        for method in ["createKey","register","get","set","isDirty","getDirty","getAll","setEntryValues","clearDirty","getEntry"] {
+            assert!(has(&v112,"EntityDataManager",method),"missing EntityDataManager#{method}");
+        }
+        for version in [&v17,&v18,&v112] {
+            for method in ["getName","getAmount","getOperation","isSaved"] {assert!(has(version,"AttributeModifier",method));}
+            for method in ["getName","getDefaultValue"] {assert!(has(version,"IAttribute",method));}
+            for method in ["registerAttribute","getAttributeInstance","getAllAttributes"] {assert!(has(version,"AttributeMap",method));}
+            for method in ["applyModifier","removeModifier","removeAllModifiers","getModifier","getModifiers","getAttributeValue","getBaseValue","setBaseValue"] {assert!(has(version,"ModifiableAttributeInstance",method));}
+        }
     }
 
     #[test]
