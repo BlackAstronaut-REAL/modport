@@ -9,8 +9,13 @@ use mojmodelbridge::viewer::ViewerScene;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{mpsc, mpsc::Receiver, Arc};
+use std::thread;
 use std::time::{Duration, Instant};
+
+use mojmodelbridge::gradle_bridge::{compile_workspace, GradleCompileReport};
+use mojmodelbridge::neoforge_port::{port_to_neoforge, NeoForgePortReport};
+use mojmodelbridge::neoforge_project::DEFAULT_NEOFORGE_VERSION;
 
 const BACKGROUND: Color32 = Color32::from_rgb(16, 20, 29);
 const SURFACE: Color32 = Color32::from_rgb(25, 32, 45);
@@ -57,6 +62,82 @@ impl AnimatedTexture {
     }
 }
 
+#[derive(Debug, Clone)]
+struct PortUiSummary {
+    output_root: String,
+    mod_id: String,
+    display_name: String,
+    conversion_state: String,
+    item_count: usize,
+    block_count: usize,
+    entity_count: usize,
+    armor_set_count: usize,
+    projectile_count: usize,
+    recipe_count: usize,
+    resource_count: usize,
+    warning_count: usize,
+    analysis_file: String,
+}
+
+#[derive(Debug, Clone)]
+struct BuildUiSummary {
+    success: bool,
+    exit_code: Option<i32>,
+    duration_seconds: f64,
+    log_file: String,
+    report_file: String,
+    diagnostics: Vec<String>,
+    output_tail: String,
+}
+
+enum BackgroundMessage {
+    Progress(String),
+    PortCompleted(PortUiSummary),
+    BuildCompleted(BuildUiSummary),
+    Failed(String),
+    Finished,
+}
+
+fn build_ui_summary(report: GradleCompileReport) -> BuildUiSummary {
+    let combined = if report.stderr.trim().is_empty() {
+        report.stdout.clone()
+    } else {
+        format!("{}\n{}", report.stdout, report.stderr)
+    };
+    let lines = combined.lines().collect::<Vec<_>>();
+    let output_tail = lines.iter().rev().take(36).copied().collect::<Vec<_>>()
+        .into_iter().rev().collect::<Vec<_>>().join("\n");
+    BuildUiSummary {
+        success: report.success,
+        exit_code: report.exit_code,
+        duration_seconds: report.duration_seconds,
+        log_file: report.log_file.to_string_lossy().to_string(),
+        report_file: report.report_file.to_string_lossy().to_string(),
+        diagnostics: report.diagnostics.iter()
+            .map(|item| format!("{}: {}", item.severity, item.message))
+            .collect(),
+        output_tail,
+    }
+}
+
+fn port_ui_summary(report: &NeoForgePortReport) -> PortUiSummary {
+    PortUiSummary {
+        output_root: report.target_project.output_root.to_string_lossy().to_string(),
+        mod_id: report.target_mod_id.clone(),
+        display_name: report.target_project.mod_name.clone(),
+        conversion_state: report.conversion_state.clone(),
+        item_count: report.items.len(),
+        block_count: report.blocks.len(),
+        entity_count: report.entities.len(),
+        armor_set_count: report.armor_sets.len(),
+        projectile_count: report.native_projectiles.len(),
+        recipe_count: report.native_recipes.generated.len(),
+        resource_count: report.resource_files_copied,
+        warning_count: report.warnings.len(),
+        analysis_file: report.analysis_file.to_string_lossy().to_string(),
+    }
+}
+
 pub struct MojModelBridgeApp {
     active_page: String,
     sidebar_collapsed: bool,
@@ -92,6 +173,25 @@ pub struct MojModelBridgeApp {
     components_json: String,
     metadata_json: String,
     minecraftia_available: bool,
+
+    port_sources: Vec<String>,
+    port_output: String,
+    port_mod_id: String,
+    port_mod_name: String,
+    port_package: String,
+    port_neoforge_version: String,
+    port_overwrite: bool,
+    port_build_after_conversion: bool,
+    build_project_path: String,
+    build_tasks: String,
+    build_offline: bool,
+    background_rx: Option<Receiver<BackgroundMessage>>,
+    background_busy: bool,
+    background_progress: String,
+    background_error: String,
+    background_log: Vec<String>,
+    port_result: Option<PortUiSummary>,
+    build_result: Option<BuildUiSummary>,
 }
 
 fn parse_animated_texture(
@@ -204,6 +304,14 @@ impl MojModelBridgeApp {
         });
 
         let recent_project = project::load_recent_project();
+        let initial_port_sources = recent_project.as_ref()
+            .map(|saved| saved.sources.paths().into_iter()
+                .map(|path| path.to_string_lossy().to_string()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let default_port_output = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("modport-output")
+            .to_string_lossy().to_string();
         Self {
             active_page: "Project Converter".to_owned(),
             sidebar_collapsed: false,
@@ -237,6 +345,24 @@ impl MojModelBridgeApp {
             components_json: "{}".to_owned(),
             metadata_json: "{}".to_owned(),
             minecraftia_available,
+            port_sources: initial_port_sources,
+            port_output: default_port_output.clone(),
+            port_mod_id: String::new(),
+            port_mod_name: String::new(),
+            port_package: String::new(),
+            port_neoforge_version: DEFAULT_NEOFORGE_VERSION.to_owned(),
+            port_overwrite: false,
+            port_build_after_conversion: true,
+            build_project_path: default_port_output,
+            build_tasks: "build".to_owned(),
+            build_offline: false,
+            background_rx: None,
+            background_busy: false,
+            background_progress: "Ready to convert.".to_owned(),
+            background_error: String::new(),
+            background_log: Vec::new(),
+            port_result: None,
+            build_result: None,
         }
     }
 
@@ -646,6 +772,442 @@ impl MojModelBridgeApp {
             });
         } else {
             ui.label(RichText::new("A project manifest is created locally after the first successful parse.").color(MUTED));
+        }
+    }
+
+    fn begin_port_conversion(&mut self) {
+        if self.background_busy {
+            return;
+        }
+        let roots = self.port_sources.iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        if roots.is_empty() {
+            self.background_error = "Add at least one mod folder, JAR, ZIP, Java source, or class file.".to_owned();
+            return;
+        }
+        let missing = roots.iter().filter(|path| !path.exists())
+            .map(|path| path.display().to_string()).collect::<Vec<_>>();
+        if !missing.is_empty() {
+            self.background_error = format!("These input paths do not exist: {}", missing.join(", "));
+            return;
+        }
+        if self.port_output.trim().is_empty() {
+            self.background_error = "Choose an output folder for the converted NeoForge project.".to_owned();
+            return;
+        }
+        let output = PathBuf::from(self.port_output.trim());
+        let mod_id = (!self.port_mod_id.trim().is_empty()).then(|| self.port_mod_id.trim().to_owned());
+        let mod_name = (!self.port_mod_name.trim().is_empty()).then(|| self.port_mod_name.trim().to_owned());
+        let package = (!self.port_package.trim().is_empty()).then(|| self.port_package.trim().to_owned());
+        let neo_version = self.port_neoforge_version.trim().to_owned();
+        let overwrite = self.port_overwrite;
+        let build_after = self.port_build_after_conversion;
+
+        let (sender, receiver) = mpsc::channel();
+        self.background_rx = Some(receiver);
+        self.background_busy = true;
+        self.background_progress = "Starting native Rust mod analysis…".to_owned();
+        self.background_error.clear();
+        self.background_log.clear();
+        self.port_result = None;
+        self.build_result = None;
+        self.build_project_path = output.to_string_lossy().to_string();
+
+        thread::spawn(move || {
+            let _ = sender.send(BackgroundMessage::Progress(
+                "Scanning source roots and resolving the legacy API version…".to_owned()
+            ));
+            match port_to_neoforge(
+                &roots,
+                &output,
+                mod_id.as_deref(),
+                mod_name.as_deref(),
+                package.as_deref(),
+                &neo_version,
+                None,
+                overwrite,
+            ) {
+                Ok(report) => {
+                    let output_root = report.target_project.output_root.clone();
+                    let summary = port_ui_summary(&report);
+                    let _ = sender.send(BackgroundMessage::PortCompleted(summary));
+                    if build_after {
+                        let _ = sender.send(BackgroundMessage::Progress(
+                            "Conversion finished. Running Gradle build for the generated NeoForge mod…".to_owned()
+                        ));
+                        match compile_workspace(&output_root, &[], false, true, false) {
+                            Ok(build) => {
+                                let _ = sender.send(BackgroundMessage::BuildCompleted(build_ui_summary(build)));
+                            }
+                            Err(error) => {
+                                let _ = sender.send(BackgroundMessage::Failed(format!(
+                                    "Conversion completed, but Gradle could not be started: {error:#}"
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(error) => {
+                    let _ = sender.send(BackgroundMessage::Failed(format!(
+                        "Mod conversion failed: {error:#}"
+                    )));
+                }
+            }
+            let _ = sender.send(BackgroundMessage::Finished);
+        });
+    }
+
+    fn begin_gradle_build(&mut self) {
+        if self.background_busy {
+            return;
+        }
+        let root = PathBuf::from(self.build_project_path.trim());
+        if self.build_project_path.trim().is_empty()
+            || (!root.join("build.gradle").is_file() && !root.join("build.gradle.kts").is_file())
+        {
+            self.background_error = format!(
+                "No Gradle build file was found in '{}'. Select a generated NeoForge project folder first.",
+                root.display()
+            );
+            return;
+        }
+        let tasks = self.build_tasks
+            .split(|character: char| character.is_whitespace() || character == ',')
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let offline = self.build_offline;
+        let (sender, receiver) = mpsc::channel();
+        self.background_rx = Some(receiver);
+        self.background_busy = true;
+        self.background_progress = format!(
+            "Running Gradle task(s): {}…",
+            if tasks.is_empty() { "build".to_owned() } else { tasks.join(", ") }
+        );
+        self.background_error.clear();
+        self.background_log.clear();
+        self.build_result = None;
+
+        thread::spawn(move || {
+            let _ = sender.send(BackgroundMessage::Progress("Gradle is running in the background…".to_owned()));
+            match compile_workspace(&root, &tasks, offline, true, false) {
+                Ok(report) => {
+                    let _ = sender.send(BackgroundMessage::BuildCompleted(build_ui_summary(report)));
+                }
+                Err(error) => {
+                    let _ = sender.send(BackgroundMessage::Failed(format!(
+                        "Gradle build could not be started: {error:#}"
+                    )));
+                }
+            }
+            let _ = sender.send(BackgroundMessage::Finished);
+        });
+    }
+
+    fn poll_background_job(&mut self, context: &egui::Context) {
+        let mut messages = Vec::new();
+        let mut disconnected = false;
+        if let Some(receiver) = self.background_rx.as_ref() {
+            loop {
+                match receiver.try_recv() {
+                    Ok(message) => messages.push(message),
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+        }
+        let mut finished = false;
+        for message in messages {
+            match message {
+                BackgroundMessage::Progress(value) => {
+                    self.background_progress = value.clone();
+                    self.background_log.push(value);
+                }
+                BackgroundMessage::PortCompleted(summary) => {
+                    self.build_project_path = summary.output_root.clone();
+                    self.background_progress = format!(
+                        "Ported {} · {} item(s), {} block(s), {} mob(s).",
+                        summary.mod_id, summary.item_count, summary.block_count, summary.entity_count
+                    );
+                    self.background_log.push(self.background_progress.clone());
+                    self.port_result = Some(summary);
+                }
+                BackgroundMessage::BuildCompleted(summary) => {
+                    self.background_progress = if summary.success {
+                        format!("Gradle build passed in {:.1}s.", summary.duration_seconds)
+                    } else {
+                        format!("Gradle build failed (exit {:?}).", summary.exit_code)
+                    };
+                    self.background_log.push(self.background_progress.clone());
+                    self.build_result = Some(summary);
+                }
+                BackgroundMessage::Failed(error) => {
+                    self.background_error = error.clone();
+                    self.background_progress = "Task finished with an error.".to_owned();
+                    self.background_log.push(error);
+                }
+                BackgroundMessage::Finished => finished = true,
+            }
+        }
+        if self.background_busy {
+            context.request_repaint_after(Duration::from_millis(120));
+        }
+        if finished || disconnected {
+            self.background_busy = false;
+            self.background_rx = None;
+            if disconnected && !finished {
+                self.background_error = "The background conversion/build task stopped unexpectedly.".to_owned();
+            }
+            context.request_repaint();
+        }
+    }
+
+    fn show_porter(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(6.0);
+        ui.heading("Convert a legacy or existing mod");
+        ui.label(RichText::new(
+            "Choose one or more source inputs. Modport merges compiled classes, decompiled Java, original source, and mod archives before generating a native Minecraft 1.21.1 / NeoForge project."
+        ).color(MUTED));
+        ui.add_space(10.0);
+
+        ui.group(|ui| {
+            ui.heading("Source inputs");
+            if self.port_sources.is_empty() {
+                ui.label(RichText::new("No input selected yet. Add a mod folder, JAR/ZIP, or loose Java/class files.").color(MUTED));
+            }
+            let mut remove_index = None;
+            for (index, path) in self.port_sources.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(path)
+                        .desired_width((ui.available_width() - 42.0).max(140.0)));
+                    if ui.small_button("×").clicked() {
+                        remove_index = Some(index);
+                    }
+                });
+            }
+            if let Some(index) = remove_index {
+                self.port_sources.remove(index);
+            }
+            ui.horizontal(|ui| {
+                if ui.button("＋ Add folder").clicked() {
+                    if let Some(folder) = rfd::FileDialog::new()
+                        .set_title("Add mod source folder")
+                        .pick_folder()
+                    {
+                        let value = folder.to_string_lossy().to_string();
+                        if !self.port_sources.contains(&value) {
+                            self.port_sources.push(value);
+                        }
+                    }
+                }
+                if ui.button("＋ Add JAR / ZIP / source files").clicked() {
+                    if let Some(files) = rfd::FileDialog::new()
+                        .set_title("Add mod JAR, ZIP, Java, or class files")
+                        .add_filter("Mod archives and source", &["jar", "zip", "java", "class"])
+                        .pick_files()
+                    {
+                        for file in files {
+                            let value = file.to_string_lossy().to_string();
+                            if !self.port_sources.contains(&value) {
+                                self.port_sources.push(value);
+                            }
+                        }
+                    }
+                }
+                if ui.button("Use current project sources").clicked() {
+                    for path in self.project_sources.paths() {
+                        let value = path.to_string_lossy().to_string();
+                        if !self.port_sources.contains(&value) {
+                            self.port_sources.push(value);
+                        }
+                    }
+                }
+                if ui.button("Clear inputs").clicked() {
+                    self.port_sources.clear();
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+        ui.group(|ui| {
+            ui.heading("NeoForge output");
+            ui.horizontal(|ui| {
+                ui.label("Output folder");
+                ui.add(egui::TextEdit::singleline(&mut self.port_output)
+                    .desired_width((ui.available_width() - 95.0).max(180.0)));
+                if ui.button("Browse…").clicked() {
+                    if let Some(folder) = rfd::FileDialog::new()
+                        .set_title("Choose converted NeoForge project output folder")
+                        .pick_folder()
+                    {
+                        self.port_output = folder.to_string_lossy().to_string();
+                    }
+                }
+            });
+            egui::Grid::new("port_target_options").num_columns(2).spacing([12.0, 7.0]).show(ui, |ui| {
+                ui.label("Target mod ID");
+                ui.add(egui::TextEdit::singleline(&mut self.port_mod_id)
+                    .desired_width(f32::INFINITY).hint_text("Auto-detect from mod metadata"));
+                ui.end_row();
+                ui.label("Display name");
+                ui.add(egui::TextEdit::singleline(&mut self.port_mod_name)
+                    .desired_width(f32::INFINITY).hint_text("Auto-detect from mod metadata"));
+                ui.end_row();
+                ui.label("Java package");
+                ui.add(egui::TextEdit::singleline(&mut self.port_package)
+                    .desired_width(f32::INFINITY).hint_text("Auto: com.modport.<modid>"));
+                ui.end_row();
+                ui.label("NeoForge version");
+                ui.add(egui::TextEdit::singleline(&mut self.port_neoforge_version).desired_width(f32::INFINITY));
+                ui.end_row();
+            });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.port_overwrite, "Replace generated files if they already exist");
+                ui.checkbox(&mut self.port_build_after_conversion, "Build the generated mod after porting");
+            });
+            ui.label(RichText::new(
+                "The output is a real Gradle project. A successful conversion does not imply that every custom AI routine, special ability, event, or network behavior has been reconstructed; check port-analysis.json for recovered properties and pending adapters."
+            ).size(10.0).color(MUTED));
+            ui.add_space(5.0);
+            let can_start = !self.background_busy && !self.port_sources.is_empty()
+                && !self.port_output.trim().is_empty() && !self.port_neoforge_version.trim().is_empty();
+            if ui.add_enabled(can_start, egui::Button::new("▶  Start mod conversion")
+                .fill(ACCENT).min_size(egui::vec2(190.0, 36.0))).clicked()
+            {
+                self.begin_port_conversion();
+            }
+        });
+
+        self.show_background_status(ui);
+        if let Some(result) = self.port_result.as_ref() {
+            ui.add_space(8.0);
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("Conversion result");
+                    ui.label(RichText::new(&result.conversion_state).size(9.0).color(MUTED));
+                });
+                ui.label(RichText::new(format!("{} ({})", result.display_name, result.mod_id)).strong());
+                ui.label(format!("Output: {}", result.output_root));
+                egui::Grid::new("port_result_counts").num_columns(4).spacing([14.0, 6.0]).show(ui, |ui| {
+                    ui.label(format!("Items / tools: {}", result.item_count));
+                    ui.label(format!("Blocks: {}", result.block_count));
+                    ui.label(format!("Entities: {}", result.entity_count));
+                    ui.label(format!("Armor sets: {}", result.armor_set_count));
+                    ui.end_row();
+                    ui.label(format!("Projectiles: {}", result.projectile_count));
+                    ui.label(format!("Recipes: {}", result.recipe_count));
+                    ui.label(format!("Resources copied: {}", result.resource_count));
+                    ui.label(format!("Warnings: {}", result.warning_count));
+                    ui.end_row();
+                });
+                ui.label(RichText::new(format!("Analysis report: {}", result.analysis_file)).size(9.0).color(MUTED));
+                if ui.button("Open Build & Test").clicked() {
+                    self.active_page = "Build & Test".to_owned();
+                }
+            });
+        }
+    }
+
+    fn show_build_test(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(6.0);
+        ui.heading("Build and verify a generated mod");
+        ui.label(RichText::new(
+            "Run Gradle against a generated NeoForge project. Build logs and structured diagnostics are written beside the project so failed Java compilation can be inspected."
+        ).color(MUTED));
+        ui.add_space(10.0);
+        ui.group(|ui| {
+            ui.heading("Gradle project");
+            ui.horizontal(|ui| {
+                ui.label("Project folder");
+                ui.add(egui::TextEdit::singleline(&mut self.build_project_path)
+                    .desired_width((ui.available_width() - 95.0).max(180.0)));
+                if ui.button("Browse…").clicked() {
+                    if let Some(folder) = rfd::FileDialog::new()
+                        .set_title("Select a Gradle / NeoForge project")
+                        .pick_folder()
+                    {
+                        self.build_project_path = folder.to_string_lossy().to_string();
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Gradle tasks");
+                ui.add(egui::TextEdit::singleline(&mut self.build_tasks)
+                    .desired_width(240.0).hint_text("build"));
+                ui.checkbox(&mut self.build_offline, "Offline");
+            });
+            let root = PathBuf::from(self.build_project_path.trim());
+            let has_gradle = root.join("build.gradle").is_file() || root.join("build.gradle.kts").is_file();
+            if !has_gradle && !self.build_project_path.trim().is_empty() {
+                ui.label(RichText::new("No build.gradle or build.gradle.kts found in the selected folder.").size(10.0).color(Color32::from_rgb(238, 167, 115)));
+            }
+            if ui.add_enabled(!self.background_busy && has_gradle, egui::Button::new("⚒  Run Gradle build")
+                .fill(ACCENT).min_size(egui::vec2(170.0, 34.0))).clicked()
+            {
+                self.begin_gradle_build();
+            }
+        });
+        self.show_background_status(ui);
+        if let Some(result) = self.build_result.as_ref() {
+            ui.add_space(8.0);
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.heading(if result.success { "Build successful" } else { "Build failed" });
+                    ui.label(RichText::new(format!("{:.1}s · exit {:?}", result.duration_seconds, result.exit_code)).color(MUTED));
+                });
+                ui.label(format!("Build log: {}", result.log_file));
+                ui.label(format!("Build report: {}", result.report_file));
+                for diagnostic in result.diagnostics.iter().take(30) {
+                    ui.label(RichText::new(diagnostic).size(10.0).color(
+                        if diagnostic.to_ascii_lowercase().starts_with("error") {
+                            Color32::from_rgb(243, 137, 127)
+                        } else {
+                            Color32::from_rgb(236, 184, 109)
+                        }
+                    ));
+                }
+                if !result.output_tail.trim().is_empty() {
+                    egui::CollapsingHeader::new("Gradle output (last lines)")
+                        .default_open(!result.success)
+                        .show(ui, |ui| {
+                            ui.add(egui::Label::new(
+                                RichText::new(&result.output_tail).monospace()
+                            ).wrap());
+                        });
+                }
+            });
+        }
+    }
+
+    fn show_background_status(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if self.background_busy {
+                ui.spinner();
+            } else {
+                ui.label(RichText::new("●").color(if self.background_error.is_empty() {
+                    Color32::from_rgb(105, 207, 151)
+                } else {
+                    Color32::from_rgb(243, 137, 127)
+                }));
+            }
+            ui.label(RichText::new(&self.background_progress).color(MUTED));
+        });
+        if !self.background_error.is_empty() {
+            ui.label(RichText::new(&self.background_error).color(Color32::from_rgb(243, 137, 127)));
+        }
+        if !self.background_log.is_empty() {
+            egui::CollapsingHeader::new("Task history").default_open(false).show(ui, |ui| {
+                for entry in self.background_log.iter().rev().take(12).rev() {
+                    ui.label(RichText::new(entry).size(10.0).color(MUTED));
+                }
+            });
         }
     }
 
@@ -1204,6 +1766,7 @@ fn show_json_object_editor(ui: &mut egui::Ui, encoded: &mut String, id: &str) {
 
 impl eframe::App for MojModelBridgeApp {
     fn logic(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_background_job(context);
         let now = Instant::now();
         let delta = now.duration_since(self.last_frame).as_secs_f32().clamp(0.0, 0.1);
         self.last_frame = now;
@@ -1257,6 +1820,8 @@ impl eframe::App for MojModelBridgeApp {
                 match active_page.as_str() {
                     "Content Browser" => self.show_browser(&context, ui),
                     "Project Converter" => self.show_project_converter(&context, ui),
+                    "Porter" => self.show_porter(ui),
+                    "Build & Test" => self.show_build_test(ui),
                     "Projects" => self.show_projects(&context, ui),
                     "Dashboard" => self.show_dashboard(ui),
                     _ => {
