@@ -2832,6 +2832,48 @@ const DEFINITIONS: &[Definition] = &[
     d!("EntityLiving", "getMaximumHomeDistance", V_ALL, "living_home_radius", "Mob#getHomeRadius", "entity_ai", "automatic_rename_candidate", "Preserve home restriction radius in blocks.", "net/minecraft/entity/EntityLiving.html"),
     d!("EntityLiving", "setLeashedToEntity", V_17_18, "living_legacy_leash_write", "Mob#setLeashedTo", "entities", "adapter_required", "Preserve entity holder and send-leash-packet flag.", "net/minecraft/entity/EntityLiving.html"),
 
+    d!("EntityAnimal", "createChild", V_ALL, "animal_child_factory", "AgeableMob offspring factory", "breeding", "adapter_required", "Preserve mate entity, offspring subtype and inherited variant data.", "net/minecraft/entity/passive/EntityAnimal.html"),
+    d!("EntityAnimal", "spawnBabyAnimal", V_17_18, "animal_legacy_spawn_offspring", "Animal offspring spawn pipeline", "breeding", "adapter_required", "Preserve legacy spawn position, parent state and offspring initialization order.", "net/minecraft/entity/passive/EntityAnimal.html"),
+    d!("EntityAnimal", "onGrowingAdult", V_ALL, "animal_adult_transition", "AgeableMob#ageBoundaryReached", "breeding", "adapter_required", "Preserve adult transition callback and scale/AI refresh.", "net/minecraft/entity/passive/EntityAnimal.html"),
+    d!("EntityAnimal", "getExperiencePoints", V_ALL, "animal_experience_drop", "LivingEntity#getExperienceReward", "combat", "adapter_required", "Preserve breeding/kill context used by the animal XP drop calculation.", "net/minecraft/entity/passive/EntityAnimal.html"),
+    d!("EntityAnimal", "processInteract", V_ALL, "animal_player_interaction", "Mob#mobInteract / Player interaction", "interaction", "adapter_required", "Preserve interaction stack, player hand, client/server side and returned action result.", "net/minecraft/entity/passive/EntityAnimal.html"),
+
+    d!("EntityAgeable", "getScaleForAge", V_ALL, "ageable_scale_for_age", "AgeableMob#ageScale", "entity_render", "automatic_rename_candidate", "Preserve age interpolation used for baby/adult model scaling.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAgeable", "isChild", V_ALL, "ageable_child_predicate", "AgeableMob#isBaby", "breeding", "automatic_rename_candidate", "Preserve baby-state predicate separately from the raw growth timer.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAgeable", "onGrowingAdult", V_ALL, "ageable_adult_transition", "AgeableMob#ageBoundaryReached", "breeding", "adapter_required", "Preserve adult transition side effects and AI/attribute refresh.", "net/minecraft/entity/EntityAgeable.html"),
+    d!("EntityAgeable", "setScaleForAge", V_ALL, "ageable_scale_for_age_write", "AgeableMob age scale / dimensions", "entity_render", "adapter_required", "Preserve scale-derived dimensions and bounding-box refresh.", "net/minecraft/entity/EntityAgeable.html"),
+
+    d!("EntityTameable", "getAISit", V_17_18, "tameable_legacy_sit_ai", "SitWhenOrderedToGoal / tameable AI", "entity_ai", "adapter_required", "Preserve legacy sit-goal state and command synchronization.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "getOwner", V_ALL, "tameable_owner_read", "TamableAnimal#getOwner", "entities", "adapter_required", "Preserve owner UUID resolution, unloaded owner behavior and cached owner semantics.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "getOwnerId", V_112, "tameable_owner_uuid_read", "TamableAnimal#getOwnerUUID", "entities", "automatic_rename_candidate", "Preserve UUID identity even when the owner entity is not currently loaded.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "getTameSkin", V_17_18, "tameable_legacy_skin_variant", "TamableAnimal texture/model variant", "entity_render", "adapter_required", "Preserve legacy skin selection based on tame state and entity variant.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "isSitting", V_ALL, "tameable_sitting_predicate", "TamableAnimal#isInSittingPose", "entity_ai", "automatic_rename_candidate", "Preserve synchronized sitting command state.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "isTamed", V_ALL, "tameable_tamed_predicate", "TamableAnimal#isTame", "entities", "automatic_rename_candidate", "Preserve tame state independently from whether an owner UUID resolves.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "playTameEffect", V_ALL, "tameable_tame_particles", "TamableAnimal tame particles/sound", "entity_render", "client_adapter_required", "Preserve tame particles, sound and client-only effect timing.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "setOwner", V_17_18, "tameable_legacy_owner_write", "TamableAnimal#setOwnerUUID", "entities", "adapter_required", "Preserve owner reference, owner UUID persistence and tame flag ordering.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "setOwnerId", V_112, "tameable_owner_uuid_write", "TamableAnimal#setOwnerUUID", "entities", "automatic_rename_candidate", "Preserve owner UUID even when owner entity is not loaded.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "setSitting", V_ALL, "tameable_sitting_write", "TamableAnimal#setInSittingPose", "entity_ai", "adapter_required", "Preserve synchronized sitting state and sit-goal behavior.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "setTamed", V_ALL, "tameable_tamed_write", "TamableAnimal#setTame", "entities", "adapter_required", "Preserve tame flag, owner UUID and attribute modifier updates.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "shouldAttackEntity", V_ALL, "tameable_target_filter", "TamableAnimal#canAttack", "combat", "adapter_required", "Preserve owner relationship, target type and tameable-specific attack filtering.", "net/minecraft/entity/passive/EntityTameable.html"),
+    d!("EntityTameable", "shouldAttackPlayer", V_ALL, "tameable_player_target_filter", "TamableAnimal#canAttack", "combat", "adapter_required", "Preserve owner/team checks for player targets.", "net/minecraft/entity/passive/EntityTameable.html"),
+
+    d!("EntityVillager", "canAbandonItems", V_ALL, "villager_item_abandonment", "Villager inventory item discard policy", "villagers", "automatic_rename_candidate", "Preserve whether the villager may discard a particular ItemStack.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "getCustomer", V_ALL, "villager_trade_customer_read", "Merchant#getTradingPlayer", "villagers", "automatic_rename_candidate", "Preserve the active trading player and session state.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "getProfession", V_ALL, "villager_profession_read", "VillagerData profession / VillagerProfession", "villagers", "adapter_required", "Translate legacy numeric profession IDs into registered profession keys without losing modded IDs.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "getRecipes", V_ALL, "villager_trade_recipe_list", "Merchant#getOffers / MerchantOffers", "villagers", "adapter_required", "Preserve recipe ordering, uses, max uses and special price data.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "getVillagerInventory", V_ALL, "villager_inventory_read", "Villager inventory container", "villagers", "adapter_required", "Preserve inventory slot order and item insertion/merge semantics.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "isMating", V_17_18, "villager_mating_state", "Villager breeding/mating state", "villagers", "automatic_rename_candidate", "Preserve mating flag and villager breeding behavior.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "isPlaying", V_17_18, "villager_playing_state", "Villager child play behavior", "villagers", "automatic_rename_candidate", "Preserve child-villager play state and AI goal transitions.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "setCustomer", V_ALL, "villager_trade_customer_write", "Merchant#setTradingPlayer", "villagers", "adapter_required", "Preserve open trade session and customer identity.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "setMating", V_17_18, "villager_mating_state_write", "Villager mating state", "villagers", "adapter_required", "Preserve mating state and AI goal transitions.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "setPlaying", V_17_18, "villager_playing_state_write", "Villager child play state", "villagers", "adapter_required", "Preserve play flag and child-villager AI behavior.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "setRecipes", V_ALL, "villager_trade_recipe_write", "Merchant#setOffers / MerchantOffers", "villagers", "adapter_required", "Preserve uses, max uses, demand, special price and ordering.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "updateAITasks", V_ALL, "villager_ai_tick", "Villager AI goals / server AI tick", "entity_ai", "adapter_required", "Preserve profession work, gossip, mating and trade refresh ordering.", "net/minecraft/entity/passive/EntityVillager.html"),
+    d!("EntityVillager", "getProfessionForge", V_112, "villager_forge_profession_read", "Forge VillagerRegistry profession mapping", "villagers", "adapter_required", "Preserve the Forge profession object and registry key separately from vanilla profession numeric ID.", "net/minecraft/entity/passive/EntityVillager.html"),
+
+    d!("EntityMob", "getExperiencePoints", V_ALL, "mob_experience_drop", "LivingEntity#getExperienceReward", "combat", "adapter_required", "Preserve player/attacker context and mob-specific XP reward.", "net/minecraft/entity/monster/EntityMob.html"),
+    d!("EntityMob", "attackEntityAsMob", V_ALL, "mob_melee_attack", "Mob#doHurtTarget / melee goal", "combat", "adapter_required", "Preserve target entity, weapon enchantments, knockback and attack result.", "net/minecraft/entity/monster/EntityMob.html"),
+
     // Forge 1.12 Block hooks for collision, plants, spawn, fire, loot and render.
     d!("Block", "addDestroyEffects", V_18, "block_destroy_particle_effects", "Client block destruction particle callback", "blocks_render", "adapter_required", "Preserve world, block position and ParticleManager; true means the block handled vanilla particle generation.", "net/minecraft/block/Block.html"),
     d!("Block", "addHitEffects", V_18, "block_hit_particle_effects", "Client block hit particle callback", "blocks_render", "adapter_required", "Preserve state, world, full RayTraceResult and ParticleManager for custom break-hit particles.", "net/minecraft/block/Block.html"),
@@ -7039,6 +7081,56 @@ mod tests {
         assert!(!has(&v112, "getLeashed"));
         assert!(!has(&v112, "onSpawnWithEgg"));
         assert!(!has(&v112, "despawnEntity"));
+    }
+
+
+    #[test]
+    fn tameable_and_animal_dictionary_covers_breeding_and_ownership() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], owner: &str, method: &str| {
+            entries.iter().any(|entry| entry.source_owner == owner && entry.source_method == method)
+        };
+        for owner in ["EntityAnimal", "EntityAgeable", "EntityTameable"] {
+            for version in [&v17, &v18, &v112] {
+                for method in ["canMateWith", "createChild", "getGrowingAge", "isChild", "setGrowingAge", "isInLove", "isTamed", "isSitting", "setTamed", "setSitting", "getOwner", "shouldAttackEntity", "shouldAttackPlayer"] {
+                    if has(version, owner, method) { continue; }
+                }
+            }
+        }
+        for method in ["canMateWith","createChild","isBreedingItem","isInLove","resetInLove","setInLove","getExperiencePoints","processInteract"] {
+            assert!(has(&v17,"EntityAnimal",method), "missing 1.7.10 EntityAnimal#{method}");
+            assert!(has(&v18,"EntityAnimal",method), "missing 1.8.9 EntityAnimal#{method}");
+            assert!(has(&v112,"EntityAnimal",method), "missing 1.12.2 EntityAnimal#{method}");
+        }
+        for method in ["createChild","getGrowingAge","getScaleForAge","isChild","setGrowingAge","setScaleForAge"] {
+            assert!(has(&v17,"EntityAgeable",method), "missing 1.7.10 EntityAgeable#{method}");
+            assert!(has(&v18,"EntityAgeable",method), "missing 1.8.9 EntityAgeable#{method}");
+            assert!(has(&v112,"EntityAgeable",method), "missing 1.12.2 EntityAgeable#{method}");
+        }
+        for method in ["getOwner","isSitting","isTamed","setSitting","setTamed","shouldAttackEntity","shouldAttackPlayer"] {
+            assert!(has(&v17,"EntityTameable",method), "missing 1.7.10 EntityTameable#{method}");
+            assert!(has(&v18,"EntityTameable",method), "missing 1.8.9 EntityTameable#{method}");
+            assert!(has(&v112,"EntityTameable",method), "missing 1.12.2 EntityTameable#{method}");
+        }
+        assert!(has(&v112,"EntityTameable","getOwnerId"));
+        assert!(!has(&v17,"EntityTameable","getOwnerId"));
+    }
+
+    #[test]
+    fn villager_dictionary_covers_trade_and_profession_lifecycle() {
+        let v17 = legacy_api_dictionary_for_version("1.7.10");
+        let v18 = legacy_api_dictionary_for_version("1.8.9");
+        let v112 = legacy_api_dictionary_for_version("1.12.2");
+        let has = |entries: &[LegacyApiMethodMapping], method: &str| entries.iter().any(|e| e.source_owner == "EntityVillager" && e.source_method == method);
+        for version in [&v17,&v18,&v112] {
+            for method in ["getCustomer","getProfession","getRecipes","getVillagerInventory","setCustomer","setRecipes","updateAITasks"] {
+                assert!(has(version,method), "missing shared villager API {method}");
+            }
+        }
+        assert!(has(&v112,"getProfessionForge"));
+        assert!(!has(&v17,"getProfessionForge"));
     }
 
     #[test]
