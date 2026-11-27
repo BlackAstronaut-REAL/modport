@@ -3958,10 +3958,9 @@ fn find_texture_reference_from_source(
     let mut candidates = Vec::<String>::new();
     for reference in texture_references_from_source(source_text, is_block) {
         let (namespace, raw_path) = reference.split_once(':').unwrap_or((mod_id, reference.as_str()));
-        if !namespace.is_empty() && !namespace.eq_ignore_ascii_case(mod_id)
-            && !namespace.eq_ignore_ascii_case("minecraft") {
-            continue;
-        }
+        // Source namespaces have already been remapped into this target
+        // texture directory; resolve the copied path independently of the
+        // original ResourceLocation namespace.
         if namespace.eq_ignore_ascii_case("minecraft") { continue; }
         let mut path = raw_path.trim_start_matches('/').to_ascii_lowercase();
         if let Some(index) = path.rfind("textures/") {
