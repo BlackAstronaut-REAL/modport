@@ -717,7 +717,9 @@ pub fn source_block_properties_with_registry_map(
         json!(
             text.contains("SandBlock")
                 || text.contains("FallingBlock")
+                || text.contains("BlockFalling")
                 || source.superclass.contains("FallingBlock")
+                || source.superclass.contains("BlockFalling")
                 || source.class_name.contains("Sand")
         ),
     );

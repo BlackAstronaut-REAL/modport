@@ -710,6 +710,8 @@ pub fn port_to_neoforge(
         recovered_properties: block.properties.clone(),
         generated_as: if block.class_name == "ResourceBlockstateFallback" {
             "native Block + BlockItem inferred from source blockstate; properties defaulted".to_owned()
+        } else if block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false) {
+            "native FallingBlock + BlockItem with vanilla falling physics".to_owned()
         } else {
             match block.shape.as_str() {
                 "cross" => "native non-colliding plant Block + cross model".to_owned(),
@@ -816,7 +818,7 @@ pub fn port_to_neoforge(
         warnings.push("Waterloggable blocks were detected, but their WATERLOGGED state/property and SimpleWaterloggedBlock update behavior are not yet generated.".to_owned());
     }
     if block_records.iter().any(|block| block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false)) {
-        warnings.push("Falling/gravity blocks were detected, but custom FallingBlock subclasses and landing behavior are not yet generated.".to_owned());
+        warnings.push("Falling blocks use native FallingBlock physics; custom landing callbacks and specialized fall damage remain unported.".to_owned());
     }
     if block_records.iter().any(|block| block.properties.contains_key("custom_drop")) {
         warnings.push("Custom block drop expressions were detected, but loot-table or getDrops adapters are not yet generated.".to_owned());
@@ -3436,6 +3438,9 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class ModBlocks {{
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(NeoForgeMod.MOD_ID);
 "#);
+    if blocks.iter().any(|block| block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false)) {
+        body.push_str("import net.minecraft.world.level.block.FallingBlock;\n");
+    }
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK");
         let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(-1.0, 3600000.0);
@@ -3448,6 +3453,7 @@ public final class ModBlocks {{
         let sound = block.properties.get("step_sound").and_then(Value::as_str)
             .map(java_block_sound_type).unwrap_or("STONE");
 
+        let has_gravity = block.properties.get("has_gravity").and_then(Value::as_bool).unwrap_or(false);
         let mut properties = format!("BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F)");
         if let Some(friction) = friction { properties.push_str(&format!(".friction({friction}F)")); }
         if light > 0 { properties.push_str(&format!(".lightLevel(state -> {light})")); }
@@ -3462,20 +3468,27 @@ public final class ModBlocks {{
 
         let entity = block_entities.iter()
             .find(|candidate| candidate.associated_blocks.iter().any(|id| id == &block.id));
-        let block_parent = match block.shape.as_str() {
-            "slab" => "SlabBlock",
-            "stairs" => "StairBlock",
-            _ => "Block",
+        let block_parent = if has_gravity {
+            "FallingBlock"
+        } else {
+            match block.shape.as_str() {
+                "slab" => "SlabBlock",
+                "stairs" => "StairBlock",
+                _ => "Block",
+            }
         };
         let constructor_super = match block.shape.as_str() {
-            "slab" => "super(properties);",
-            "stairs" => "super(Blocks.STONE_STAIRS.defaultBlockState(), properties);",
+            "stairs" if !has_gravity => "super(Blocks.STONE_STAIRS.defaultBlockState(), properties);",
             _ => "super(properties);",
         };
-        let block_factory = match block.shape.as_str() {
-            "slab" => format!("new SlabBlock({properties})"),
-            "stairs" => format!("new StairBlock(Blocks.STONE_STAIRS.defaultBlockState(), {properties})"),
-            _ => format!("new Block({properties})"),
+        let block_factory = if has_gravity {
+            format!("new FallingBlock({properties})")
+        } else {
+            match block.shape.as_str() {
+                "slab" => format!("new SlabBlock({properties})"),
+                "stairs" => format!("new StairBlock(Blocks.STONE_STAIRS.defaultBlockState(), {properties})"),
+                _ => format!("new Block({properties})"),
+            }
         };
         if let Some(entity) = entity {
             let block_class = generated_entity_block_class(&block.id);
@@ -4864,7 +4877,7 @@ mod tests {
                     return new ItemStack(Items.DIAMOND, 3);
                 }
             }
-            public class NoDropBlock extends Block {
+            public class NoDropBlock extends BlockFalling {
                 public NoDropBlock() { setHardness(1.0F); }
                 public List<ItemStack> getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
                     return Collections.emptyList();
@@ -4973,6 +4986,10 @@ mod tests {
             output.join("src/main/resources/data/oldmod/loot_tables/blocks/no_drop.json")
         ).unwrap()).unwrap();
         assert_eq!(no_drop_loot["pools"].as_array().unwrap().len(), 0);
+        let no_drop = report.blocks.iter().find(|entry| entry.registry_name == "no_drop").unwrap();
+        assert_eq!(no_drop.properties["has_gravity"], true);
+        assert!(no_drop.generated_as.contains("FallingBlock"));
+        assert!(blocks_java.contains("new FallingBlock(BlockBehaviour.Properties.of()"));
         let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
         assert!(items_java.contains("ITEMS.register(\"ruby\""));
         assert!(items_java.contains("new BlockItem"));
