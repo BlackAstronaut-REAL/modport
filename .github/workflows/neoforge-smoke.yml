@@ -119,9 +119,11 @@ jobs:
           public class ModBlocks {
               public static final Block RUBY_ORE = new RubyOre();
               public static final Block RUBY_MACHINE = new BlockRubyMachine();
+              public static final Block FALLING_SAND = new FallingSand();
               public static void register() {
                   GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
                   GameRegistry.registerBlock(RUBY_MACHINE, "ruby_machine");
+                  GameRegistry.registerBlock(FALLING_SAND, "falling_sand");
               }
           }
           class RubyOre extends Block {
@@ -131,6 +133,12 @@ jobs:
                   setBlockName("rubyOre");
                   setBlockTextureName("smoke_mod:blocks/ruby_ore");
               }
+              public List<ItemStack> getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
+                  return Collections.singletonList(new ItemStack(ModItems.RUBY, 2));
+              }
+          }
+          class FallingSand extends BlockFalling {
+              public FallingSand() { setHardness(0.5F); }
           }
           '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/ModBlocks.java")
 
@@ -224,7 +232,15 @@ jobs:
           if (!(Test-Path $statusPath)) { throw "The converter did not write modport/port-status.json." }
           $status = Get-Content -Raw $statusPath | ConvertFrom-Json
           if ($status.converted.items -lt 1) { throw "Smoke port did not register its sample item." }
-          if ($status.converted.blocks -lt 1) { throw "Smoke port did not register its sample block." }
+          if ($status.converted.blocks -lt 3) { throw "Smoke port did not register its sample blocks, GUI block, and falling block." }
+          $nativeBlocksPath = Join-Path $output "src/main/java/com/modport/smoke_mod/registry/ModBlocks.java"
+          $nativeBlocksJava = Get-Content -Raw $nativeBlocksPath
+          if ($nativeBlocksJava -notmatch 'new FallingBlock\(') { throw "Legacy BlockFalling was not generated as a native FallingBlock." }
+          $rubyLootPath = Join-Path $output "src/main/resources/data/smoke_mod/loot_tables/blocks/ruby_ore.json"
+          if (!(Test-Path $rubyLootPath)) { throw "Registered item block-drop loot table was not generated." }
+          $rubyLoot = Get-Content -Raw $rubyLootPath | ConvertFrom-Json
+          if ($rubyLoot.pools[0].entries[0].name -ne "smoke_mod:ruby") { throw "Ruby Ore does not drop the registered Ruby item." }
+          if ($rubyLoot.pools[0].entries[0].functions[0].count -ne 2) { throw "Ruby Ore drop count was not preserved." }
           $itemsJavaPath = Join-Path $output "src/main/java/com/modport/smoke_mod/registry/ModItems.java"
           $itemsJava = Get-Content -Raw $itemsJavaPath
           if ($itemsJava -notmatch 'MobEffectInstance\(MobEffects\.REGENERATION, 120, 1\)') {
