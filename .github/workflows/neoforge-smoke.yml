@@ -224,7 +224,7 @@ jobs:
           $generatedBlockFile = Join-Path $output "src/main/java/com/modport/smoke_mod/registry/ModBlocks.java"
           $generatedModelFile = Join-Path $output "src/main/java/com/modport/smoke_mod/client/model/ConvertedEntityRubyBeastModel.java"
           if (!(Test-Path $menusFile) -or !(Test-Path $screensFile)) { throw "Smoke port did not generate a linked native menu and screen." }
-          if (!(Get-Content -Raw $generatedBlockFile).Contains("serverPlayer.openMenu(provider, pos)")) { throw "Generated machine block is not wired to its recovered GUI." }
+          if (!(Get-Content -Raw $generatedBlockFile).Contains("serverPlayer.openMenu(provider)")) { throw "Generated machine block is not wired to its recovered GUI." }
           if (!(Test-Path $generatedModelFile)) { throw "Smoke port did not generate the mob model class." }
           $entityClass = Join-Path $output "src/main/java/com/modport/smoke_mod/entity/ConvertedEntityRubyBeast.java"
           if (!(Test-Path $entityClass)) { throw "Smoke port did not generate the sample entity class." }
