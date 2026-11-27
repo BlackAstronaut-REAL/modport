@@ -68,6 +68,7 @@ pub struct NativeFoodPlan {
     pub saturation: f32,
     pub always_edible: bool,
     pub fast: bool,
+    pub wolf_favorite_meat: bool,
     pub effects: Vec<NativeFoodEffectPlan>,
 }
 
@@ -259,6 +260,7 @@ struct FoodRecord {
     saturation: f32,
     always_edible: bool,
     fast: bool,
+    wolf_favorite_meat: bool,
     effects: Vec<FoodEffectRecord>,
 }
 
@@ -629,6 +631,7 @@ pub fn port_to_neoforge(
             saturation: food.saturation,
             always_edible: food.always_edible,
             fast: food.fast,
+            wolf_favorite_meat: food.wolf_favorite_meat,
             effects: food.effects.iter().map(|effect| NativeFoodEffectPlan {
                 effect: effect.effect.clone(),
                 duration_ticks: effect.duration_ticks,
@@ -1307,6 +1310,9 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         .unwrap_or("");
     let numeric = Regex::new(r"-?\d+(?:\.\d+)?")
         .expect("static food numeric argument regex");
+    let constructor_arguments = crate::source::java::split_top_level(args, ',');
+    let wolf_constructor_flag = constructor_arguments.last()
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"));
     let values: Vec<f64> = numeric.find_iter(args)
         .filter_map(|value| value.as_str().parse::<f64>().ok())
         .filter(|value| value.is_finite())
@@ -1324,6 +1330,11 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         saturation,
         always_edible: lower.contains("setalwaysedible") || lower.contains("alwaysedible"),
         fast: lower.contains("fastfood") || lower.contains("fast_eating") || lower.contains("fastfood()"),
+        wolf_favorite_meat: lower.contains(".meat()")
+            || wolf_constructor_flag
+            || Regex::new(r"(?is)\bisWolfsFavoriteMeat\s*\(\s*\)\s*\{[^}]*\breturn\s+true\s*;")
+                .expect("static wolf-food override regex")
+                .is_match(&source.source_text),
         effects: Vec::new(),
     })
 }
@@ -1335,6 +1346,7 @@ fn food_properties_java(food: &FoodRecord) -> String {
     );
     if food.always_edible { builder.push_str(".alwaysEdible()"); }
     if food.fast { builder.push_str(".fast()"); }
+    if food.wolf_favorite_meat { builder.push_str(".meat()"); }
     for effect in &food.effects {
         builder.push_str(&format!(
             ".effect(() -> new MobEffectInstance(MobEffects.{}, {}, {}), {}F)",
@@ -3999,6 +4011,16 @@ fn write_native_resources(
         }
     }
 
+    let wolf_food_items: BTreeSet<String> = items.iter()
+        .filter(|item| item.food.as_ref().is_some_and(|food| food.wolf_favorite_meat))
+        .map(|item| format!("{mod_id}:{}", item.id))
+        .collect();
+    if !wolf_food_items.is_empty() {
+        let wolf_food_tag = resources_root.join("data/minecraft/tags/item/wolf_food.json");
+        merge_tag_values(&wolf_food_tag, &wolf_food_items)?;
+        written.push(relative_to(resources_root, &wolf_food_tag));
+    }
+
     write_json_file(&lang, &Value::Object(localization))?;
     written.push(relative_to(resources_root, &lang));
     written.sort();
@@ -5053,7 +5075,7 @@ mod tests {
             }
             public class ItemFoodMeat extends ItemFood {
                 public ItemFoodMeat() {
-                    super(4, 0.6F, false);
+                    super(4, 0.6F, true);
                     setPotionEffect(Potion.hunger.id, 30, 0, 0.3F);
                 }
             }
@@ -5065,6 +5087,7 @@ mod tests {
         let food = report.items.iter().find(|item| item.registry_name == "meat").unwrap();
         let effect = &food.food.as_ref().unwrap().effects[0];
         assert_eq!(effect.effect, "HUNGER");
+        assert!(food.food.as_ref().unwrap().wolf_favorite_meat);
         assert_eq!(effect.duration_ticks, 600);
         assert_eq!(effect.amplifier, 0);
         assert!((effect.probability - 0.3).abs() < 0.001);
@@ -5087,7 +5110,7 @@ mod tests {
             }
             public class ItemFoodRoast extends ItemFood {
                 public ItemFoodRoast() {
-                    super(6, 0.8F, false);
+                    super(6, 0.8F, true);
                     setAlwaysEdible();
                     setPotionEffect(new PotionEffect(Potion.getPotionById(10), 120, 1), 0.25F);
                 }
@@ -5102,6 +5125,7 @@ mod tests {
         assert_eq!(food_props.nutrition, 6);
         assert!((food_props.saturation - 0.8).abs() < 0.001);
         assert!(food_props.always_edible);
+        assert!(food_props.wolf_favorite_meat);
         assert_eq!(food_props.effects.len(), 1);
         assert_eq!(food_props.effects[0].effect, "REGENERATION");
         assert_eq!(food_props.effects[0].duration_ticks, 120);
@@ -5112,6 +5136,11 @@ mod tests {
         assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationMod(0.8F).alwaysEdible().effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 120, 1), 0.25F).build()"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffectInstance;"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffects;"));
+        assert!(items.contains(".alwaysEdible().meat().effect("));
+        let wolf_food: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/minecraft/tags/item/wolf_food.json")
+        ).unwrap()).unwrap();
+        assert!(wolf_food["values"].as_array().unwrap().contains(&json!("foodmod:roast")));
     }
 
     #[test]
