@@ -261,6 +261,7 @@ struct ToolRecord {
     attribute_speed: f32,
     durability: u32,
     lore: Vec<String>,
+    source_text: String,
     warnings: Vec<String>,
 }
 
@@ -291,6 +292,7 @@ struct BlockRecord {
     properties: Map<String, Value>,
     plant_like: bool,
     shape: String,
+    source_text: String,
     warnings: Vec<String>,
 }
 
@@ -408,6 +410,17 @@ pub fn port_to_neoforge(
             Ok(count) => resource_files_copied += count,
             Err(error) => warnings.push(format!("Resource import from {} failed: {error:#}", root.display())),
         }
+    }
+
+    match crate::resource_bridge::normalize_model_texture_references(
+        &resources_root, &source_mod_id, &target_mod_id
+    ) {
+        Ok(count) if count > 0 => warnings.push(format!(
+            "Normalized {} copied model JSON texture reference(s) against the actual target texture files.",
+            count
+        )),
+        Ok(_) => {}
+        Err(error) => warnings.push(format!("Could not normalize copied model texture references: {error:#}")),
     }
 
     let native_recipes = export_native_recipes(roots, &resources_root, &source_mod_id, &target_mod_id)?;
@@ -996,6 +1009,42 @@ fn display_name_from_id(value: &str) -> String {
         }).collect::<Vec<_>>().join(" ")
 }
 
+fn source_unlocalized_name(source_text: &str) -> Option<String> {
+    let pattern = Regex::new(
+        r#"(?i)\b(?:setUnlocalizedName|setBlockName|setTranslationKey|setDescriptionId)\s*\(\s*["']([^"']+)["']"#
+    ).expect("static unlocalized name regex");
+    let raw = pattern.captures(source_text)?.get(1)?.as_str().trim();
+    let mut value = raw.rsplit(':').next().unwrap_or(raw).to_owned();
+    for prefix in ["item.", "tile.", "block.", "entity."] {
+        if value.to_ascii_lowercase().starts_with(prefix) {
+            value = value[prefix.len()..].to_owned();
+            break;
+        }
+    }
+    (!value.trim().is_empty()).then_some(value)
+}
+
+fn localize_generated_entry(
+    localization: &mut Map<String, Value>,
+    target_key: String,
+    mod_id: &str,
+    category: &str,
+    registry_id: &str,
+    source_text: &str,
+) {
+    if localization.contains_key(&target_key) { return; }
+    let translated = source_unlocalized_name(source_text).and_then(|name| {
+        let alias = format!("{category}.{mod_id}.{name}");
+        localization.get(&alias).cloned().or_else(|| {
+            let short = format!("{category}.{name}");
+            localization.get(&short).cloned()
+        })
+    });
+    let value = translated.unwrap_or_else(|| json!(display_name_from_id(registry_id)));
+    localization.insert(target_key, value);
+}
+
+
 fn compact(value: &str) -> String {
     value.chars().filter(|ch| ch.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
@@ -1577,6 +1626,7 @@ fn collect_native_tools(
             attribute_speed,
             durability,
             lore: collect_source_lore(&source.source_text, language_lore, &source.registry_name),
+            source_text: source.source_text.clone(),
             warnings: tool_warnings,
         });
     }
@@ -1627,6 +1677,7 @@ fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<Bl
             properties,
             plant_like,
             shape: infer_block_shape(source, plant_like).to_owned(),
+            source_text: source.source_text.clone(),
             warnings: block_warnings,
         });
     }
@@ -2185,7 +2236,6 @@ import java.util.List;
 import {package}.registry.ModEntities;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -2825,19 +2875,52 @@ fn collect_native_entity_models(
     let mut output = Vec::new();
     for entity in entities {
         let registrations: Vec<&crate::mod_graph::RendererRegistration> = graph.registrations.iter()
-            .filter(|registration| registration.entity_class == entity.class_name && !registration.model_class.is_empty())
+            .filter(|registration| compact(&registration.entity_class) == compact(&entity.class_name))
             .collect();
         let mut recovered = false;
         for registration in registrations {
-            let source = graph.java_files.get(&registration.model_class)
-                .or_else(|| graph.class_files.get(&registration.model_class));
-            let Some(source) = source else { continue };
+            let mut resolved_model_class = registration.model_class.clone();
+            if resolved_model_class.is_empty() {
+                let renderer_path = graph.java_files.iter()
+                    .find(|(name, _)| compact(name) == compact(&registration.renderer_class))
+                    .map(|(_, path)| path);
+                if let Some(renderer_path) = renderer_path {
+                    if let Ok(renderer_source) = fs::read_to_string(renderer_path) {
+                        let model_reference = Regex::new(r"(?i)\bnew\s+([A-Za-z_$][A-Za-z0-9_$.]*Model[A-Za-z0-9_$]*)\s*\(")
+                            .expect("static renderer model fallback regex");
+                        if let Some(found) = model_reference.captures(&renderer_source)
+                            .and_then(|capture| capture.get(1)) {
+                            resolved_model_class = found.as_str().rsplit('.').next().unwrap_or(found.as_str()).to_owned();
+                        }
+                    }
+                }
+            }
+            if resolved_model_class.is_empty() {
+                warnings.push(format!(
+                    "Renderer '{}' was linked to entity '{}', but no model class reference could be recovered.",
+                    registration.renderer_class, entity.registry_name
+                ));
+                continue;
+            }
+            let source = graph.java_files.iter()
+                .find(|(name, _)| compact(name) == compact(&resolved_model_class))
+                .map(|(_, path)| path)
+                .or_else(|| graph.class_files.iter()
+                    .find(|(name, _)| compact(name) == compact(&resolved_model_class))
+                    .map(|(_, path)| path));
+            let Some(source) = source else {
+                warnings.push(format!(
+                    "Renderer '{}' references model '{}' for entity '{}', but that source/class file was not found.",
+                    registration.renderer_class, resolved_model_class, entity.registry_name
+                ));
+                continue;
+            };
             let parsed = match crate::mcreator_model::parse_model_source_with_args(source, &registration.model_args) {
                 Ok(model) => model,
                 Err(error) => {
                     warnings.push(format!(
                         "Mob model '{}' for entity '{}' was discovered but could not be parsed: {error:#}",
-                        registration.model_class, entity.registry_name
+                        resolved_model_class, entity.registry_name
                     ));
                     continue;
                 }
@@ -2850,7 +2933,7 @@ fn collect_native_entity_models(
                 Err(error) => {
                     warnings.push(format!(
                         "Mob model '{}' for entity '{}' could not be emitted as a NeoForge model: {error:#}",
-                        registration.model_class, entity.registry_name
+                        resolved_model_class, entity.registry_name
                     ));
                     continue;
                 }
@@ -2863,7 +2946,7 @@ fn collect_native_entity_models(
                 entity_registry_name: normalized_id(&entity.registry_name),
                 source_entity_class: registration.entity_class.clone(),
                 source_renderer_class: registration.renderer_class.clone(),
-                source_model_class: registration.model_class.clone(),
+                source_model_class: resolved_model_class.clone(),
                 source_path: source.to_string_lossy().to_string(),
                 generated_class: generated.class_name.clone(),
                 animation_count: generated.animation_records.len(),
@@ -2880,7 +2963,8 @@ fn collect_native_entity_models(
             recovered = true;
             break;
         }
-        if !recovered && !graph.registrations.iter().any(|registration| registration.entity_class == entity.class_name) {
+        if !recovered && !graph.registrations.iter()
+            .any(|registration| compact(&registration.entity_class) == compact(&entity.class_name)) {
             warnings.push(format!(
                 "No renderer registration was found for mob '{}'; generated a generic fallback renderer.",
                 entity.registry_name
@@ -2904,8 +2988,11 @@ fn generate_entity_renderers_java(
 import {package}.NeoForgeMod;
 import {package}.entity.*;
 import {package}.registry.ModEntities;
-import {package}.client.model.*;
-import net.minecraft.client.model.HumanoidModel;
+"#);
+    if !models.is_empty() {
+        body.push_str(&format!("import {package}.client.model.*;\n"));
+    }
+    body.push_str(r#"import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
@@ -3040,6 +3127,7 @@ fn generate_blocks_java(
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
+import {package}.blockentity.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -3057,7 +3145,6 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.network.NetworkHooks;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -3125,10 +3212,10 @@ public final class ModBlocks {{
             if entity.gui.is_some() {
                 body.push_str(r#"
         @Override
-        public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        public InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
             if (!level.isClientSide && player instanceof ServerPlayer serverPlayer
                     && level.getBlockEntity(pos) instanceof MenuProvider provider) {
-                NetworkHooks.openScreen(serverPlayer, provider, pos);
+                serverPlayer.openMenu(provider, pos);
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
@@ -3533,10 +3620,12 @@ fn write_native_resources(
 
     for item in items {
         let key = format!("item.{mod_id}.{}", item.id);
-        localization.entry(key).or_insert_with(|| json!(display_name_from_id(&item.id)));
+        localize_generated_entry(&mut localization, key, mod_id, "item", &item.id, &item.source_text);
         let model_path = namespace_root.join(format!("models/item/{}.json", item.id));
         if !model_path.exists() {
-            let texture = find_texture_reference(&textures_root, mod_id, &item.id, &item.class_name)
+            let texture = find_texture_reference_from_source(
+                &textures_root, mod_id, &item.source_text, false
+            ).or_else(|| find_texture_reference(&textures_root, mod_id, &item.id, &item.class_name))
                 .unwrap_or_else(|| "minecraft:item/barrier".to_owned());
             write_json_file(&model_path, &json!({
                 "parent": "minecraft:item/generated",
@@ -3548,13 +3637,21 @@ fn write_native_resources(
 
     for tool in tools {
         let key = format!("item.{mod_id}.{}", tool.id);
-        localization.entry(key).or_insert_with(|| json!(display_name_from_id(&tool.id)));
+        localize_generated_entry(&mut localization, key, mod_id, "item", &tool.id, &tool.source_text);
         let model_path = namespace_root.join(format!("models/item/{}.json", tool.id));
         if !model_path.exists() {
-            let texture = find_texture_reference(&textures_root, mod_id, &tool.id, &tool.class_name)
+            let texture = find_texture_reference_from_source(
+                &textures_root, mod_id, &tool.source_text, false
+            ).or_else(|| find_texture_reference(&textures_root, mod_id, &tool.id, &tool.class_name))
                 .unwrap_or_else(|| "minecraft:item/barrier".to_owned());
+            let parent = match tool.kind.as_str() {
+                "Bow" => "minecraft:item/bow",
+                "Fishing Rod" => "minecraft:item/handheld_rod",
+                "Sword" | "Axe" | "Pickaxe" | "Shovel" | "Hoe" | "Shears" => "minecraft:item/handheld",
+                _ => "minecraft:item/generated",
+            };
             write_json_file(&model_path, &json!({
-                "parent": "minecraft:item/generated",
+                "parent": parent,
                 "textures": {"layer0": texture}
             }))?;
             written.push(relative_to(resources_root, &model_path));
@@ -3563,10 +3660,12 @@ fn write_native_resources(
 
     for block in blocks {
         let key = format!("block.{mod_id}.{}", block.id);
-        localization.entry(key).or_insert_with(|| json!(display_name_from_id(&block.id)));
+        localize_generated_entry(&mut localization, key, mod_id, "block", &block.id, &block.source_text);
 
         let block_model = namespace_root.join(format!("models/block/{}.json", block.id));
-        let texture = find_texture_reference(&textures_root, mod_id, &block.id, &block.class_name)
+        let texture = find_texture_reference_from_source(
+            &textures_root, mod_id, &block.source_text, true
+        ).or_else(|| find_texture_reference(&textures_root, mod_id, &block.id, &block.class_name))
             .unwrap_or_else(|| "minecraft:block/stone".to_owned());
         let block_state = namespace_root.join(format!("blockstates/{}.json", block.id));
 
@@ -3656,7 +3755,9 @@ fn write_native_resources(
     for armor in armors {
         for piece in &armor.pieces {
             let key = format!("item.{mod_id}.{}", piece.id);
-            localization.entry(key).or_insert_with(|| json!(display_name_from_id(&piece.id)));
+            let source_text = items.iter().find(|item| item.class_name == piece.class_name)
+                .map(|item| item.source_text.as_str()).unwrap_or("");
+            localize_generated_entry(&mut localization, key, mod_id, "item", &piece.id, source_text);
             let model_path = namespace_root.join(format!("models/item/{}.json", piece.id));
             if !model_path.exists() {
                 let texture = find_texture_reference(&textures_root, mod_id, &piece.id, &piece.class_name)
@@ -3789,6 +3890,200 @@ fn write_native_block_data(
     written.sort();
     written.dedup();
     Ok(())
+}
+
+fn texture_references_from_source(source_text: &str, is_block: bool) -> Vec<String> {
+    let mut references = Vec::new();
+    let literal_pattern = Regex::new(
+        r#"(?i)["']((?:[a-z0-9_.-]+:)?(?:textures/)?(?:items?|blocks?|item|block|entity|entities|models?)/[a-z0-9_./-]{1,200}(?:\.png)?)["']"#
+    ).expect("static texture reference regex");
+    for capture in literal_pattern.captures_iter(source_text) {
+        if let Some(value) = capture.get(1) {
+            let reference = value.as_str().replace('\\', "/");
+            if !references.iter().any(|existing: &String| existing.eq_ignore_ascii_case(&reference)) {
+                references.push(reference);
+            }
+        }
+    }
+    let call_pattern = Regex::new(
+        r#"(?i)\b(setTextureName|setBlockTextureName|registerIcon)\s*\(\s*["']([^"']+)["']"#
+    ).expect("static legacy texture call regex");
+    for capture in call_pattern.captures_iter(source_text) {
+        let method = capture.get(1).map(|value| value.as_str().to_ascii_lowercase()).unwrap_or_default();
+        let Some(value) = capture.get(2).map(|value| value.as_str().trim().replace('\\', "/")) else { continue };
+        let normalized = if value.contains('/') || value.contains(':') || value.starts_with("textures/") {
+            value
+        } else if method == "setblocktexturename" || is_block {
+            format!("blocks/{value}")
+        } else {
+            format!("items/{value}")
+        };
+        if !references.iter().any(|existing| existing.eq_ignore_ascii_case(&normalized)) {
+            references.push(normalized);
+        }
+    }
+    let resource_location_pattern = Regex::new(
+        r#"(?i)new\s+ResourceLocation\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#
+    ).expect("static ResourceLocation texture regex");
+    for capture in resource_location_pattern.captures_iter(source_text) {
+        let namespace = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+        let path = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+        let value = if namespace.is_empty() { path.to_owned() } else { format!("{namespace}:{path}") };
+        if !references.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+            references.push(value);
+        }
+    }
+    references
+}
+
+fn find_texture_reference_from_source(
+    textures_root: &Path,
+    mod_id: &str,
+    source_text: &str,
+    is_block: bool,
+) -> Option<String> {
+    if !textures_root.is_dir() { return None; }
+    let mut files = BTreeMap::<String, String>::new();
+    for entry in WalkDir::new(textures_root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+        if !entry.file_type().is_file()
+            || !entry.path().extension().and_then(|value| value.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png")) {
+            continue;
+        }
+        let Ok(relative) = entry.path().strip_prefix(textures_root) else { continue };
+        let actual = relative.to_string_lossy().replace('\\', "/");
+        files.entry(actual.to_ascii_lowercase()).or_insert(actual);
+    }
+
+    let mut candidates = Vec::<String>::new();
+    for reference in texture_references_from_source(source_text, is_block) {
+        let (namespace, raw_path) = reference.split_once(':').unwrap_or((mod_id, reference.as_str()));
+        if !namespace.is_empty() && !namespace.eq_ignore_ascii_case(mod_id)
+            && !namespace.eq_ignore_ascii_case("minecraft") {
+            continue;
+        }
+        if namespace.eq_ignore_ascii_case("minecraft") { continue; }
+        let mut path = raw_path.trim_start_matches('/').to_ascii_lowercase();
+        if let Some(index) = path.rfind("textures/") {
+            path = path[index + "textures/".len()..].to_owned();
+        }
+        if path.ends_with(".png") { path.truncate(path.len() - 4); }
+        if candidates.iter().any(|candidate| candidate == &path) { continue; }
+        candidates.push(path.clone());
+        if let Some(rest) = path.strip_prefix("items/") { candidates.push(format!("item/{rest}")); }
+        if let Some(rest) = path.strip_prefix("item/") { candidates.push(format!("items/{rest}")); }
+        if let Some(rest) = path.strip_prefix("blocks/") { candidates.push(format!("block/{rest}")); }
+        if let Some(rest) = path.strip_prefix("block/") { candidates.push(format!("blocks/{rest}")); }
+        if !path.contains('/') {
+            candidates.push(format!("{}s/{path}", if is_block { "block" } else { "item" }));
+            candidates.push(format!("{}/{path}", if is_block { "block" } else { "item" }));
+        }
+    }
+    for candidate in candidates {
+        let key = format!("{}.png", candidate.to_ascii_lowercase());
+        if let Some(actual) = files.get(&key) {
+            let without_extension = actual.strip_suffix(".png").or_else(|| actual.strip_suffix(".PNG")).unwrap_or(actual);
+            return Some(format!("{mod_id}:{}", without_extension.to_ascii_lowercase()));
+        }
+    }
+    None
+}
+
+fn texture_references_from_source(source_text: &str, is_block: bool) -> Vec<String> {
+    let mut references = Vec::new();
+    let path_pattern = Regex::new(
+        r#"(?i)["']((?:[a-z0-9_.-]+:)?(?:textures/)?(?:items?|blocks?|item|block|entity|entities|models?)/[a-z0-9_./-]{1,200}(?:\.png)?)["']"#
+    ).expect("static texture path regex");
+    for capture in path_pattern.captures_iter(source_text) {
+        if let Some(value) = capture.get(1) {
+            let value = value.as_str().replace('\\', "/");
+            if !references.iter().any(|existing: &String| existing.eq_ignore_ascii_case(&value)) {
+                references.push(value);
+            }
+        }
+    }
+
+    let calls = Regex::new(
+        r#"(?i)\b(setTextureName|setBlockTextureName|registerIcon)\s*\(\s*["']([^"']+)["']"#
+    ).expect("static legacy texture-name regex");
+    for capture in calls.captures_iter(source_text) {
+        let method = capture.get(1).map(|value| value.as_str().to_ascii_lowercase()).unwrap_or_default();
+        let Some(value) = capture.get(2).map(|value| value.as_str().trim().replace('\\', "/")) else { continue };
+        let value = if value.contains('/') || value.contains(':') {
+            value
+        } else if method == "setblocktexturename" || is_block {
+            format!("blocks/{value}")
+        } else {
+            format!("items/{value}")
+        };
+        if !references.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+            references.push(value);
+        }
+    }
+
+    let resource_location = Regex::new(
+        r#"(?i)new\s+ResourceLocation\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#
+    ).expect("static ResourceLocation texture regex");
+    for capture in resource_location.captures_iter(source_text) {
+        let namespace = capture.get(1).map(|value| value.as_str()).unwrap_or("");
+        let path = capture.get(2).map(|value| value.as_str()).unwrap_or("");
+        let value = if namespace.is_empty() { path.to_owned() } else { format!("{namespace}:{path}") };
+        if !references.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+            references.push(value);
+        }
+    }
+    references
+}
+
+fn find_texture_reference_from_source(
+    textures_root: &Path,
+    mod_id: &str,
+    source_text: &str,
+    is_block: bool,
+) -> Option<String> {
+    if !textures_root.is_dir() { return None; }
+    let mut files = BTreeMap::<String, String>::new();
+    for entry in WalkDir::new(textures_root).follow_links(false).into_iter().filter_map(|entry| entry.ok()) {
+        if !entry.file_type().is_file()
+            || !entry.path().extension().and_then(|value| value.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png")) {
+            continue;
+        }
+        let Ok(relative) = entry.path().strip_prefix(textures_root) else { continue };
+        let actual = relative.to_string_lossy().replace('\\', "/");
+        files.entry(actual.to_ascii_lowercase()).or_insert(actual);
+    }
+
+    let mut candidates = Vec::<String>::new();
+    for reference in texture_references_from_source(source_text, is_block) {
+        let (namespace, raw_path) = reference.split_once(':').unwrap_or((mod_id, reference.as_str()));
+        if namespace.eq_ignore_ascii_case("minecraft") { continue; }
+        // The legacy source namespace is intentionally remapped into the
+        // target namespace during resource import. Resolve the path against that
+        // copied target texture tree, regardless of the source namespace string.
+        let mut path = raw_path.trim_start_matches('/').to_ascii_lowercase();
+        if let Some(index) = path.rfind("textures/") {
+            path = path[index + "textures/".len()..].to_owned();
+        }
+        if path.ends_with(".png") { path.truncate(path.len() - 4); }
+        if !candidates.contains(&path) { candidates.push(path.clone()); }
+        if let Some(rest) = path.strip_prefix("items/") { candidates.push(format!("item/{rest}")); }
+        if let Some(rest) = path.strip_prefix("item/") { candidates.push(format!("items/{rest}")); }
+        if let Some(rest) = path.strip_prefix("blocks/") { candidates.push(format!("block/{rest}")); }
+        if let Some(rest) = path.strip_prefix("block/") { candidates.push(format!("blocks/{rest}")); }
+        if !path.contains('/') {
+            candidates.push(format!("{}{path}", if is_block { "block/" } else { "item/" }));
+            candidates.push(format!("{}{path}", if is_block { "blocks/" } else { "items/" }));
+        }
+    }
+
+    for candidate in candidates {
+        if let Some(actual) = files.get(&format!("{}.png", candidate.to_ascii_lowercase())) {
+            let without_extension = actual.strip_suffix(".png").or_else(|| actual.strip_suffix(".PNG")).unwrap_or(actual);
+            return Some(format!("{mod_id}:{}", without_extension.to_ascii_lowercase()));
+        }
+    }
+    None
 }
 
 fn find_texture_reference(textures_root: &Path, mod_id: &str, registry_id: &str, class_name: &str) -> Option<String> {
@@ -3924,13 +4219,45 @@ mod tests {
         }];
 
         let generated = generate_entity_renderers_java(
-            "com.example.converted", "converted", temp.path(), &entities, &[]
+            "com.example.converted", "converted", temp.path(), &entities, &[], &[]
         );
 
         assert!(generated.contains("package com.example.converted.client;"));
         assert!(generated.contains("import com.example.converted.entity.*;"));
+        assert!(!generated.contains("import com.example.converted.client.model.*;"));
         assert!(generated.contains("MobRenderer<ConvertedEntityRubyBeast"));
         assert!(generated.contains("getTextureLocation(ConvertedEntityRubyBeast entity)"));
+    }
+
+    #[test]
+    fn uses_legacy_unlocalized_name_translation_for_registry_display_name() {
+        let mut localization = Map::new();
+        localization.insert("item.demo.rubyBlade".to_owned(), json!("Ruby Blade"));
+        localize_generated_entry(
+            &mut localization,
+            "item.demo.ruby_sword".to_owned(),
+            "demo",
+            "item",
+            "ruby_sword",
+            r#"class RubySword extends Item { RubySword() { setUnlocalizedName("rubyBlade"); } }"#,
+        );
+        assert_eq!(localization["item.demo.ruby_sword"], "Ruby Blade");
+    }
+
+    #[test]
+    fn resolves_legacy_item_texture_names_to_imported_target_assets() {
+        let temp = tempdir().unwrap();
+        let textures = temp.path().join("textures");
+        fs::create_dir_all(textures.join("items")).unwrap();
+        fs::write(textures.join("items/ruby_icon.png"), b"png").unwrap();
+
+        let resolved = find_texture_reference_from_source(
+            &textures,
+            "targetmod",
+            r#"class RubyItem extends Item { RubyItem() { setTextureName("oldmod:items/Ruby_Icon"); } }"#,
+            false,
+        );
+        assert_eq!(resolved.as_deref(), Some("targetmod:items/ruby_icon"));
     }
 
     #[test]

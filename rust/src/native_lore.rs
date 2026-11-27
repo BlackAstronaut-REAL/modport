@@ -292,7 +292,12 @@ pub fn lore_component_expressions(line: &str) -> Vec<String> {
     let mut index = 0usize;
 
     while index < chars.len() {
-        if chars[index] == '\u{00a7}' && index + 1 < chars.len() {
+        let marker = chars[index];
+        let ampersand_format_code = marker == '&' && chars.get(index + 1).is_some_and(|code| {
+            color_name(code.to_ascii_lowercase()).is_some()
+                || matches!(code.to_ascii_lowercase(), 'k' | 'l' | 'm' | 'n' | 'o' | 'r')
+        });
+        if (marker == '\u{00a7}' || ampersand_format_code) && index + 1 < chars.len() {
             flush_segment(&mut output, &mut segment, style);
             index += 1;
             let code = chars[index].to_ascii_lowercase();
@@ -439,6 +444,10 @@ mod tests {
         assert!(expressions[1].contains("withBold(true)"));
         assert_eq!(expressions[2], "Component.literal(\" Plain \")");
         assert!(expressions[3].contains("withItalic(true)"));
+        let ampersand = lore_component_expressions("&6Gold &lBold");
+        assert_eq!(ampersand.len(), 2);
+        assert!(ampersand[0].contains("ChatFormatting.GOLD"));
+        assert!(ampersand[1].contains("withBold(true)"));
     }
 
     #[test]

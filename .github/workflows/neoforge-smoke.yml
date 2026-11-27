@@ -43,8 +43,50 @@ jobs:
           $output = Join-Path $env:RUNNER_TEMP "modport-smoke-output"
           New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/java/demo") | Out-Null
           New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/textures/Items") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/textures/Blocks") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/textures/gui") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/models/item") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/models/block") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/blockstates") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $source "src/main/resources/assets/smoke_mod/lang") | Out-Null
+          $png = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p3sAAAAASUVORK5CYII=")
+          [IO.File]::WriteAllBytes((Join-Path $source "src/main/resources/assets/smoke_mod/textures/Items/Ruby_Gem.PNG"), $png)
+          [IO.File]::WriteAllBytes((Join-Path $source "src/main/resources/assets/smoke_mod/textures/Blocks/Ruby_Ore.PNG"), $png)
+          [IO.File]::WriteAllBytes((Join-Path $source "src/main/resources/assets/smoke_mod/textures/gui/ruby_machine.png"), $png)
 
           Set-Content -Encoding utf8 -Path (Join-Path $source "mcmod.info") -Value '{"modid":"smoke_mod","name":"Modport Smoke Test","version":"1.0"}'
+
+          @'
+          item.rubyGem.name=Ruby Gem
+          tile.rubyOre.name=Ruby Ore
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/resources/assets/smoke_mod/lang/en_US.lang")
+
+          @'
+          {
+            "parent": "minecraft:item/handheld",
+            "textures": {
+              "layer0": "smoke_mod:Textures/Items/RUBY_GEM.PNG"
+            }
+          }
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/resources/assets/smoke_mod/models/item/ruby.json")
+
+          @'
+          {
+            "parent": "minecraft:block/cube_all",
+            "textures": {
+              "all": "smoke_mod:Textures/Blocks/RUBY_ORE.PNG"
+            }
+          }
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/resources/assets/smoke_mod/models/block/ruby_ore.json")
+
+          @'
+          {
+            "variants": {
+              "": { "model": "smoke_mod:block/ruby_ore" }
+            }
+          }
+          '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/resources/assets/smoke_mod/blockstates/ruby_ore.json")
           @'
           public class ModItems {
               public static final Item RUBY = new RubyItem();
@@ -53,7 +95,14 @@ jobs:
               }
           }
           class RubyItem extends Item {
-              public RubyItem() { setMaxStackSize(16); }
+              public RubyItem() {
+                  setMaxStackSize(16);
+                  setUnlocalizedName("rubyGem");
+                  setTextureName("smoke_mod:items/ruby_gem");
+              }
+              public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
+                  tooltip.add(EnumChatFormatting.GOLD + "Legendary " + EnumChatFormatting.BOLD + "Ruby");
+              }
           }
           '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/ModItems.java")
 
@@ -70,6 +119,8 @@ jobs:
               public RubyOre() {
                   setHardness(3.0F);
                   setResistance(5.0F);
+                  setBlockName("rubyOre");
+                  setBlockTextureName("smoke_mod:blocks/ruby_ore");
               }
           }
           '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/ModBlocks.java")
@@ -173,7 +224,7 @@ jobs:
           $generatedBlockFile = Join-Path $output "src/main/java/com/modport/smoke_mod/registry/ModBlocks.java"
           $generatedModelFile = Join-Path $output "src/main/java/com/modport/smoke_mod/client/model/ConvertedEntityRubyBeastModel.java"
           if (!(Test-Path $menusFile) -or !(Test-Path $screensFile)) { throw "Smoke port did not generate a linked native menu and screen." }
-          if (!(Get-Content -Raw $generatedBlockFile).Contains("NetworkHooks.openScreen")) { throw "Generated machine block is not wired to its recovered GUI." }
+          if (!(Get-Content -Raw $generatedBlockFile).Contains("serverPlayer.openMenu(provider, pos)")) { throw "Generated machine block is not wired to its recovered GUI." }
           if (!(Test-Path $generatedModelFile)) { throw "Smoke port did not generate the mob model class." }
           $entityClass = Join-Path $output "src/main/java/com/modport/smoke_mod/entity/ConvertedEntityRubyBeast.java"
           if (!(Test-Path $entityClass)) { throw "Smoke port did not generate the sample entity class." }
@@ -189,6 +240,34 @@ jobs:
           if ($rendererSource -notmatch 'registerLayerDefinition\(ConvertedEntityRubyBeastModel\.LAYER_LOCATION') {
               throw "Generated entity renderer did not register the recovered mob model layer."
           }
+          if ($rendererSource -notmatch 'MobRenderer<ConvertedEntityRubyBeast,\s*ConvertedEntityRubyBeastModel<ConvertedEntityRubyBeast>>') {
+              throw "Generated entity renderer did not use the recovered custom model type."
+          }
+          if ($rendererSource -match 'HumanoidModel<ConvertedEntityRubyBeast>') {
+              throw "Generated mob unexpectedly fell back to the humanoid model despite a source renderer/model registration."
+          }
+          $generatedLoreFile = Join-Path $output "src/main/java/com/modport/smoke_mod/item/LoreRuby.java"
+          if (!(Test-Path $generatedLoreFile)) { throw "Source item tooltip lore was not generated." }
+          $generatedLore = Get-Content -Raw $generatedLoreFile
+          if ($generatedLore -notmatch 'ChatFormatting\.GOLD' -or $generatedLore -notmatch 'withBold\(true\)') {
+              throw "Generated item lore lost its legacy color/bold formatting."
+          }
+          $itemModelFile = Join-Path $output "src/main/resources/assets/smoke_mod/models/item/ruby.json"
+          $blockModelFile = Join-Path $output "src/main/resources/assets/smoke_mod/models/block/ruby_ore.json"
+          $itemTextureFile = Join-Path $output "src/main/resources/assets/smoke_mod/textures/items/ruby_gem.png"
+          $blockTextureFile = Join-Path $output "src/main/resources/assets/smoke_mod/textures/blocks/ruby_ore.png"
+          if (!(Test-Path $itemModelFile) -or !(Test-Path $blockModelFile)) { throw "Copied item/block model JSON was lost." }
+          if (!(Test-Path $itemTextureFile) -or !(Test-Path $blockTextureFile)) { throw "Legacy mixed-case textures were not normalized into valid target paths." }
+          $itemModel = Get-Content -Raw $itemModelFile | ConvertFrom-Json
+          $blockModel = Get-Content -Raw $blockModelFile | ConvertFrom-Json
+          if ($itemModel.textures.layer0 -ne "smoke_mod:items/ruby_gem") { throw "Held item model texture was not remapped to its real texture." }
+          if ($itemModel.parent -ne "minecraft:item/handheld") { throw "Held item model parent was not preserved." }
+          if ($blockModel.textures.all -ne "smoke_mod:blocks/ruby_ore") { throw "Block model texture was not remapped to its real texture." }
+          $languageFile = Join-Path $output "src/main/resources/assets/smoke_mod/lang/en_us.json"
+          if (!(Test-Path $languageFile)) { throw "Legacy .lang file was not migrated into target JSON language data." }
+          $language = Get-Content -Raw $languageFile | ConvertFrom-Json
+          if ($language.'item.smoke_mod.ruby' -ne "Ruby Gem") { throw "The registry item name did not resolve through its unlocalized-name alias." }
+          if ($language.'block.smoke_mod.ruby_ore' -ne "Ruby Ore") { throw "The block display name did not resolve through its unlocalized-name alias." }
           if (!(Test-Path (Join-Path $output "src/main/java/com/modport/smoke_mod/NeoForgeMod.java"))) {
               throw "Smoke port did not produce its NeoForge @Mod entrypoint."
           }

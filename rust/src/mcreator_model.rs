@@ -471,6 +471,16 @@ pub fn generate_neoforge_entity_model_sources(
     let class_name = java_identifier(class_name, "ConvertedEntityModel");
     let generated_animation = generate_animation_definition_java(model, &class_name)?;
     let mut source = generate_mojmap_model_java(model, &class_name, modid)?;
+    // The shared MCreator writer retains its historical imports and color
+    // arguments. A native 1.21.1 HierarchicalModel uses ModelPart's
+    // packed-color render overload and the PartPose type in geom, not builders.
+    let old_render_signature = "\tpublic void renderToBuffer(PoseStack poseStack, VertexConsumer vertexConsumer, int packedLight, int packedOverlay,\n\t\t\tfloat red, float green, float blue, float alpha) {";
+    let new_render_signature = "\tpublic void renderToBuffer(PoseStack poseStack, VertexConsumer vertexConsumer, int packedLight, int packedOverlay, int packedColor) {";
+    if !source.contains(old_render_signature) {
+        bail!("Generated base model '{}' did not contain the expected MCreator render signature.", class_name);
+    }
+    source = source.replace(old_render_signature, new_render_signature);
+    source = source.replace(", red, green, blue, alpha);", ", packedColor);");
 
     let old_header = format!(
         "public class {class_name}<T extends Entity> extends EntityModel<T> {{"
@@ -550,7 +560,7 @@ import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
 import net.minecraft.client.model.geom.builders.PartDefinition;
-import net.minecraft.client.model.geom.builders.PartPose;
+import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
@@ -785,6 +795,10 @@ mod tests {
         assert!(generated.source.contains("extends HierarchicalModel<T>"));
         assert!(generated.source.contains("public ModelPart root()"));
         assert!(generated.source.contains("ModelPart::resetPose"));
+        assert!(generated.source.contains("geom.PartPose"));
+        assert!(generated.source.contains("int packedColor)"));
+        assert!(generated.source.contains("this.body.render(poseStack, vertexConsumer, packedLight, packedOverlay, packedColor)"));
+        assert!(!generated.source.contains("float red, float green, float blue, float alpha"));
         assert!(generated.source.contains("KeyframeAnimations.animate(this, ConvertedWingModelAnimation."));
         assert!(generated.source.contains("(long) (limbSwing * 50.0F)"));
         assert!(generated.source.contains("import demo.client.model.animation.*;"));
