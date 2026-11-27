@@ -4278,7 +4278,7 @@ mod tests {
 
     #[test]
     fn block_registry_imports_block_entity_package_only_for_generated_block_entities() {
-        let block = BlockRecord {
+        let make_block = || BlockRecord {
             id: "ruby_machine".to_owned(),
             class_name: "RubyMachine".to_owned(),
             source_path: "RubyMachine.java".to_owned(),
@@ -4290,7 +4290,7 @@ mod tests {
         };
 
         let without_entity = generate_blocks_java(
-            "com.example.machine", "machine", &[block.clone()], &[]
+            "com.example.machine", "machine", &[make_block()], &[]
         );
         assert!(!without_entity.contains("import com.example.machine.blockentity.*;"));
 
@@ -4305,7 +4305,7 @@ mod tests {
             warnings: Vec::new(),
         };
         let with_entity = generate_blocks_java(
-            "com.example.machine", "machine", &[block], &[entity]
+            "com.example.machine", "machine", &[make_block()], &[entity]
         );
         assert!(with_entity.contains("import com.example.machine.blockentity.*;"));
         assert!(with_entity.contains("new ConvertedRubyMachineBlockEntity"));
