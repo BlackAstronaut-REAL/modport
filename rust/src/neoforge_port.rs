@@ -1362,7 +1362,6 @@ fn food_properties_java(food: &FoodRecord) -> String {
     );
     if food.always_edible { builder.push_str(".alwaysEdible()"); }
     if food.fast { builder.push_str(".fast()"); }
-    if food.wolf_favorite_meat { builder.push_str(".meat()"); }
     for effect in &food.effects {
         builder.push_str(&format!(
             ".effect(() -> new MobEffectInstance(MobEffects.{}, {}, {}), {}F)",
@@ -5190,7 +5189,8 @@ mod tests {
         };
         let generated = food_properties_java(&food);
         assert!(generated.contains(".nutrition(8).saturationModifier(0.9F)"));
-        assert!(generated.contains(".alwaysEdible().meat().effect("));
+        assert!(generated.contains(".alwaysEdible().effect("));
+        assert!(!generated.contains(".meat()"));
         assert!(!generated.contains(".saturationMod("));
     }
 
@@ -5276,7 +5276,8 @@ mod tests {
         assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationModifier(0.8F).alwaysEdible().effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 120, 1), 0.25F).build()"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffectInstance;"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffects;"));
-        assert!(items.contains(".alwaysEdible().meat().effect("));
+        assert!(items.contains(".alwaysEdible().effect("));
+        assert!(!items.contains(".meat()"));
         let wolf_food: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/minecraft/tags/item/wolf_food.json")
         ).unwrap()).unwrap();
