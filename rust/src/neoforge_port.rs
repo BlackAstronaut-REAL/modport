@@ -4827,12 +4827,14 @@ mod tests {
                 public static final Block BEDROCK_COPY = new UnbreakableBlock();
                 public static final Block ICE_COPY = new SlipperyIce();
                 public static final Block STONE_ORE = new StoneOre();
+                public static final Block NO_DROP = new NoDropBlock();
                 public static void register() {
                     GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
                     GameRegistry.registerBlock(RUBY_FLOWER, "ruby_flower");
                     GameRegistry.registerBlock(BEDROCK_COPY, "bedrock_copy");
                     GameRegistry.registerBlock(ICE_COPY, "ice_copy");
                     GameRegistry.registerBlock(STONE_ORE, "stone_ore");
+                    GameRegistry.registerBlock(NO_DROP, "no_drop");
                 }
             }
             public class RubyOre extends Block {
@@ -4857,6 +4859,15 @@ mod tests {
                     setHardness(2.0F);
                     setHarvestLevel("pickaxe", 1);
                     setStepSound(Block.soundTypeGravel);
+                }
+                public ItemStack getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
+                    return new ItemStack(Items.DIAMOND, 3);
+                }
+            }
+            public class NoDropBlock extends Block {
+                public NoDropBlock() { setHardness(1.0F); }
+                public List<ItemStack> getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
+                    return Collections.emptyList();
                 }
             }
             public class UnbreakableBlock extends Block {
@@ -4887,7 +4898,7 @@ mod tests {
         assert_eq!(report.native_projectiles.len(), 1);
         assert_eq!(report.native_projectiles[0].registry_name, "ruby_orb_projectile");
         assert_eq!(report.native_projectiles[0].bound_item.as_deref(), Some("ruby_orb"));
-        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ice_copy", "ruby_flower", "ruby_ore", "stone_ore"]);
+        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ice_copy", "no_drop", "ruby_flower", "ruby_ore", "stone_ore"]);
         let bedrock_copy = report.blocks.iter().find(|entry| entry.registry_name == "bedrock_copy").unwrap();
         assert_eq!(bedrock_copy.hardness, -1.0);
         let ruby_ore = report.blocks.iter().find(|entry| entry.registry_name == "ruby_ore").unwrap();
@@ -4953,6 +4964,15 @@ mod tests {
         ).unwrap()).unwrap();
         assert_eq!(loot["pools"][0]["entries"][0]["name"], "oldmod:ruby");
         assert_eq!(loot["pools"][0]["entries"][0]["functions"][0]["count"], 2);
+        let vanilla_loot: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/oldmod/loot_tables/blocks/stone_ore.json")
+        ).unwrap()).unwrap();
+        assert_eq!(vanilla_loot["pools"][0]["entries"][0]["name"], "minecraft:diamond");
+        assert_eq!(vanilla_loot["pools"][0]["entries"][0]["functions"][0]["count"], 3);
+        let no_drop_loot: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/oldmod/loot_tables/blocks/no_drop.json")
+        ).unwrap()).unwrap();
+        assert_eq!(no_drop_loot["pools"].as_array().unwrap().len(), 0);
         let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
         assert!(items_java.contains("ITEMS.register(\"ruby\""));
         assert!(items_java.contains("new BlockItem"));
@@ -4960,7 +4980,7 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 2);
         assert_eq!(status["converted"]["throwable_projectiles"], 1);
-        assert_eq!(status["converted"]["blocks"], 5);
+        assert_eq!(status["converted"]["blocks"], 6);
     }
 
     #[test]
