@@ -1357,7 +1357,7 @@ fn recover_food_properties(source: &EquipmentSource, source_release: &str) -> Op
 
 fn food_properties_java(food: &FoodRecord) -> String {
     let mut builder = format!(
-        "new FoodProperties.Builder().nutrition({}).saturationMod({}F)",
+        "new FoodProperties.Builder().nutrition({}).saturationModifier({}F)",
         food.nutrition, food.saturation
     );
     if food.always_edible { builder.push_str(".alwaysEdible()"); }
@@ -5173,6 +5173,27 @@ mod tests {
     }
 
     #[test]
+    fn food_properties_java_uses_neoforge_1211_builder_method_names() {
+        let food = FoodRecord {
+            nutrition: 8,
+            saturation: 0.9,
+            always_edible: true,
+            fast: false,
+            wolf_favorite_meat: true,
+            effects: vec![FoodEffectRecord {
+                effect: "REGENERATION".to_owned(),
+                duration_ticks: 120,
+                amplifier: 1,
+                probability: 0.25,
+            }],
+        };
+        let generated = food_properties_java(&food);
+        assert!(generated.contains(".nutrition(8).saturationModifier(0.9F)"));
+        assert!(generated.contains(".alwaysEdible().meat().effect("));
+        assert!(!generated.contains(".saturationMod("));
+    }
+
+    #[test]
     fn ports_legacy_numeric_food_potion_effects_with_seconds_to_ticks_conversion() {
         let temp = tempdir().unwrap();
         let source = temp.path().join("numeric_food_mod");
@@ -5251,7 +5272,7 @@ mod tests {
         assert!((food_props.effects[0].probability - 0.25).abs() < 0.001);
 
         let items = fs::read_to_string(output.join("src/main/java/com/modport/foodmod/registry/ModItems.java")).unwrap();
-        assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationMod(0.8F).alwaysEdible().effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 120, 1), 0.25F).build()"));
+        assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationModifier(0.8F).alwaysEdible().effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 120, 1), 0.25F).build()"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffectInstance;"));
         assert!(items.contains("import net.minecraft.world.effect.MobEffects;"));
         assert!(items.contains(".alwaysEdible().meat().effect("));
