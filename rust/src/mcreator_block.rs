@@ -621,22 +621,39 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     let text = &source.source_text;
     let mut properties = Map::new();
 
-    let hardness = number_after(text, &[
+    let source_hardness = number_after(text, &[
         r"\.strength\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\.hardness\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\bsetHardness\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
-    ]).unwrap_or(1.0).max(0.0);
+    ]);
+    let unbreakable = Regex::new(r"(?i)\bsetBlockUnbreakable\s*\(\s*\)")
+        .expect("static legacy unbreakable block regex")
+        .is_match(text)
+        || source_hardness.is_some_and(|value| value < 0.0);
+    let hardness = if unbreakable {
+        -1.0
+    } else {
+        source_hardness.unwrap_or(1.0).max(0.0)
+    };
     let resistance = number_after(text, &[
         r"\.strength\s*\(\s*-?\d+(?:\.\d+)?[fFdD]?\s*,\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\.resistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\bsetResistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
     ]).unwrap_or(1.0).max(0.0);
-    let light = number_after(text, &[
+    let modern_light = number_after(text, &[
         r"\.lightLevel\s*\(\s*\(\s*\)\s*->\s*(?:\(\s*)?(-?\d+)",
+    ]);
+    let legacy_light = number_after(text, &[
         r"\bsetLightLevel\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
-    ]).unwrap_or(0.0).max(0.0);
+    ]);
+    let light = if let Some(value) = modern_light {
+        value.clamp(0.0, 15.0)
+    } else {
+        (legacy_light.unwrap_or(0.0).clamp(0.0, 1.0) * 15.0).round()
+    };
 
     properties.insert("hardness".to_owned(), json!(hardness));
+    properties.insert("unbreakable".to_owned(), json!(unbreakable));
     properties.insert("resistance".to_owned(), json!(resistance));
     properties.insert("light_level".to_owned(), json!(light));
     let harvest_level = number_after(text, &[
@@ -663,10 +680,18 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
         "requires_correct_tool".to_owned(),
         json!(text.contains("setHarvestLevel") || text.contains("requiresCorrectToolForDrops")),
     );
-    properties.insert(
-        "random_ticks".to_owned(),
-        json!(text.contains("randomTicks") || text.contains("tickRandomly")),
-    );
+    let legacy_random_ticks = Regex::new(r"(?i)\bsetTickRandomly\s*\(\s*(true|false)\s*\)")
+        .expect("static legacy random tick flag regex")
+        .captures(text)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().eq_ignore_ascii_case("true"));
+    let legacy_random_tick_call = Regex::new(r"(?i)\bsetTickRandomly\s*\(")
+        .expect("static legacy random tick setter regex")
+        .is_match(text);
+    let random_ticks = legacy_random_ticks.unwrap_or_else(|| {
+        legacy_random_tick_call || text.contains("randomTicks") || text.contains("tickRandomly")
+    });
+    properties.insert("random_ticks".to_owned(), json!(random_ticks));
     properties.insert(
         "replaceable".to_owned(),
         json!(text.contains("replaceable") || text.contains("REPLACEABLE")),
@@ -1073,6 +1098,32 @@ mod tests{
         assert_eq!(properties["step_sound"], "METAL");
         assert_eq!(properties["light_opacity"], 4);
         assert_eq!(properties["destroy_tool"], "Pickaxe");
+    }
+
+
+    #[test]
+    fn converts_common_legacy_block_constructor_properties() {
+        let source = BlockSource {
+            class_name: "LegacyBedrock".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "legacy_bedrock".to_owned(),
+            source_path: "LegacyBedrock.java".to_owned(),
+            source_text: "setBlockUnbreakable(); setTickRandomly(true); setLightLevel(0.8F);".to_owned(),
+        };
+        let properties = source_block_properties(&source);
+        assert_eq!(properties["unbreakable"], true);
+        assert_eq!(properties["hardness"], -1.0);
+        assert_eq!(properties["random_ticks"], true);
+        assert_eq!(properties["light_level"], 12.0);
+
+        let disabled = BlockSource {
+            class_name: "NoRandomTicks".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "no_random_ticks".to_owned(),
+            source_path: "NoRandomTicks.java".to_owned(),
+            source_text: "setTickRandomly(false);".to_owned(),
+        };
+        assert_eq!(source_block_properties(&disabled)["random_ticks"], false);
     }
 
     #[test]

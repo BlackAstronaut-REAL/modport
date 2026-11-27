@@ -84,6 +84,12 @@ const DEFINITIONS: &[Definition] = &[
     t!("IItemExtension", "canPerformAction", "boolean canPerformAction(ItemStack, ItemAbility)", "tool", "Use item abilities for tool actions instead of legacy tool-class strings.", "net/neoforged/neoforge/common/extensions/IItemExtension.html", "Item#isItemTool; Item#canItemEditBlocks"),
 
     // Block behavior, shape, placement, redstone and block entities.
+    // Construction-time block properties with direct 1.21.1 equivalents.
+    t!("BlockBehaviour.Properties", "strength", "BlockBehaviour.Properties strength(float destroyTime, float explosionResistance)", "block_properties", "Preserve the legacy -1 destroy-time sentinel for unbreakable blocks; keep explosion resistance independent from mining hardness.", "net/minecraft/world/level/block/state/BlockBehaviour.Properties.html", "Block#setBlockUnbreakable; Block#setHardness; Block#setResistance"),
+    t!("BlockBehaviour.Properties", "randomTicks", "BlockBehaviour.Properties randomTicks()", "block_updates", "Opt the block into server random ticks; this is separate from scheduled ticks and does not translate the source randomTick callback body.", "net/minecraft/world/level/block/state/BlockBehaviour.Properties.html", "Block#setTickRandomly"),
+    t!("BlockBehaviour.Properties", "lightLevel", "BlockBehaviour.Properties lightLevel(ToIntFunction<BlockState>)", "block_properties", "NeoForge expects emitted light as an integer from 0 through 15; scale legacy setLightLevel fractions from 0.0 through 1.0.", "net/minecraft/world/level/block/state/BlockBehaviour.Properties.html", "Block#setLightLevel"),
+    t!("BlockBehaviour.Properties", "sound", "BlockBehaviour.Properties sound(SoundType)", "block_properties", "Translate the legacy step/sound profile into the target SoundType while retaining the distinction between different sound profiles.", "net/minecraft/world/level/block/state/BlockBehaviour.Properties.html", "Block#setStepSound; Block#setSoundType"),
+    t!("BlockBehaviour.Properties", "requiresCorrectToolForDrops", "BlockBehaviour.Properties requiresCorrectToolForDrops()", "block_properties", "Require an appropriate tool for drops; preserve the source tool class and harvest-level tags separately.", "net/minecraft/world/level/block/state/BlockBehaviour.Properties.html", "Block#setHarvestLevel"),
     t!("Block", "use", "InteractionResult use(BlockState, Level, BlockPos, Player, InteractionHand, BlockHitResult)", "block_interaction", "Translate right-click behavior to UseOnContext-like hit data and typed interaction results.", "net/minecraft/world/level/block/Block.html", "Block#onBlockActivated"),
     t!("Block", "getStateForPlacement", "BlockState getStateForPlacement(BlockPlaceContext)", "block_state", "Return the state to place; do not mutate metadata after placement.", "net/minecraft/world/level/block/Block.html", "Block#onBlockPlaced; Block#getStateFromMeta"),
     t!("Block", "onPlace", "void onPlace(BlockState, Level, BlockPos, BlockState, boolean)", "block_lifecycle", "Called when the new state is placed; distinguish from chunk-load restoration.", "net/minecraft/world/level/block/Block.html", "Block#onBlockAdded"),
@@ -957,6 +963,29 @@ mod tests {
         let matches = find_target_api_methods("IItemExtension", "getBurnTime");
         assert_eq!(matches.len(), 1);
         assert!(matches[0].legacy_aliases.iter().any(|alias| alias == "Item#getItemBurnTime"));
+    }
+
+
+    #[test]
+    fn common_legacy_block_property_aliases_resolve_to_native_properties() {
+        for (alias, method) in [
+            ("Block#setBlockUnbreakable", "strength"),
+            ("Block#setHardness", "strength"),
+            ("Block#setResistance", "strength"),
+            ("Block#setTickRandomly", "randomTicks"),
+            ("Block#setLightLevel", "lightLevel"),
+            ("Block#setStepSound", "sound"),
+            ("Block#setSoundType", "sound"),
+            ("Block#setHarvestLevel", "requiresCorrectToolForDrops"),
+        ] {
+            let matches = find_target_api_methods_by_legacy_alias(alias);
+            assert!(
+                matches.iter().any(|entry|
+                    entry.owner == "BlockBehaviour.Properties" && entry.method == method
+                ),
+                "missing native construction contract for {alias}"
+            );
+        }
     }
 
     #[test]

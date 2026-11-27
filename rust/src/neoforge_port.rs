@@ -3153,7 +3153,7 @@ public final class ModBlocks {{
 "#);
     for block in blocks {
         let field = java_field_name(&block.id, "BLOCK");
-        let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
+        let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(-1.0, 3600000.0);
         let resistance = block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
         let light = block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32;
         let requires_tool = block.properties.get("requires_correct_tool").and_then(Value::as_bool).unwrap_or(false);
@@ -4422,9 +4422,11 @@ mod tests {
             public class ModBlocks {
                 public static final Block RUBY_ORE = new RubyOre();
                 public static final Block RUBY_FLOWER = new RubyFlower();
+                public static final Block BEDROCK_COPY = new UnbreakableBlock();
                 public static void register() {
                     GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
                     GameRegistry.registerBlock(RUBY_FLOWER, "ruby_flower");
+                    GameRegistry.registerBlock(BEDROCK_COPY, "bedrock_copy");
                 }
             }
             public class RubyOre extends Block {
@@ -4434,6 +4436,14 @@ mod tests {
                     setHarvestLevel("pickaxe", 2);
                     setStepSound(SoundType.METAL);
                     randomTicks();
+                }
+            }
+            public class UnbreakableBlock extends Block {
+                public UnbreakableBlock() {
+                    setBlockUnbreakable();
+                    setTickRandomly(true);
+                    setLightLevel(0.8F);
+                    setSoundType(SoundType.METAL);
                 }
             }
             public class RubyFlower extends BlockFlower { }
@@ -4456,7 +4466,11 @@ mod tests {
         assert_eq!(report.native_projectiles.len(), 1);
         assert_eq!(report.native_projectiles[0].registry_name, "ruby_orb_projectile");
         assert_eq!(report.native_projectiles[0].bound_item.as_deref(), Some("ruby_orb"));
-        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["ruby_flower", "ruby_ore"]);
+        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ruby_flower", "ruby_ore"]);
+        let bedrock_copy = report.blocks.iter().find(|entry| entry.registry_name == "bedrock_copy").unwrap();
+        assert_eq!(bedrock_copy.hardness, -1.0);
+        assert!(bedrock_copy.random_ticks);
+        assert_eq!(bedrock_copy.light_level, 12);
         assert!(report.blocks.iter().find(|block| block.registry_name == "ruby_flower").unwrap().plant_like);
         let flower_model: Value = serde_json::from_slice(&fs::read(output.join("src/main/resources/assets/oldmod/models/block/ruby_flower.json")).unwrap()).unwrap();
         assert_eq!(flower_model["parent"], "minecraft:block/cross");
@@ -4488,6 +4502,9 @@ mod tests {
         assert!(blocks_java.contains(".requiresCorrectToolForDrops()"));
         assert!(blocks_java.contains(".randomTicks()"));
         assert!(blocks_java.contains(".sound(SoundType.METAL)"));
+        assert!(blocks_java.contains(".strength(-1F, 1F)"));
+        assert!(blocks_java.contains(".randomTicks()"));
+        assert!(blocks_java.contains(".lightLevel(state -> 12)"));
         let mineable: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json")
         ).unwrap()).unwrap();
@@ -4507,7 +4524,7 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 2);
         assert_eq!(status["converted"]["throwable_projectiles"], 1);
-        assert_eq!(status["converted"]["blocks"], 2);
+        assert_eq!(status["converted"]["blocks"], 3);
     }
 
     #[test]
