@@ -415,7 +415,7 @@ pub fn generate_animation_definition_java(model: &ParsedModel, class_name: &str)
         methods.push(build.join("\n"));
         for (index, chunk) in chunks.iter().enumerate() {
             methods.push(format!(
-                "\tprivate static AnimationDefinition.Builder add{field_name}Part{}(AnimationDefinition.Builder builder) {{\n\t\treturn builder\n{}\n\t}}",
+                "\tprivate static AnimationDefinition.Builder add{field_name}Part{}(AnimationDefinition.Builder builder) {{\n\t\treturn builder\n{};\n\t}}",
                 index + 1, chunk.join("\n")
             ));
         }
@@ -778,6 +778,9 @@ mod tests {
         assert!(generated.source.contains(".addAnimation(\"wing\""));
         assert!(generated.source.contains(".addAnimation(\"wing_2\""));
         assert!(generated.source.contains("KeyframeAnimations.degreeVec"));
+        // The returned fluent Builder chain must be terminated before the
+        // generated helper method closes; otherwise javac reports '; expected'.
+        assert!(generated.source.contains("AnimationChannel.Interpolations.LINEAR)));\n\t}"));
         assert!(generated.source.contains("KeyframeAnimations.posVec"));
         assert_eq!(generated.records.len(), 1);
         assert_eq!(generated.records[0].channel_count, 4);
