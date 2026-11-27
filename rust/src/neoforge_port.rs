@@ -4417,6 +4417,45 @@ mod tests {
     }
 
     #[test]
+    fn common_legacy_block_setters_resolve_to_native_properties_across_releases() {
+        for version in ["1.7.10", "1.8.9", "1.12.2"] {
+            let mappings = crate::legacy_api_dictionary::legacy_api_dictionary_for_version(version);
+            for (source_method, target_method) in [
+                ("setBlockUnbreakable", "strength"),
+                ("setHardness", "strength"),
+                ("setResistance", "strength"),
+                ("setTickRandomly", "randomTicks"),
+                ("setLightLevel", "lightLevel"),
+            ] {
+                let mapping = mappings.iter()
+                    .find(|entry| entry.source_owner == "Block" && entry.source_method == source_method)
+                    .unwrap_or_else(|| panic!("missing {version} Block#{source_method}"));
+                assert!(mapping.target_api_methods.iter().any(|target|
+                    target.owner == "BlockBehaviour.Properties" && target.method == target_method
+                ), "{version} Block#{source_method} did not resolve to BlockBehaviour.Properties#{target_method}");
+            }
+        }
+
+        for version in ["1.7.10", "1.8.9"] {
+            let mappings = crate::legacy_api_dictionary::legacy_api_dictionary_for_version(version);
+            let step_sound = mappings.iter()
+                .find(|entry| entry.source_owner == "Block" && entry.source_method == "setStepSound")
+                .unwrap_or_else(|| panic!("missing {version} Block#setStepSound"));
+            assert!(step_sound.target_api_methods.iter().any(|target|
+                target.owner == "BlockBehaviour.Properties" && target.method == "sound"
+            ), "{version} Block#setStepSound did not resolve to BlockBehaviour.Properties#sound");
+        }
+
+        let v112 = crate::legacy_api_dictionary::legacy_api_dictionary_for_version("1.12.2");
+        let sound_type = v112.iter()
+            .find(|entry| entry.source_owner == "Block" && entry.source_method == "setSoundType")
+            .expect("missing 1.12.2 Block#setSoundType");
+        assert!(sound_type.target_api_methods.iter().any(|target|
+            target.owner == "BlockBehaviour.Properties" && target.method == "sound"
+        ), "1.12.2 Block#setSoundType did not resolve to BlockBehaviour.Properties#sound");
+    }
+
+    #[test]
     fn ports_registered_items_blocks_and_resources_from_java_source() {
         let temp = tempdir().unwrap();
         let source = temp.path().join("old_mod");
