@@ -43,3 +43,9 @@ The launcher downloads Gradle 9.2.1 into the user cache on its first run; no sep
 Modport emits native registered items, tools, armor, blocks, plants, living-entity classes, supported throwable projectiles, recipes, and imported resources. It also links supported legacy block GUIs to the block that opens them and can emit native mob models and keyframe animations when the source renderer/model chain is recoverable. It remains a partial converter: original GUI button logic, machine state and recipes, entity AI/attacks, event handlers, networking, and other custom behavior still require dedicated adapters. The analysis report records warnings and pending behavior rather than claiming a complete 1:1 conversion.
 
 Please credit the original mod authors and obtain permission before redistributing a port. A generated project does not grant rights to the original mod's code or assets.
+
+
+## Comments from the guy who did the thing
+
+the whole thing was ai. i had the idea, i typed it, i sent it. it made it. thank you chatgpt free plan. 
+there is NOTHING special about this repository and I did nothing but type and test. thank you for coming to my ted talk.
