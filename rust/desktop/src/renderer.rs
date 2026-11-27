@@ -254,14 +254,20 @@ fn legacy_model_box_face_uvs(
     height: f32,
     depth: f32,
 ) -> [[f32; 4]; 6] {
-    [
+    // Legacy ModelRenderer geometry is Y-down, but the preview converts its
+    // vertices to Y-up and emits each quad in the opposite vertical order.
+    // Reverse each legacy face rectangle's V endpoints so the texture's top
+    // remains attached to the model's top. Resource-model faces use their
+    // explicit UV path and are intentionally unaffected.
+    let faces = [
         [u + depth + width, v + depth, u + 2.0 * depth + width, v + depth + height],
         [u, v + depth, u + depth, v + depth + height],
         [u + depth, v, u + depth + width, v + depth],
         [u + depth + width, v, u + depth + 2.0 * width, v + depth],
         [u + depth, v + depth, u + depth + width, v + depth + height],
         [u + 2.0 * depth + width, v + depth, u + 2.0 * depth + 2.0 * width, v + depth + height],
-    ]
+    ];
+    faces.map(|[u1, v1, u2, v2]| [u1, v2, u2, v1])
 }
 
 fn draw_cube(
@@ -633,14 +639,28 @@ mod tests {
     use mojmodelbridge::viewer::{ViewerAnimation, ViewerNode};
 
     #[test]
-    fn legacy_model_box_uv_net_uses_width_for_the_bottom_face_span() {
+    fn legacy_model_box_uv_net_uses_width_for_the_bottom_face_span_and_flips_v() {
         let faces = legacy_model_box_face_uvs(2.0, 3.0, 4.0, 6.0, 2.0);
-        assert_eq!(faces[0], [8.0, 5.0, 10.0, 11.0]);
-        assert_eq!(faces[1], [2.0, 5.0, 4.0, 11.0]);
-        assert_eq!(faces[2], [4.0, 3.0, 8.0, 5.0]);
-        assert_eq!(faces[3], [8.0, 3.0, 12.0, 5.0]);
-        assert_eq!(faces[4], [4.0, 5.0, 8.0, 11.0]);
-        assert_eq!(faces[5], [10.0, 5.0, 14.0, 11.0]);
+        assert_eq!(faces[0], [8.0, 11.0, 10.0, 5.0]);
+        assert_eq!(faces[1], [2.0, 11.0, 4.0, 5.0]);
+        assert_eq!(faces[2], [4.0, 5.0, 8.0, 3.0]);
+        assert_eq!(faces[3], [8.0, 5.0, 12.0, 3.0]);
+        assert_eq!(faces[4], [4.0, 11.0, 8.0, 5.0]);
+        assert_eq!(faces[5], [10.0, 11.0, 14.0, 5.0]);
+    }
+
+    #[test]
+    fn legacy_model_box_top_vertices_sample_the_top_of_the_texture() {
+        let rect = legacy_model_box_face_uvs(2.0, 3.0, 4.0, 6.0, 2.0)[4];
+        let points = [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ];
+        let vertices = quad_from_rect(points, rect, false, 16.0, 16.0);
+        assert_eq!(vertices[0].uv[1], 11.0 / 16.0, "lower model vertex must map to the bottom texture row");
+        assert_eq!(vertices[2].uv[1], 5.0 / 16.0, "upper model vertex must map to the top texture row");
     }
 
     #[test]
