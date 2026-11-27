@@ -18,7 +18,9 @@ use crate::archive::extract_archive;
 use crate::metadata::{infer_mod_metadata, ModMetadata};
 use crate::mod_graph::{scan_mod_graph, EntityMetadata};
 use crate::mcreator_armor::{compiled_armor_stats, discover_armor_sources, source_armor_stats, ArmorSetSource};
-use crate::mcreator_block::{discover_block_sources, is_plant_source, source_block_properties, BlockSource};
+use crate::mcreator_block::{
+    discover_block_sources, is_plant_source, source_block_properties_with_registry_map, BlockSource,
+};
 use crate::mcreator_equipment::{compiled_tool_materials, discover_equipment_sources, source_tool_materials, EquipmentSource, ToolMaterialStats};
 use crate::mcreator_projectile::{discover_projectile_sources, ProjectileSource};
 use crate::neoforge_docs::{default_docs_root, DocSearchResult, NeoForgeDocsIndex};
@@ -387,6 +389,8 @@ pub fn port_to_neoforge(
         .filter(|value| !value.trim().is_empty())
         .map(str::to_owned)
         .unwrap_or_else(|| format!("com.modport.{}", target_mod_id));
+    let native_registry_fields =
+        crate::recipe_bridge::source_field_registered_names(roots, &source_mod_id);
 
     // Resolve docs and source metadata before touching output. Invalid input
     // should not leave a half-created target project behind.
@@ -469,7 +473,13 @@ pub fn port_to_neoforge(
     all_block_sources.extend(resource_fallbacks.into_iter().filter(|source| {
         !registered_block_ids.contains(&normalized_id(&source.registry_name))
     }));
-    let mut block_records = collect_blocks(&all_block_sources, &mut warnings);
+    let mut block_records = collect_blocks(
+        &all_block_sources,
+        &mut warnings,
+        &native_registry_fields,
+        &source_mod_id,
+        &target_mod_id,
+    );
     for item in &mut item_records {
         item.source_path = prepared.display_source_path(&item.source_path);
     }
@@ -1880,17 +1890,59 @@ fn infer_block_shape(source: &BlockSource, plant_like: bool) -> &'static str {
     "cube"
 }
 
-fn collect_blocks(sources: &[BlockSource], warnings: &mut Vec<String>) -> Vec<BlockRecord> {
+fn collect_blocks(
+    sources: &[BlockSource],
+    warnings: &mut Vec<String>,
+    registry_fields: &BTreeMap<String, BTreeSet<String>>,
+    source_mod_id: &str,
+    target_mod_id: &str,
+) -> Vec<BlockRecord> {
     let mut blocks = Vec::new();
     for source in sources {
-        let properties = source_block_properties(source);
+        let mut properties = source_block_properties_with_registry_map(source, registry_fields);
+        if let Some(drop) = properties.get("custom_drop").and_then(Value::as_str) {
+            if drop.is_empty() || properties.get("drop_amount").and_then(Value::as_f64).unwrap_or(1.0) <= 0.0 {
+                properties.insert("custom_drop_empty".to_owned(), json!(true));
+            } else if let Some(field) = drop.strip_prefix("Items.") {
+                if let Some(registries) = registry_fields.get(field) {
+                    if let Some(registry) = registries.iter().next() {
+                        properties.insert(
+                            "custom_drop_resource".to_owned(),
+                            json!(format!("{target_mod_id}:{registry}")),
+                        );
+                    }
+                } else {
+                    // extract_block_drop only produces Items.* without a registry
+                    // lookup for explicit vanilla Items/Blocks fields.
+                    properties.insert(
+                        "custom_drop_resource".to_owned(),
+                        json!(format!("minecraft:{}", normalized_id(field))),
+                    );
+                }
+            } else if let Some((namespace, path)) = drop.split_once(':') {
+                let namespace = if namespace.eq_ignore_ascii_case(source_mod_id) {
+                    target_mod_id
+                } else {
+                    namespace
+                };
+                properties.insert(
+                    "custom_drop_resource".to_owned(),
+                    json!(format!("{namespace}:{path}")),
+                );
+            } else {
+                properties.insert(
+                    "custom_drop_resource".to_owned(),
+                    json!(format!("{target_mod_id}:{}", normalized_id(drop))),
+                );
+            }
+        }
         let plant_like = is_plant_source(source);
         let mut block_warnings = Vec::new();
         block_warnings.push(match infer_block_shape(source, plant_like) {
             "slab" => "Legacy slab class detected; native slab state and models are generated, but double-slab merging and custom placement rules remain pending.".to_owned(),
             "stairs" => "Legacy stair class detected; native stair variants/models are generated, but shape calculation and custom placement rules remain pending.".to_owned(),
             "cross" => "Plant-like class detected; a cross model and non-collision fallback are generated; growth and special placement remain pending.".to_owned(),
-            _ => "Custom block methods, state properties, interactions, drops and tick behavior are not copied; this entry uses a simple native Block.".to_owned(),
+            _ => "Custom block methods, state properties, interactions, dynamic drops and tick behavior are not copied; this entry uses a simple native Block.".to_owned(),
         });
         if plant_like {
             block_warnings.push("Plant-like source detected; a cross-model and non-collision fallback is emitted, but growth and special placement behavior remain pending.".to_owned());
@@ -4054,15 +4106,31 @@ fn merge_tag_values(path: &Path, new_values: &BTreeSet<String>) -> Result<()> {
 }
 
 fn block_loot_table(block: &BlockRecord, mod_id: &str) -> Value {
-    let drop = block.properties.get("custom_drop")
+    if block.properties.get("custom_drop_empty").and_then(Value::as_bool).unwrap_or(false) {
+        return json!({"type":"minecraft:block","pools":[]});
+    }
+    let drop = block.properties.get("custom_drop_resource")
         .and_then(Value::as_str)
-        .map(|value| {
-            let value = value.trim().trim_matches('"').trim_matches('\'');
-            if value.contains(':') { value.to_owned() } else { format!("{mod_id}:{value}") }
-        })
+        .map(str::to_owned)
+        .or_else(|| block.properties.get("custom_drop")
+            .and_then(Value::as_str)
+            .map(|value| {
+                let value = value.trim().trim_matches('"').trim_matches('\'');
+                if let Some(field) = value.strip_prefix("Items.") {
+                    format!("minecraft:{}", normalized_id(field))
+                } else if value.contains(':') {
+                    value.to_owned()
+                } else {
+                    format!("{mod_id}:{value}")
+                }
+            }))
         .unwrap_or_else(|| format!("{mod_id}:{}", block.id));
     let amount = block.properties.get("drop_amount")
-        .and_then(Value::as_f64).unwrap_or(1.0).clamp(1.0, 64.0);
+        .and_then(Value::as_f64).unwrap_or(1.0);
+    if amount <= 0.0 {
+        return json!({"type":"minecraft:block","pools":[]});
+    }
+    let amount = amount.clamp(1.0, 64.0);
     let mut entry = json!({"type":"minecraft:item","name":drop});
     if (amount - 1.0).abs() > 0.001 {
         entry["functions"] = json!([{
@@ -4775,6 +4843,9 @@ mod tests {
                     setStepSound(Block.soundTypeMetal);
                     randomTicks();
                 }
+                public List<ItemStack> getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
+                    return Collections.singletonList(new ItemStack(ModItems.RUBY, 2));
+                }
             }
             public class SlipperyIce extends Block {
                 public SlipperyIce() {
@@ -4880,7 +4951,8 @@ mod tests {
         let loot: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/oldmod/loot_tables/blocks/ruby_ore.json")
         ).unwrap()).unwrap();
-        assert_eq!(loot["pools"][0]["entries"][0]["name"], "oldmod:ruby_ore");
+        assert_eq!(loot["pools"][0]["entries"][0]["name"], "oldmod:ruby");
+        assert_eq!(loot["pools"][0]["entries"][0]["functions"][0]["count"], 2);
         let items_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModItems.java")).unwrap();
         assert!(items_java.contains("ITEMS.register(\"ruby\""));
         assert!(items_java.contains("new BlockItem"));

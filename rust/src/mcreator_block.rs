@@ -648,6 +648,13 @@ fn apply_block_drop_updates(
 /// These values mirror the fields used by the native MCreator block builder,
 /// but remain separate metadata so the browser does not present them as lore.
 pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
+    source_block_properties_with_registry_map(source, &BTreeMap::new())
+}
+
+pub fn source_block_properties_with_registry_map(
+    source: &BlockSource,
+    field_registry_map: &BTreeMap<String, BTreeSet<String>>,
+) -> Map<String, Value> {
     let text = &source.source_text;
     let mut properties = Map::new();
 
@@ -760,7 +767,7 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     if let Some(tool) = destroy_tool {
         properties.insert("destroy_tool".to_owned(), json!(tool));
     }
-    if let Some((drop, amount)) = extract_block_drop(text, &BTreeMap::new()) {
+    if let Some((drop, amount)) = extract_block_drop(text, field_registry_map) {
         properties.insert("custom_drop".to_owned(), json!(drop));
         properties.insert("drop_amount".to_owned(), json!(amount));
         properties.insert("use_loot_table_for_drops".to_owned(), json!(false));
