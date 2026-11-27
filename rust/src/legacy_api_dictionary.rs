@@ -171,7 +171,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("Block", "getBlockLayer", V_18, "render_layer", "RenderType / client render-layer registration", "block_rendering", "client_adapter_required", "Map translucent/cutout layers to modern render types and client registration.", "net/minecraft/block/Block.html"),
     d!("Block", "getStateFromMeta", V_18, "metadata_to_state", "Block#getStateForPlacement / StateDefinition", "block_state", "adapter_required", "Create explicit block-state properties and translate each metadata combination.", "net/minecraft/block/Block.html"),
     d!("Block", "getMetaFromState", V_18, "state_to_metadata", "BlockState properties / serialization", "block_state", "adapter_required", "Metadata is no longer the state identity; preserve serialization only where compatibility requires it.", "net/minecraft/block/Block.html"),
-    d!("Block", "getDefaultState", V_18, "default_block_state", "Block#registerDefaultState", "block_state", "property_recovery", "Recover the default property assignments and register them after state definition.", "net/minecraft/block/Block.html"),
+    d!("Block", "getDefaultState", V_18, "default_block_state", "Block#defaultBlockState", "block_state", "property_recovery", "Recover the default property assignments and register them after state definition.", "net/minecraft/block/Block.html"),
     d!("Block", "isReplaceable", V_18, "replaceable_block", "Block#canBeReplaced", "block_properties", "adapter_required", "Preserve placement context and fluid/plant replacement rules.", "net/minecraft/block/Block.html"),
     d!("Block", "isLeaves", V_18, "leaves_classification", "BlockTags#LEAVES / LeavesBlock behavior", "block_properties", "adapter_required", "Prefer tags and native leaves behavior over an isolated boolean.", "net/minecraft/block/Block.html"),
     d!("Block", "isWood", V_18, "wood_classification", "BlockTags#LOGS / BlockTags#PLANKS", "block_properties", "adapter_required", "Translate classification checks into appropriate block tags.", "net/minecraft/block/Block.html"),
@@ -413,18 +413,38 @@ const DEFINITIONS: &[Definition] = &[
     d!("SimpleNetworkWrapper", "sendToServer", V_ALL, "send_packet_to_server", "PacketDistributor.SERVER", "networking", "adapter_required", "Keep client-thread safety and server-side validation.", ""),
 
     // Expanded world, entity, capability, rendering and lifecycle APIs.
-    d!("IBlockState", "getBlock", V_18, "state_block_identity", "BlockState#getBlock", "block_state", "automatic_rename_candidate", "Translate the state object to a modern BlockState and preserve registry identity.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getValue", V_18, "state_property_read", "BlockState#getValue", "block_state", "signature_adapter_required", "Translate IProperty to Property and keep the correct generic value type.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "withProperty", V_18, "state_property_write", "BlockState#setValue", "block_state", "signature_adapter_required", "Translate immutable state updates and property value types.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "cycleProperty", V_18, "state_property_cycle", "BlockState#cycle", "block_state", "automatic_rename_candidate", "Preserve property cycling order and default values.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getProperties", V_18, "state_property_enumeration", "BlockState#getValues", "block_state", "adapter_required", "Translate property-keyed maps and avoid assumptions about property iteration order.", "net/minecraft/block/state/IBlockState.html"),
+    // Block access and lighting queries shared by world, chunk and render-region adapters.
+    d!("IBlockAccess", "getBlockState", V_112, "block_state_lookup", "BlockGetter#getBlockState", "block_access", "automatic_rename_candidate", "Read the immutable state at this position; keep the access object read-only and avoid forcing chunk loads.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "getTileEntity", V_112, "block_entity_lookup", "BlockGetter#getBlockEntity", "block_access", "automatic_rename_candidate", "Translate nullable TileEntity results to nullable BlockEntity while preserving the supplied position.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "getBiome", V_112, "biome_lookup", "LevelReader#getBiome", "world_environment", "signature_adapter_required", "Modern biome lookup returns Holder<Biome>; unwrap only at APIs that still require a concrete biome and preserve registry identity.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "getCombinedLight", V_112, "packed_light_lookup", "BlockAndTintGetter#getBrightness / LightTexture#pack", "block_rendering", "signature_adapter_required", "Read block and sky LightLayer values separately, apply the legacy minimum-light fallback, then pack channels in block/sky order.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "getStrongPower", V_112, "direct_redstone_signal", "SignalGetter#getDirectSignal", "redstone", "signature_adapter_required", "Translate EnumFacing to Direction and preserve direct/strong signal direction semantics rather than substituting neighbor maximum power.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "isAirBlock", V_112, "air_state_predicate", "BlockBehaviour.BlockStateBase#isAir", "block_state", "automatic_rename_candidate", "Resolve the state first and test its air flag; do not substitute replaceability or empty collision shape.", "net/minecraft/world/IBlockAccess.html"),
+    d!("IBlockAccess", "isSideSolid", V_112, "face_support_query", "BlockBehaviour.BlockStateBase#isFaceSturdy", "block_shape", "signature_adapter_required", "Translate EnumFacing to Direction and preserve the caller-provided default when the state/level is unavailable; use the correct face-support semantics.", "net/minecraft/world/IBlockAccess.html"),
+
+    // Block state containers describe the owning block, declared properties and generated states.
+    d!("BlockStateContainer", "getBaseState", V_112, "initial_block_state", "StateDefinition#any", "block_state", "automatic_rename_candidate", "Return the first generated state in the definition; do not substitute the block's configured default state, which may have non-base property values.", "net/minecraft/block/state/BlockStateContainer.html"),
+    d!("BlockStateContainer", "getValidStates", V_112, "all_block_states", "StateDefinition#getPossibleStates", "block_state", "automatic_rename_candidate", "Preserve the precomputed finite set of valid property combinations and its deterministic ordering.", "net/minecraft/block/state/BlockStateContainer.html"),
+    d!("BlockStateContainer", "getProperties", V_112, "block_state_properties", "StateDefinition#getProperties", "block_state", "automatic_rename_candidate", "Preserve declared property objects and generic value types; this is a property schema, not the current state's values.", "net/minecraft/block/state/BlockStateContainer.html"),
+    d!("BlockStateContainer", "getProperty", V_112, "block_state_property_lookup", "StateDefinition#getProperty", "block_state", "signature_adapter_required", "Look up by the exact property name and preserve null when the property is not declared.", "net/minecraft/block/state/BlockStateContainer.html"),
+    d!("BlockStateContainer", "getBlock", V_112, "block_state_owner", "StateDefinition#getOwner", "block_state", "automatic_rename_candidate", "Retrieve the block which owns this state definition; preserve the registry object identity.", "net/minecraft/block/state/BlockStateContainer.html"),
+
+    // Client model-loader and tint registration APIs are migrated to mod-bus events.
+    d!("ModelLoaderRegistry", "registerLoader", V_112, "custom_model_loader_registration", "ModelEvent.RegisterGeometryLoaders#register", "models", "client_event_adapter_required", "Move registration to the logical-client ModelEvent.RegisterGeometryLoaders mod-bus event and adapt ICustomModelLoader to IGeometryLoader.", "net/minecraftforge/client/model/ModelLoaderRegistry.html"),
+    d!("BlockColors", "registerBlockColorHandler", V_112, "block_tint_registration", "RegisterColorHandlersEvent.Block#register", "rendering", "client_event_adapter_required", "Register the BlockColor from RegisterColorHandlersEvent.Block on the logical client; retain state, level, position and tint-index inputs.", "net/minecraft/client/renderer/color/BlockColors.html"),
+    d!("ItemColors", "registerItemColorHandler", V_112, "item_tint_registration", "RegisterColorHandlersEvent.Item#register", "rendering", "client_event_adapter_required", "Register the ItemColor from RegisterColorHandlersEvent.Item on the logical client; retain ItemStack and tint-index inputs.", "net/minecraft/client/renderer/color/ItemColors.html"),
+    d!("IBlockState", "getBlock", V_18, "state_block_identity", "BlockBehaviour.BlockStateBase#getBlock", "block_state", "automatic_rename_candidate", "Translate the state object to a modern BlockState and preserve registry identity.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getValue", V_18, "state_property_read", "StateHolder#getValue", "block_state", "signature_adapter_required", "Translate IProperty to Property and keep the correct generic value type.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "withProperty", V_18, "state_property_write", "StateHolder#setValue", "block_state", "signature_adapter_required", "Translate immutable state updates and property value types.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "cycleProperty", V_18, "state_property_cycle", "StateHolder#cycle", "block_state", "automatic_rename_candidate", "Preserve property cycling order and default values.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getProperties", V_18, "state_property_enumeration", "StateHolder#getValues", "block_state", "adapter_required", "Translate property-keyed maps and avoid assumptions about property iteration order.", "net/minecraft/block/state/IBlockState.html"),
     d!("IBlockState", "getMaterial", V_18, "state_material", "BlockState#liquid / BlockState#isAir / material tags", "block_state", "adapter_required", "Material was a bundled classification; recover the exact liquid, replaceable, solid or movement property.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isFullBlock", V_18, "state_full_block", "BlockState#isCollisionShapeFullBlock", "block_state", "adapter_required", "Do not confuse full collision, visual solidity and occlusion.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isSideSolid", V_18, "state_side_solid", "BlockState#isFaceSturdy", "block_state", "signature_adapter_required", "Map EnumFacing and EnumBlockFaceShape to Direction and SupportType.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getCollisionBoundingBox", V_18, "state_collision_box", "BlockState#getCollisionShape", "block_shape", "adapter_required", "Convert AxisAlignedBB to VoxelShape and preserve world/position context.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getBoundingBox", V_18, "state_outline_box", "BlockState#getShape", "block_shape", "adapter_required", "Preserve state-dependent outline geometry and convert AABB to VoxelShape.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getBlockHardness", V_18, "state_hardness", "BlockState#getDestroySpeed", "block_properties", "adapter_required", "Preserve world, position and player-specific hardness calculations.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getLightValue", V_18, "state_light_value", "BlockState#getLightEmission", "block_properties", "automatic_rename_candidate", "Preserve state-dependent emitted light.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isFullBlock", V_18, "state_full_block", "BlockBehaviour.BlockStateBase#isCollisionShapeFullBlock", "block_state", "adapter_required", "Do not confuse full collision, visual solidity and occlusion.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isSideSolid", V_18, "state_side_solid", "BlockBehaviour.BlockStateBase#isFaceSturdy", "block_state", "signature_adapter_required", "Map EnumFacing and EnumBlockFaceShape to Direction and SupportType.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getCollisionBoundingBox", V_18, "state_collision_box", "BlockBehaviour.BlockStateBase#getCollisionShape", "block_shape", "adapter_required", "Convert AxisAlignedBB to VoxelShape and preserve world/position context.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getBoundingBox", V_18, "state_outline_box", "BlockBehaviour.BlockStateBase#getShape", "block_shape", "adapter_required", "Preserve state-dependent outline geometry and convert AABB to VoxelShape.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getBlockHardness", V_18, "state_hardness", "BlockBehaviour.BlockStateBase#getDestroySpeed", "block_properties", "adapter_required", "Preserve world, position and player-specific hardness calculations.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getLightValue", V_18, "state_light_value", "IBlockStateExtension#getLightEmission", "block_properties", "automatic_rename_candidate", "Preserve state-dependent emitted light.", "net/minecraft/block/state/IBlockState.html"),
     d!("BlockPos", "add", V_18, "block_position_offset", "BlockPos#offset / BlockPos#relative", "world_math", "signature_adapter_required", "Translate immutable/mutable position types and axis/direction overloads.", "net/minecraft/util/math/BlockPos.html"),
     d!("BlockPos", "offset", V_18, "block_position_direction_offset", "BlockPos#relative", "world_math", "signature_adapter_required", "Preserve direction and distance, including negative offsets.", "net/minecraft/util/math/BlockPos.html"),
     d!("BlockPos", "up", V_18, "block_position_up", "BlockPos#above", "world_math", "automatic_rename_candidate", "Keep distance argument and immutable position semantics.", "net/minecraft/util/math/BlockPos.html"),
@@ -3399,7 +3419,7 @@ const DEFINITIONS: &[Definition] = &[
     d!("Block", "removedByPlayer", V_18, "block_player_removal", "Player block removal and harvest decision", "blocks_loot", "adapter_required", "Preserve state, world, position, player and willHarvest; return value controls removal and must not be collapsed into harvestBlock.", "net/minecraft/block/Block.html"),
     d!("Block", "requiresUpdates", V_18, "block_requires_update_flag", "Block update scheduling predicate", "blocks_world", "adapter_required", "Preserve whether the block requires neighbor/update processing; used by chunk/world update scheduling.", "net/minecraft/block/Block.html"),
     d!("Block", "setBlockUnbreakable", V_ALL, "block_unbreakable_write", "Block hardness configuration", "blocks", "adapter_required", "Preserve negative-hardness/unbreakable semantics and interaction with hardness overrides.", "net/minecraft/block/Block.html"),
-    d!("Block", "setDefaultState", V_18, "block_default_state_write", "Block default IBlockState", "blocks", "adapter_required", "Protected initialization hook; preserve declared property set and ensure state belongs to this BlockStateContainer.", "net/minecraft/block/Block.html"),
+    d!("Block", "setDefaultState", V_18, "block_default_state_write", "Block#registerDefaultState", "blocks", "adapter_required", "Protected initialization hook; preserve declared property set and ensure state belongs to this BlockStateContainer.", "net/minecraft/block/Block.html"),
     d!("Block", "setHardness", V_ALL, "block_hardness_write", "Block hardness configuration", "blocks", "adapter_required", "Preserve numeric hardness and instant-break/unbreakable special values.", "net/minecraft/block/Block.html"),
     d!("Block", "setLightLevel", V_ALL, "block_light_level_write", "Block emitted light configuration", "blocks_render", "adapter_required", "Preserve 0-1 float conversion to block light level and world light updates.", "net/minecraft/block/Block.html"),
     d!("Block", "setLightOpacity", V_ALL, "block_light_opacity_write", "Block light opacity configuration", "blocks_render", "adapter_required", "Preserve opacity integer and lighting propagation behavior.", "net/minecraft/block/Block.html"),
@@ -4345,17 +4365,17 @@ const DEFINITIONS: &[Definition] = &[
     d!("ExtendedBlockStorage", "setBlockLight", V_112, "chunk_section_block_light_write", "Chunk section block light mutation", "world_lighting", "adapter_required", "Preserve 0-15 light values and block emission propagation.", "net/minecraft/world/chunk/storage/ExtendedBlockStorage.html"),
 
     // IBlockState functional properties and world-aware behavior.
-    d!("IBlockState", "getActualState", V_112, "block_state_actual_state", "World/position-dependent block state expansion", "blocks", "automatic_rename_candidate", "Preserve IBlockAccess and BlockPos because connected fences, doors and multipart blocks derive render state dynamically.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getBlockState", V_112, "block_state_base_container", "State container and owning block", "blocks", "automatic_rename_candidate", "Preserve state container/property schema identity.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getMapColor", V_112, "block_state_map_color", "Map pixel color for block state", "blocks_render", "automatic_rename_candidate", "Preserve world/position-sensitive map color rather than item tint/color handler.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "getPropertyKeys", V_112, "block_state_property_keys", "Immutable set of state property definitions", "blocks", "automatic_rename_candidate", "Preserve declared property identity and iteration order.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isFullCube", V_112, "block_state_full_cube_predicate", "State-aware full cube predicate", "blocks_physics", "automatic_rename_candidate", "Preserve full-cube render/collision semantics separately from normal-cube and opacity.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isNormalCube", V_112, "block_state_normal_cube_predicate", "World-aware normal cube predicate", "blocks_physics", "automatic_rename_candidate", "Preserve world/position and side-specific normal-cube behavior.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isOpaqueCube", V_112, "block_state_opaque_cube_predicate", "Block-state opaque cube predicate", "blocks_render", "automatic_rename_candidate", "Preserve opacity separately from full cube and render layer.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "isTopSolid", V_112, "block_state_top_solid_predicate", "Block-state top-face solidity", "blocks_physics", "automatic_rename_candidate", "Preserve top-face support separately from generic side-solid/full-cube checks.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getActualState", V_112, "block_state_actual_state", "IForgeBakedModel#getModelData", "blocks", "automatic_rename_candidate", "Preserve IBlockAccess and BlockPos because connected fences, doors and multipart blocks derive render state dynamically.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getBlockState", V_112, "block_state_base_container", "Block#getStateDefinition", "blocks", "automatic_rename_candidate", "Preserve state container/property schema identity.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getMapColor", V_112, "block_state_map_color", "BlockBehaviour.BlockStateBase#getMapColor", "blocks_render", "automatic_rename_candidate", "Preserve world/position-sensitive map color rather than item tint/color handler.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "getPropertyKeys", V_112, "block_state_property_keys", "StateHolder#getProperties", "blocks", "automatic_rename_candidate", "Preserve declared property identity and iteration order.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isFullCube", V_112, "block_state_full_cube_predicate", "BlockBehaviour.BlockStateBase#isCollisionShapeFullBlock", "blocks_physics", "automatic_rename_candidate", "Preserve full-cube render/collision semantics separately from normal-cube and opacity.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isNormalCube", V_112, "block_state_normal_cube_predicate", "BlockBehaviour.BlockStateBase#isSolidRender", "blocks_physics", "automatic_rename_candidate", "Preserve world/position and side-specific normal-cube behavior.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isOpaqueCube", V_112, "block_state_opaque_cube_predicate", "BlockBehaviour.BlockStateBase#isSolidRender", "blocks_render", "automatic_rename_candidate", "Preserve opacity separately from full cube and render layer.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "isTopSolid", V_112, "block_state_top_solid_predicate", "BlockBehaviour.BlockStateBase#isFaceSturdy", "blocks_physics", "automatic_rename_candidate", "Preserve top-face support separately from generic side-solid/full-cube checks.", "net/minecraft/block/state/IBlockState.html"),
     d!("IBlockState", "isTranslucent", V_112, "block_state_translucent_predicate", "Block-state translucency", "blocks_render", "automatic_rename_candidate", "Preserve translucent material behavior separately from render-layer choice.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "rotate", V_112, "block_state_rotation", "BlockState rotation transform", "blocks", "adapter_required", "Preserve Rotation enum and all directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
-    d!("IBlockState", "withMirror", V_112, "block_state_mirror", "BlockState mirror transform", "blocks", "adapter_required", "Preserve Mirror enum and directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "rotate", V_112, "block_state_rotation", "BlockBehaviour.BlockStateBase#rotate", "blocks", "adapter_required", "Preserve Rotation enum and all directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
+    d!("IBlockState", "withMirror", V_112, "block_state_mirror", "BlockBehaviour.BlockStateBase#mirror", "blocks", "adapter_required", "Preserve Mirror enum and directional/property mappings; return new immutable state.", "net/minecraft/block/state/IBlockState.html"),
 
 
     // BlockPos packed coordinates, neighborhood iteration and immutable transforms.
@@ -8680,4 +8700,61 @@ mod tests {
             .unwrap();
         assert!(block.documentation_urls.iter().any(|url| url.contains("javadoc/forge/1.12.2-14.23.5.2859/")));
     }
+
+    #[test]
+    fn world_access_state_containers_and_client_model_hooks_resolve_to_target_contracts() {
+        let entries = legacy_api_dictionary_for_version("1.12.2");
+        let expect = |owner: &str, method: &str, target_owner: &str, target_method: &str| {
+            let mapping = entries.iter()
+                .find(|entry| entry.source_owner == owner && entry.source_method == method)
+                .unwrap_or_else(|| panic!("missing source mapping {owner}#{method}"));
+            assert!(
+                mapping.target_api_methods.iter().any(|target|
+                    target.owner == target_owner && target.method == target_method
+                ),
+                "{owner}#{method} did not resolve to {target_owner}#{target_method}: {:?}",
+                mapping.target_api_methods.iter().map(|target| format!("{}#{}", target.owner, target.method)).collect::<Vec<_>>()
+            );
+        };
+        for (owner, method, target_owner, target_method) in [
+            ("IBlockAccess", "getBlockState", "BlockGetter", "getBlockState"),
+            ("IBlockAccess", "getTileEntity", "BlockGetter", "getBlockEntity"),
+            ("IBlockAccess", "getBiome", "LevelReader", "getBiome"),
+            ("IBlockAccess", "getStrongPower", "SignalGetter", "getDirectSignal"),
+            ("IBlockAccess", "isAirBlock", "BlockBehaviour.BlockStateBase", "isAir"),
+            ("IBlockAccess", "isSideSolid", "BlockBehaviour.BlockStateBase", "isFaceSturdy"),
+            ("BlockStateContainer", "getBaseState", "StateDefinition", "any"),
+            ("BlockStateContainer", "getValidStates", "StateDefinition", "getPossibleStates"),
+            ("BlockStateContainer", "getProperties", "StateDefinition", "getProperties"),
+            ("BlockStateContainer", "getProperty", "StateDefinition", "getProperty"),
+            ("BlockStateContainer", "getBlock", "StateDefinition", "getOwner"),
+            ("ModelLoaderRegistry", "registerLoader", "ModelEvent.RegisterGeometryLoaders", "register"),
+            ("BlockColors", "registerBlockColorHandler", "RegisterColorHandlersEvent.Block", "register"),
+            ("ItemColors", "registerItemColorHandler", "RegisterColorHandlersEvent.Item", "register"),
+            ("Block", "getDefaultState", "Block", "defaultBlockState"),
+            ("Block", "setDefaultState", "Block", "registerDefaultState"),
+        ] { expect(owner, method, target_owner, target_method); }
+        let packed_light = entries.iter().find(|entry| entry.source_owner == "IBlockAccess" && entry.source_method == "getCombinedLight").unwrap();
+        assert!(packed_light.target_api_methods.iter().any(|target| target.owner == "BlockAndTintGetter" && target.method == "getBrightness"));
+        assert!(packed_light.target_api_methods.iter().any(|target| target.owner == "LightTexture" && target.method == "pack"));
+        for (method, target_owner, target_method) in [
+            ("getBlock", "BlockBehaviour.BlockStateBase", "getBlock"),
+            ("getValue", "StateHolder", "getValue"),
+            ("withProperty", "StateHolder", "setValue"),
+            ("cycleProperty", "StateHolder", "cycle"),
+            ("getProperties", "StateHolder", "getValues"),
+            ("getPropertyKeys", "StateHolder", "getProperties"),
+            ("getLightValue", "IBlockStateExtension", "getLightEmission"),
+            ("getActualState", "IForgeBakedModel", "getModelData"),
+            ("getMapColor", "BlockBehaviour.BlockStateBase", "getMapColor"),
+            ("getBlockState", "Block", "getStateDefinition"),
+            ("isFullBlock", "BlockBehaviour.BlockStateBase", "isCollisionShapeFullBlock"),
+            ("getCollisionBoundingBox", "BlockBehaviour.BlockStateBase", "getCollisionShape"),
+            ("getBoundingBox", "BlockBehaviour.BlockStateBase", "getShape"),
+            ("getBlockHardness", "BlockBehaviour.BlockStateBase", "getDestroySpeed"),
+            ("rotate", "BlockBehaviour.BlockStateBase", "rotate"),
+            ("withMirror", "BlockBehaviour.BlockStateBase", "mirror"),
+        ] { expect("IBlockState", method, target_owner, target_method); }
+    }
+
 }
