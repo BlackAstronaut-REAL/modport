@@ -5118,10 +5118,11 @@ mod tests {
             }
             public class ItemFoodRoast extends ItemFood {
                 public ItemFoodRoast() {
-                    super(6, 0.8F, true);
+                    super(6, 0.8F, false);
                     setAlwaysEdible();
                     setPotionEffect(new PotionEffect(Potion.getPotionById(10), 120, 1), 0.25F);
                 }
+                public boolean isWolfsFavoriteMeat() { return true; }
             }
         "#).unwrap();
 
