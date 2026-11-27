@@ -55,7 +55,7 @@ jobs:
           [IO.File]::WriteAllBytes((Join-Path $source "src/main/resources/assets/smoke_mod/textures/Blocks/Ruby_Ore.PNG"), $png)
           [IO.File]::WriteAllBytes((Join-Path $source "src/main/resources/assets/smoke_mod/textures/gui/ruby_machine.png"), $png)
 
-          Set-Content -Encoding utf8 -Path (Join-Path $source "mcmod.info") -Value '{"modid":"smoke_mod","name":"Modport Smoke Test","version":"1.0"}'
+          Set-Content -Encoding utf8 -Path (Join-Path $source "mcmod.info") -Value '{"modid":"smoke_mod","name":"Modport Smoke Test","version":"1.0","mcversion":"1.12.2"}'
 
           @'
           item.rubyGem.name=Ruby Gem
@@ -90,8 +90,10 @@ jobs:
           @'
           public class ModItems {
               public static final Item RUBY = new RubyItem();
+              public static final Item ROAST = new ItemFoodRoast();
               public static void register() {
                   GameRegistry.registerItem(RUBY, "ruby");
+                  GameRegistry.registerItem(ROAST, "roast");
               }
           }
           class RubyItem extends Item {
@@ -102,6 +104,13 @@ jobs:
               }
               public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
                   tooltip.add(EnumChatFormatting.GOLD + "Legendary " + EnumChatFormatting.BOLD + "Ruby");
+              }
+          }
+          class ItemFoodRoast extends ItemFood {
+              public ItemFoodRoast() {
+                  super(6, 0.8F, true);
+                  setAlwaysEdible();
+                  setPotionEffect(new PotionEffect(Potion.getPotionById(10), 120, 1), 0.25F);
               }
           }
           '@ | Set-Content -Encoding utf8 -Path (Join-Path $source "src/main/java/demo/ModItems.java")
@@ -216,6 +225,17 @@ jobs:
           $status = Get-Content -Raw $statusPath | ConvertFrom-Json
           if ($status.converted.items -lt 1) { throw "Smoke port did not register its sample item." }
           if ($status.converted.blocks -lt 1) { throw "Smoke port did not register its sample block." }
+          $itemsJavaPath = Join-Path $output "src/main/java/com/modport/smoke_mod/registry/ModItems.java"
+          $itemsJava = Get-Content -Raw $itemsJavaPath
+          if ($itemsJava -notmatch 'MobEffectInstance\(MobEffects\.REGENERATION, 120, 1\)') {
+              throw "Food potion effect was not emitted as a native MobEffectInstance."
+          }
+          $wolfFoodTagPath = Join-Path $output "src/main/resources/data/minecraft/tags/item/wolf_food.json"
+          if (!(Test-Path $wolfFoodTagPath)) { throw "Legacy wolf-food membership was not emitted." }
+          $wolfFoodTag = Get-Content -Raw $wolfFoodTagPath | ConvertFrom-Json
+          if ($wolfFoodTag.values -notcontains "smoke_mod:roast") {
+              throw "The generated roast item is missing from minecraft:wolf_food."
+          }
           if ($status.converted.entity_placeholders -lt 1) { throw "Smoke port did not register its sample entity." }
           if ($status.converted.custom_guis -lt 1) { throw "Smoke port did not discover the block GUI." }
           if ($status.converted.entity_models -lt 1) { throw "Smoke port did not recover the mob model." }
