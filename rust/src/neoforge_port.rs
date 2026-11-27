@@ -55,11 +55,20 @@ pub struct NativeItemPlan {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct NativeFoodEffectPlan {
+    pub effect: String,
+    pub duration_ticks: u32,
+    pub amplifier: u32,
+    pub probability: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NativeFoodPlan {
     pub nutrition: u32,
     pub saturation: f32,
     pub always_edible: bool,
     pub fast: bool,
+    pub effects: Vec<NativeFoodEffectPlan>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -237,11 +246,20 @@ struct ItemRecord {
 }
 
 #[derive(Debug, Clone)]
+struct FoodEffectRecord {
+    effect: String,
+    duration_ticks: u32,
+    amplifier: u32,
+    probability: f32,
+}
+
+#[derive(Debug, Clone)]
 struct FoodRecord {
     nutrition: u32,
     saturation: f32,
     always_edible: bool,
     fast: bool,
+    effects: Vec<FoodEffectRecord>,
 }
 
 #[derive(Debug, Clone)]
@@ -611,6 +629,12 @@ pub fn port_to_neoforge(
             saturation: food.saturation,
             always_edible: food.always_edible,
             fast: food.fast,
+            effects: food.effects.iter().map(|effect| NativeFoodEffectPlan {
+                effect: effect.effect.clone(),
+                duration_ticks: effect.duration_ticks,
+                amplifier: effect.amplifier,
+                probability: effect.probability,
+            }).collect(),
         }),
         durability: item.durability,
         rarity: item.rarity.clone(),
@@ -1082,6 +1106,186 @@ fn recover_constant_getter(source_text: &str, method_name: &str) -> Option<f64> 
     returned.captures(body)?.get(1)?.as_str().parse::<f64>().ok()
 }
 
+fn legacy_food_effect_name(expression: &str) -> Option<&'static str> {
+    let numeric_id = Regex::new(r"(?i)\bgetPotionById\s*\(\s*(\d+)\s*\)")
+        .expect("static potion ID lookup regex")
+        .captures(expression)
+        .and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<u32>().ok())
+        .or_else(|| expression.trim().parse::<u32>().ok());
+
+    if let Some(id) = numeric_id {
+        return Some(match id {
+            1 => "MOVEMENT_SPEED",
+            2 => "MOVEMENT_SLOWDOWN",
+            3 => "DIG_SPEED",
+            4 => "DIG_SLOWDOWN",
+            5 => "DAMAGE_BOOST",
+            6 => "HEAL",
+            7 => "HARM",
+            8 => "JUMP",
+            9 => "CONFUSION",
+            10 => "REGENERATION",
+            11 => "DAMAGE_RESISTANCE",
+            12 => "FIRE_RESISTANCE",
+            13 => "WATER_BREATHING",
+            14 => "INVISIBILITY",
+            15 => "BLINDNESS",
+            16 => "NIGHT_VISION",
+            17 => "HUNGER",
+            18 => "WEAKNESS",
+            19 => "POISON",
+            20 => "WITHER",
+            21 => "HEALTH_BOOST",
+            22 => "ABSORPTION",
+            23 => "SATURATION",
+            24 => "GLOWING",
+            25 => "LEVITATION",
+            26 => "LUCK",
+            27 => "UNLUCK",
+            _ => return None,
+        });
+    }
+
+    let mut token = expression.trim().to_ascii_lowercase();
+    token = token.trim_end_matches(".id").to_owned();
+    if let Some((_, tail)) = token.rsplit_once('.') {
+        token = tail.to_owned();
+    }
+    Some(match token.as_str() {
+        "movespeed" | "movement_speed" | "speed" => "MOVEMENT_SPEED",
+        "moveslowdown" | "movement_slowdown" | "slowness" => "MOVEMENT_SLOWDOWN",
+        "digspeed" | "dig_speed" | "haste" => "DIG_SPEED",
+        "digslowdown" | "dig_slowdown" | "mining_fatigue" => "DIG_SLOWDOWN",
+        "damageboost" | "damage_boost" | "strength" => "DAMAGE_BOOST",
+        "heal" | "instant_health" | "instanthealth" => "HEAL",
+        "harm" | "instant_damage" | "instantdamage" => "HARM",
+        "jump" | "jump_boost" | "jumpboost" => "JUMP",
+        "confusion" | "nausea" => "CONFUSION",
+        "regeneration" | "regen" => "REGENERATION",
+        "damageresistance" | "damage_resistance" | "resistance" => "DAMAGE_RESISTANCE",
+        "fireresistance" | "fire_resistance" => "FIRE_RESISTANCE",
+        "waterbreathing" | "water_breathing" => "WATER_BREATHING",
+        "invisibility" => "INVISIBILITY",
+        "blindness" => "BLINDNESS",
+        "nightvision" | "night_vision" => "NIGHT_VISION",
+        "hunger" => "HUNGER",
+        "weakness" => "WEAKNESS",
+        "poison" => "POISON",
+        "wither" => "WITHER",
+        "healthboost" | "health_boost" => "HEALTH_BOOST",
+        "absorption" => "ABSORPTION",
+        "saturation" => "SATURATION",
+        "glowing" => "GLOWING",
+        "levitation" => "LEVITATION",
+        "luck" => "LUCK",
+        "unluck" => "UNLUCK",
+        _ => return None,
+    })
+}
+
+fn legacy_food_number(expression: &str) -> Option<f64> {
+    let pattern = Regex::new(
+        r"(?i)^\s*(?:\(\s*(?:float|double|int)\s*\)\s*)?(-?\d+(?:\.\d+)?)[fFdD]?\s*$",
+    ).expect("static food numeric literal regex");
+    pattern.captures(expression)
+        .and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<f64>().ok())
+        .filter(|value| value.is_finite())
+}
+
+fn recover_food_effects(source_text: &str) -> (Vec<FoodEffectRecord>, Vec<String>) {
+    let setter = Regex::new(r"(?i)\bsetPotionEffect\s*\(")
+        .expect("static food effect setter regex");
+    let mut effects = Vec::new();
+    let mut warnings = Vec::new();
+
+    for found in setter.find_iter(source_text) {
+        let Some(open) = source_text[found.start()..found.end()].rfind('(')
+            .map(|offset| offset + found.start()) else { continue };
+        let Ok((raw_arguments, _)) =
+            crate::source::java::extract_balanced(source_text, open, '(', ')') else {
+                warnings.push("A setPotionEffect call had unbalanced arguments and was left unconverted.".to_owned());
+                continue;
+            };
+        let arguments = crate::source::java::split_top_level(&raw_arguments, ',');
+        if arguments.is_empty() {
+            warnings.push("A setPotionEffect call did not contain a recoverable effect expression.".to_owned());
+            continue;
+        }
+
+        // 1.12.2 passes a PotionEffect object and probability.
+        // 1.7.10/1.8.9 pass potion ID, duration in seconds, amplifier, probability.
+        let (effect_expression, duration_expression, amplifier_expression, probability_expression, seconds_duration) =
+            if let Some(constructor) = Regex::new(r"(?i)\bnew\s+PotionEffect\s*\(")
+                .expect("static PotionEffect constructor regex")
+                .find(&arguments[0]) {
+                let Some(open) = arguments[0][constructor.start()..constructor.end()].rfind('(')
+                    .map(|offset| offset + constructor.start()) else { continue };
+                let Ok((effect_arguments, _)) =
+                    crate::source::java::extract_balanced(&arguments[0], open, '(', ')') else {
+                        warnings.push("A PotionEffect constructor had unbalanced arguments and was left unconverted.".to_owned());
+                        continue;
+                    };
+                let parts = crate::source::java::split_top_level(&effect_arguments, ',');
+                if parts.len() < 3 {
+                    warnings.push("A PotionEffect constructor did not expose effect, duration, and amplifier arguments.".to_owned());
+                    continue;
+                }
+                (
+                    parts[0].trim().to_owned(),
+                    parts[1].trim().to_owned(),
+                    parts[2].trim().to_owned(),
+                    arguments.get(1).map(|value| value.trim().to_owned()).unwrap_or_else(|| "1.0F".to_owned()),
+                    false
+                )
+            } else if arguments.len() >= 4 {
+                (
+                    arguments[0].trim().to_owned(),
+                    arguments[1].trim().to_owned(),
+                    arguments[2].trim().to_owned(),
+                    arguments[3].trim().to_owned(),
+                    true
+                )
+            } else {
+                warnings.push("A setPotionEffect call used an unsupported overload; its food effect was left unconverted.".to_owned());
+                continue;
+            };
+
+        let Some(effect) = legacy_food_effect_name(&effect_expression) else {
+            warnings.push(format!(
+                "Food potion effect '{}' was not mapped to a known vanilla MobEffects constant and was left unconverted.",
+                effect_expression
+            ));
+            continue;
+        };
+        let Some(mut duration) = legacy_food_number(&duration_expression) else {
+            warnings.push(format!("Food effect '{}' has a non-constant duration and was left unconverted.", effect_expression));
+            continue;
+        };
+        let Some(amplifier) = legacy_food_number(&amplifier_expression) else {
+            warnings.push(format!("Food effect '{}' has a non-constant amplifier and was left unconverted.", effect_expression));
+            continue;
+        };
+        let Some(probability) = legacy_food_number(&probability_expression) else {
+            warnings.push(format!("Food effect '{}' has a non-constant probability and was left unconverted.", effect_expression));
+            continue;
+        };
+
+        if seconds_duration {
+            duration *= 20.0;
+        }
+        effects.push(FoodEffectRecord {
+            effect: effect.to_owned(),
+            duration_ticks: duration.round().clamp(1.0, 2_147_483_647.0) as u32,
+            amplifier: amplifier.round().clamp(0.0, 255.0) as u32,
+            probability: probability.clamp(0.0, 1.0) as f32,
+        });
+    }
+
+    (effects, warnings)
+}
+
 fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
     let identity = format!("{} {}", source.class_name, source.superclass).to_ascii_lowercase();
     if !identity.contains("itemfood") && !identity.contains("fooditem")
@@ -1120,6 +1324,7 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         saturation,
         always_edible: lower.contains("setalwaysedible") || lower.contains("alwaysedible"),
         fast: lower.contains("fastfood") || lower.contains("fast_eating") || lower.contains("fastfood()"),
+        effects: Vec::new(),
     })
 }
 
@@ -1130,6 +1335,12 @@ fn food_properties_java(food: &FoodRecord) -> String {
     );
     if food.always_edible { builder.push_str(".alwaysEdible()"); }
     if food.fast { builder.push_str(".fast()"); }
+    for effect in &food.effects {
+        builder.push_str(&format!(
+            ".effect(() -> new MobEffectInstance(MobEffects.{}, {}, {}), {}F)",
+            effect.effect, effect.duration_ticks, effect.amplifier, effect.probability
+        ));
+    }
     builder.push_str(".build()");
     builder
 }
@@ -1249,7 +1460,11 @@ fn collect_items(
             record_warnings.push("Tool/weapon registry recovered, but its legacy combat stats, mining rules, durability and use behavior are not yet transferred.".to_owned());
         }
         let lore = collect_source_lore(&source.source_text, language_lore, &source.registry_name);
-        let food = recover_food_properties(source);
+        let mut food = recover_food_properties(source);
+        let (food_effects, food_effect_warnings) = recover_food_effects(&source.source_text);
+        if let Some(food) = food.as_mut() {
+            food.effects = food_effects;
+        }
         let item_properties = recover_item_properties(source);
         if lore.is_empty() && food.is_none() && item_properties.durability.is_none()
             && item_properties.rarity.is_none() && !item_properties.fire_resistant
@@ -1258,8 +1473,9 @@ fn collect_items(
         } else if !lore.is_empty() {
             record_warnings.push("Legacy formatted tooltip lore was reconstructed; other custom item methods remain unported.".to_owned());
         }
-        if food.is_some() && (source.source_text.contains("setPotionEffect") || source.source_text.contains("addEffect")) {
-            record_warnings.push("Custom food effects were detected; nutrition/saturation are ported, but effect type, duration, amplifier and chance are not yet reconstructed.".to_owned());
+        record_warnings.extend(food_effect_warnings);
+        if source.source_text.contains("addEffect") {
+            record_warnings.push("Custom on-food effect callbacks were detected; only static ItemFood#setPotionEffect properties are converted. Callback timing, multiple conditional effects, and custom effect logic remain manual.".to_owned());
         }
         items.push(ItemRecord {
             id: normalized_id(&source.registry_name),
@@ -3488,6 +3704,10 @@ import net.neoforged.neoforge.registries.DeferredRegister;
     if items.iter().any(|item| item.food.is_some()) {
         body.push_str("import net.minecraft.world.food.FoodProperties;\n");
     }
+    if items.iter().any(|item| item.food.as_ref().is_some_and(|food| !food.effects.is_empty())) {
+        body.push_str("import net.minecraft.world.effect.MobEffectInstance;\n");
+        body.push_str("import net.minecraft.world.effect.MobEffects;\n");
+    }
     if items.iter().any(|item| item.rarity.is_some()) {
         body.push_str("import net.minecraft.world.item.Rarity;\n");
     }
@@ -4817,12 +5037,49 @@ mod tests {
     }
 
     #[test]
+    fn ports_legacy_numeric_food_potion_effects_with_seconds_to_ticks_conversion() {
+        let temp = tempdir().unwrap();
+        let source = temp.path().join("numeric_food_mod");
+        let output = temp.path().join("numeric_food_out");
+        fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
+        fs::write(
+            source.join("mcmod.info"),
+            r#"{"modid":"numericfood","name":"Numeric Food","mcversion":"1.7.10"}"#,
+        ).unwrap();
+        fs::write(source.join("src/main/java/demo/ModFoods.java"), r#"
+            public class ModFoods {
+                public static final Item MEAT = new ItemFoodMeat();
+                public static void register() { GameRegistry.registerItem(MEAT, "meat"); }
+            }
+            public class ItemFoodMeat extends ItemFood {
+                public ItemFoodMeat() {
+                    super(4, 0.6F, false);
+                    setPotionEffect(Potion.hunger.id, 30, 0, 0.3F);
+                }
+            }
+        "#).unwrap();
+
+        let report = port_to_neoforge(
+            &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
+        ).unwrap();
+        let food = report.items.iter().find(|item| item.registry_name == "meat").unwrap();
+        let effect = &food.food.as_ref().unwrap().effects[0];
+        assert_eq!(effect.effect, "HUNGER");
+        assert_eq!(effect.duration_ticks, 600);
+        assert_eq!(effect.amplifier, 0);
+        assert!((effect.probability - 0.3).abs() < 0.001);
+
+        let items = fs::read_to_string(output.join("src/main/java/com/modport/numericfood/registry/ModItems.java")).unwrap();
+        assert!(items.contains(".effect(() -> new MobEffectInstance(MobEffects.HUNGER, 600, 0), 0.3F)"));
+    }
+
+    #[test]
     fn ports_legacy_food_nutrition_and_saturation_into_food_properties() {
         let temp = tempdir().unwrap();
         let source = temp.path().join("food_mod");
         let output = temp.path().join("food_out");
         fs::create_dir_all(source.join("src/main/java/demo")).unwrap();
-        fs::write(source.join("mcmod.info"), r#"{"modid":"foodmod","name":"Food Mod"}"#).unwrap();
+        fs::write(source.join("mcmod.info"), r#"{"modid":"foodmod","name":"Food Mod","mcversion":"1.12.2"}"#).unwrap();
         fs::write(source.join("src/main/java/demo/ModFoods.java"), r#"
             public class ModFoods {
                 public static final Item ROAST = new ItemFoodRoast();
@@ -4832,6 +5089,7 @@ mod tests {
                 public ItemFoodRoast() {
                     super(6, 0.8F, false);
                     setAlwaysEdible();
+                    setPotionEffect(new PotionEffect(Potion.getPotionById(10), 120, 1), 0.25F);
                 }
             }
         "#).unwrap();
@@ -4844,9 +5102,16 @@ mod tests {
         assert_eq!(food_props.nutrition, 6);
         assert!((food_props.saturation - 0.8).abs() < 0.001);
         assert!(food_props.always_edible);
+        assert_eq!(food_props.effects.len(), 1);
+        assert_eq!(food_props.effects[0].effect, "REGENERATION");
+        assert_eq!(food_props.effects[0].duration_ticks, 120);
+        assert_eq!(food_props.effects[0].amplifier, 1);
+        assert!((food_props.effects[0].probability - 0.25).abs() < 0.001);
 
         let items = fs::read_to_string(output.join("src/main/java/com/modport/foodmod/registry/ModItems.java")).unwrap();
-        assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationMod(0.8F).alwaysEdible().build()"));
+        assert!(items.contains("FoodProperties.Builder().nutrition(6).saturationMod(0.8F).alwaysEdible().effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 120, 1), 0.25F).build()"));
+        assert!(items.contains("import net.minecraft.world.effect.MobEffectInstance;"));
+        assert!(items.contains("import net.minecraft.world.effect.MobEffects;"));
     }
 
     #[test]
