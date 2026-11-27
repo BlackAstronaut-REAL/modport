@@ -3124,11 +3124,20 @@ fn generate_blocks_java(
     blocks: &[BlockRecord],
     block_entities: &[NativeBlockEntityPlan],
 ) -> String {
+    let needs_block_entity_package = blocks.iter().any(|block| {
+        block_entities.iter().any(|entity| {
+            entity.associated_blocks.iter().any(|id| id == &block.id)
+        })
+    });
+    let block_entity_import = if needs_block_entity_package {
+        format!("import {package}.blockentity.*;\n")
+    } else {
+        String::new()
+    };
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
-import {package}.blockentity.*;
-import net.minecraft.core.BlockPos;
+{block_entity_import}import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -4265,6 +4274,41 @@ mod tests {
         assert_eq!(java_field_name("ruby_beast", "ENTITY"), "ENTITY_RUBY_BEAST");
         assert_eq!(java_field_name("iron-ore", "BLOCK"), "BLOCK_IRON_ORE");
         assert_eq!(java_field_name("1st_item", "ITEM"), "ITEM_N_1ST_ITEM");
+    }
+
+    #[test]
+    fn block_registry_imports_block_entity_package_only_for_generated_block_entities() {
+        let block = BlockRecord {
+            id: "ruby_machine".to_owned(),
+            class_name: "RubyMachine".to_owned(),
+            source_path: "RubyMachine.java".to_owned(),
+            properties: Map::new(),
+            plant_like: false,
+            shape: "cube".to_owned(),
+            source_text: String::new(),
+            warnings: Vec::new(),
+        };
+
+        let without_entity = generate_blocks_java(
+            "com.example.machine", "machine", &[block.clone()], &[]
+        );
+        assert!(!without_entity.contains("import com.example.machine.blockentity.*;"));
+
+        let entity = NativeBlockEntityPlan {
+            registry_name: "ruby_machine".to_owned(),
+            source_class: "RubyMachineBlockEntity".to_owned(),
+            source_path: "RubyMachineBlockEntity.java".to_owned(),
+            associated_blocks: vec!["ruby_machine".to_owned()],
+            generated_class: "ConvertedRubyMachineBlockEntity".to_owned(),
+            generated_as: "native BlockEntity placeholder".to_owned(),
+            gui: None,
+            warnings: Vec::new(),
+        };
+        let with_entity = generate_blocks_java(
+            "com.example.machine", "machine", &[block], &[entity]
+        );
+        assert!(with_entity.contains("import com.example.machine.blockentity.*;"));
+        assert!(with_entity.contains("new ConvertedRubyMachineBlockEntity"));
     }
 
     #[test]
