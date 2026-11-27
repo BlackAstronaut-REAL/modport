@@ -581,42 +581,40 @@ fn apply_block_sound_bindings(
 
 /// Recover the statically identifiable ItemStack emitted by a block's drop
 /// routine. Dynamic loot tables remain untouched instead of guessing an item.
-fn extract_block_drop(
-    source_text: &str,
+fn resolve_block_drop_reference(
+    raw_reference: &str,
     field_registry_map: &BTreeMap<String, BTreeSet<String>>,
-) -> Option<(String, i64)> {
-    if source_text.contains("Collections.emptyList") {
-        return Some((String::new(), 0));
-    }
-
-    // Balance the constructor arguments instead of relying on a fragile regex:
-    // ItemStack references in old Java sources often contain qualified fields
-    // or nested count expressions.
-    let constructor = Regex::new(r"\bnew\s+ItemStack\s*\(").ok()?;
-    let found = constructor.find(source_text)?;
-    let open = source_text[found.start()..found.end()].rfind('(')? + found.start();
-    let (raw_arguments, _) =
-        crate::source::java::extract_balanced(source_text, open, '(', ')').ok()?;
-    let arguments = crate::source::java::split_top_level(&raw_arguments, ',');
-    let raw_reference = arguments.first()?.trim();
-    if raw_reference.is_empty() {
+) -> Option<String> {
+    let mut reference = raw_reference.trim().trim_end_matches(';').trim();
+    if reference.is_empty() {
         return None;
     }
-    let count = match arguments.get(1) {
-        Some(value) => value.trim().parse::<i64>().ok()?.max(0),
-        None => 1,
-    };
 
-    let field = raw_reference.rsplit('.').next().unwrap_or(raw_reference);
-    if field.eq_ignore_ascii_case("this") || field.eq_ignore_ascii_case("self") {
-        return Some((String::new(), count));
+    // Item.getItemFromBlock(Blocks.X) is common in legacy getItemDropped overrides.
+    if let Some(position) = reference.find("getItemFromBlock") {
+        let open = reference[position..].find('(').map(|offset| position + offset)?;
+        let (arguments, _) =
+            crate::source::java::extract_balanced(reference, open, '(', ')').ok()?;
+        reference = crate::source::java::split_top_level(&arguments, ',')
+            .first()?.trim();
     }
 
-    // Keep vanilla references canonical. A Block used as an ItemStack drop
-    // maps to MCreator's item token with the same registry path.
-    if let Some((owner, name)) = raw_reference.split_once('.') {
+    if reference.eq_ignore_ascii_case("null")
+        || reference.eq_ignore_ascii_case("Items.AIR")
+        || reference.eq_ignore_ascii_case("Blocks.AIR")
+    {
+        return Some(String::new());
+    }
+
+    let field = reference.rsplit('.').next().unwrap_or(reference).trim();
+    if field.eq_ignore_ascii_case("this") || field.eq_ignore_ascii_case("self") {
+        return Some(String::new());
+    }
+
+    // Explicit vanilla registry owners stay canonical.
+    if let Some((owner, name)) = reference.split_once('.') {
         if owner.eq_ignore_ascii_case("Items") || owner.eq_ignore_ascii_case("Blocks") {
-            return Some((format!("Items.{name}"), count));
+            return Some(format!("Items.{name}"));
         }
     }
 
@@ -627,8 +625,62 @@ fn extract_block_drop(
     let token = registry.chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' })
         .collect::<String>();
-    Some((format!("Items.{token}"), count))
+    Some(format!("Items.{token}"))
 }
+
+fn extract_block_drop(
+    source_text: &str,
+    field_registry_map: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<(String, i64)> {
+    if source_text.contains("Collections.emptyList") {
+        return Some((String::new(), 0));
+    }
+
+    // Newer legacy sources often construct ItemStacks directly in getDrops().
+    let constructor = Regex::new(r"\bnew\s+ItemStack\s*\(").ok()?;
+    if let Some(found) = constructor.find(source_text) {
+        let open = source_text[found.start()..found.end()].rfind('(')? + found.start();
+        let (raw_arguments, _) =
+            crate::source::java::extract_balanced(source_text, open, '(', ')').ok()?;
+        let arguments = crate::source::java::split_top_level(&raw_arguments, ',');
+        let raw_reference = arguments.first()?.trim();
+        let count = match arguments.get(1) {
+            Some(value) => value.trim().parse::<i64>().ok()?.max(0),
+            None => 1,
+        };
+        let reference = resolve_block_drop_reference(raw_reference, field_registry_map)?;
+        return Some((reference, count));
+    }
+
+    // 1.7.10–1.12.2 commonly override getItemDropped() and quantityDropped()
+    // independently. Only static return references/counts are safely portable.
+    let item_method = Regex::new(
+        r"(?s)\bgetItemDropped\s*\([^)]*\)\s*\{(?P<body>[^{}]*)\}",
+    ).ok()?;
+    let body = item_method.captures(source_text)
+        .and_then(|capture| capture.name("body"))
+        .map(|capture| capture.as_str())?;
+    let return_statement = Regex::new(r"(?s)\breturn\s+([^;]+);").ok()?;
+    let raw_reference = return_statement.captures(body)
+        .and_then(|capture| capture.get(1))
+        .map(|capture| capture.as_str().trim())?;
+    let reference = resolve_block_drop_reference(raw_reference, field_registry_map)?;
+
+    let count = if reference.is_empty() {
+        0
+    } else {
+        let quantity_method = Regex::new(
+            r"(?s)\bquantityDropped\s*\([^)]*\)\s*\{\s*return\s+(\d+)\s*;",
+        ).ok()?;
+        quantity_method.captures(source_text)
+            .and_then(|capture| capture.get(1))
+            .and_then(|value| value.as_str().parse::<i64>().ok())
+            .unwrap_or(1)
+            .max(0)
+    };
+    Some((reference, count))
+}
+
 
 fn apply_block_drop_updates(
     definition: &mut Map<String, Value>,
@@ -1231,6 +1283,46 @@ mod tests{
             source_text: "public float getSlipperiness(IBlockState state, IBlockAccess world, BlockPos pos) { return 0.98F; }".to_owned(),
         };
         assert_eq!(source_block_properties(&constant_method_ice)["friction"], 0.98);
+    }
+
+    #[test]
+    fn recovers_legacy_get_item_dropped_and_quantity_dropped_overrides() {
+        let vanilla = BlockSource {
+            class_name: "LegacyOre".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "legacy_ore".to_owned(),
+            source_path: "LegacyOre.java".to_owned(),
+            source_text: "public Item getItemDropped(IBlockState state, Random random, int fortune) { return Item.getItemFromBlock(Blocks.DIAMOND_BLOCK); } public int quantityDropped(Random random) { return 3; }".to_owned(),
+        };
+        let properties = source_block_properties_with_registry_map(&vanilla, &BTreeMap::new());
+        assert_eq!(properties["custom_drop"], "Items.DIAMOND_BLOCK");
+        assert_eq!(properties["drop_amount"], 3);
+
+        let custom = BlockSource {
+            class_name: "RubyOre".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "ruby_ore".to_owned(),
+            source_path: "RubyOre.java".to_owned(),
+            source_text: "public Item getItemDropped(IBlockState state, Random random, int fortune) { return ModItems.RUBY; }".to_owned(),
+        };
+        let fields = BTreeMap::from([(
+            "RUBY".to_owned(),
+            BTreeSet::from(["ruby".to_owned()]),
+        )]);
+        let properties = source_block_properties_with_registry_map(&custom, &fields);
+        assert_eq!(properties["custom_drop"], "Items.RUBY");
+        assert_eq!(properties["drop_amount"], 1);
+
+        let none = BlockSource {
+            class_name: "NoDrop".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "no_drop".to_owned(),
+            source_path: "NoDrop.java".to_owned(),
+            source_text: "public Item getItemDropped(IBlockState state, Random random, int fortune) { return Items.AIR; }".to_owned(),
+        };
+        let properties = source_block_properties_with_registry_map(&none, &BTreeMap::new());
+        assert_eq!(properties["custom_drop"], "");
+        assert_eq!(properties["drop_amount"], 0);
     }
 
     #[test]

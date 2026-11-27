@@ -4873,9 +4873,10 @@ mod tests {
                     setHarvestLevel("pickaxe", 1);
                     setStepSound(Block.soundTypeGravel);
                 }
-                public ItemStack getDrops(World world, BlockPos pos, IBlockState state, int fortune) {
-                    return new ItemStack(Items.DIAMOND, 3);
+                public Item getItemDropped(IBlockState state, Random random, int fortune) {
+                    return Item.getItemFromBlock(Blocks.DIAMOND_BLOCK);
                 }
+                public int quantityDropped(Random random) { return 3; }
             }
             public class NoDropBlock extends BlockFalling {
                 public NoDropBlock() { setHardness(1.0F); }
@@ -4980,7 +4981,7 @@ mod tests {
         let vanilla_loot: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/oldmod/loot_tables/blocks/stone_ore.json")
         ).unwrap()).unwrap();
-        assert_eq!(vanilla_loot["pools"][0]["entries"][0]["name"], "minecraft:diamond");
+        assert_eq!(vanilla_loot["pools"][0]["entries"][0]["name"], "minecraft:diamond_block");
         assert_eq!(vanilla_loot["pools"][0]["entries"][0]["functions"][0]["count"], 3);
         let no_drop_loot: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/oldmod/loot_tables/blocks/no_drop.json")
