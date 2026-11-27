@@ -594,7 +594,7 @@ fn resolve_block_drop_reference(
     if let Some(position) = reference.find("getItemFromBlock") {
         let open = reference[position..].find('(').map(|offset| position + offset)?;
         let (arguments, _) =
-            crate::source::java::extract_balanced(reference, open, '(', ')').ok()?;
+            crate::source::java::extract_balanced(&reference, open, '(', ')').ok()?;
         reference = crate::source::java::split_top_level(&arguments, ',')
             .first()?.trim().to_owned();
     }
