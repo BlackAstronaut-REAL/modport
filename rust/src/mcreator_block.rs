@@ -1197,6 +1197,15 @@ mod tests{
             source_text: "this.slipperiness = 0.98F;".to_owned(),
         };
         assert_eq!(source_block_properties(&slippery_ice)["friction"], 0.98);
+
+        let constant_method_ice = BlockSource {
+            class_name: "ConstantMethodIce".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "constant_method_ice".to_owned(),
+            source_path: "ConstantMethodIce.java".to_owned(),
+            source_text: "public float getSlipperiness(IBlockState state, IBlockAccess world, BlockPos pos) { return 0.98F; }".to_owned(),
+        };
+        assert_eq!(source_block_properties(&constant_method_ice)["friction"], 0.98);
     }
 
     #[test]

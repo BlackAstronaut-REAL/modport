@@ -4455,6 +4455,13 @@ mod tests {
         assert!(sound_type.target_api_methods.iter().any(|target|
             target.owner == "BlockBehaviour.Properties" && target.method == "sound"
         ), "1.12.2 Block#setSoundType did not resolve to BlockBehaviour.Properties#sound");
+
+        let slipperiness = v112.iter()
+            .find(|entry| entry.source_owner == "Block" && entry.source_method == "getSlipperiness")
+            .expect("missing 1.12.2 Block#getSlipperiness");
+        assert!(slipperiness.target_api_methods.iter().any(|target|
+            target.owner == "BlockBehaviour.Properties" && target.method == "friction"
+        ), "1.12.2 Block#getSlipperiness did not resolve to BlockBehaviour.Properties#friction");
     }
 
     #[test]
