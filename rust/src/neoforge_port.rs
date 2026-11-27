@@ -3837,6 +3837,7 @@ fn write_native_block_data(
     written: &mut Vec<String>,
 ) -> Result<()> {
     let mut mineable = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut needs_stone = BTreeSet::new();
     let mut needs_iron = BTreeSet::new();
     let mut needs_diamond = BTreeSet::new();
 
@@ -3856,7 +3857,9 @@ fn write_native_block_data(
         }
 
         let harvest = block.properties.get("harvest_level").and_then(Value::as_u64).unwrap_or(0);
-        if harvest == 2 {
+        if harvest == 1 {
+            needs_stone.insert(id.clone());
+        } else if harvest == 2 {
             needs_iron.insert(id.clone());
         } else if harvest >= 3 {
             needs_diamond.insert(id.clone());
@@ -3874,6 +3877,11 @@ fn write_native_block_data(
         let path = resources_root.join("data/minecraft/tags/block/mineable")
             .join(format!("{tool}.json"));
         merge_tag_values(&path, &values)?;
+        written.push(relative_to(resources_root, &path));
+    }
+    if !needs_stone.is_empty() {
+        let path = resources_root.join("data/minecraft/tags/block/needs_stone_tool.json");
+        merge_tag_values(&path, &needs_stone)?;
         written.push(relative_to(resources_root, &path));
     }
     if !needs_iron.is_empty() {
@@ -4423,10 +4431,12 @@ mod tests {
                 public static final Block RUBY_ORE = new RubyOre();
                 public static final Block RUBY_FLOWER = new RubyFlower();
                 public static final Block BEDROCK_COPY = new UnbreakableBlock();
+                public static final Block STONE_ORE = new StoneOre();
                 public static void register() {
                     GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
                     GameRegistry.registerBlock(RUBY_FLOWER, "ruby_flower");
                     GameRegistry.registerBlock(BEDROCK_COPY, "bedrock_copy");
+                    GameRegistry.registerBlock(STONE_ORE, "stone_ore");
                 }
             }
             public class RubyOre extends Block {
@@ -4436,6 +4446,12 @@ mod tests {
                     setHarvestLevel("pickaxe", 2);
                     setStepSound(SoundType.METAL);
                     randomTicks();
+                }
+            }
+            public class StoneOre extends Block {
+                public StoneOre() {
+                    setHardness(2.0F);
+                    setHarvestLevel("pickaxe", 1);
                 }
             }
             public class UnbreakableBlock extends Block {
@@ -4466,11 +4482,14 @@ mod tests {
         assert_eq!(report.native_projectiles.len(), 1);
         assert_eq!(report.native_projectiles[0].registry_name, "ruby_orb_projectile");
         assert_eq!(report.native_projectiles[0].bound_item.as_deref(), Some("ruby_orb"));
-        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ruby_flower", "ruby_ore"]);
+        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ruby_flower", "ruby_ore", "stone_ore"]);
         let bedrock_copy = report.blocks.iter().find(|entry| entry.registry_name == "bedrock_copy").unwrap();
         assert_eq!(bedrock_copy.hardness, -1.0);
         assert!(bedrock_copy.random_ticks);
         assert_eq!(bedrock_copy.light_level, 12);
+        let stone_ore = report.blocks.iter().find(|entry| entry.registry_name == "stone_ore").unwrap();
+        assert_eq!(stone_ore.harvest_level, 1);
+        assert_eq!(stone_ore.destroy_tool.as_deref(), Some("Pickaxe"));
         assert!(report.blocks.iter().find(|block| block.registry_name == "ruby_flower").unwrap().plant_like);
         let flower_model: Value = serde_json::from_slice(&fs::read(output.join("src/main/resources/assets/oldmod/models/block/ruby_flower.json")).unwrap()).unwrap();
         assert_eq!(flower_model["parent"], "minecraft:block/cross");
@@ -4509,6 +4528,10 @@ mod tests {
             output.join("src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json")
         ).unwrap()).unwrap();
         assert!(mineable["values"].as_array().unwrap().contains(&json!("oldmod:ruby_ore")));
+        let stone_required: Value = serde_json::from_slice(&fs::read(
+            output.join("src/main/resources/data/minecraft/tags/block/needs_stone_tool.json")
+        ).unwrap()).unwrap();
+        assert!(stone_required["values"].as_array().unwrap().contains(&json!("oldmod:stone_ore")));
         let iron_required: Value = serde_json::from_slice(&fs::read(
             output.join("src/main/resources/data/minecraft/tags/block/needs_iron_tool.json")
         ).unwrap()).unwrap();
@@ -4524,7 +4547,7 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 2);
         assert_eq!(status["converted"]["throwable_projectiles"], 1);
-        assert_eq!(status["converted"]["blocks"], 3);
+        assert_eq!(status["converted"]["blocks"], 4);
     }
 
     #[test]
