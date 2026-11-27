@@ -3003,11 +3003,11 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 
 @EventBusSubscriber(modid = NeoForgeMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public final class ModEntityRenderers {{
-    private ModEntityRenderers() {{}}
+public final class ModEntityRenderers {
+    private ModEntityRenderers() {}
 
     @SubscribeEvent
-    public static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {{
+    public static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
 "#);
     for model in models {
         body.push_str(&format!(
