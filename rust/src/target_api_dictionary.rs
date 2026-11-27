@@ -69,6 +69,11 @@ const DEFINITIONS: &[Definition] = &[
     t!("Item", "isCorrectToolForDrops", "boolean isCorrectToolForDrops(ItemStack, BlockState)", "tool", "Translate harvest-level logic to Tool rules and tags rather than a single numeric tier.", "net/minecraft/world/item/Item.html", "Item#canHarvestBlock; Block#getHarvestLevel"),
     t!("Item", "onCraftedBy", "void onCraftedBy(ItemStack, Level, Player)", "item_lifecycle", "Preserve crafting context and item stack initialization.", "net/minecraft/world/item/Item.html", "Item#onCreated"),
     t!("IItemExtension", "getBurnTime", "int getBurnTime(ItemStack, RecipeType<?>)", "fuel", "Recipe-type-aware and stack-aware burn time; do not collapse custom fuel logic into a single global integer.", "net/neoforged/neoforge/common/extensions/IItemExtension.html", "Item#getItemBurnTime; IFuelHandler#getBurnTime"),
+    // Common Item.Properties mappings used by legacy Item setters.
+    t!("Item.Properties", "stacksTo", "Item.Properties stacksTo(int maxStackSize)", "item_properties", "Static legacy stack limits map to the registered item's Item.Properties; durability items remain non-stackable.", "net/minecraft/world/item/Item.Properties.html", "Item#setMaxStackSize"),
+    t!("Item.Properties", "durability", "Item.Properties durability(int maxDamage)", "item_properties", "Static legacy max damage becomes the item's initial MAX_DAMAGE and DAMAGE components; durability automatically enforces a stack size of one.", "net/minecraft/world/item/Item.Properties.html", "Item#setMaxDamage"),
+    t!("Item.Properties", "craftRemainder", "Item.Properties craftRemainder(Item craftingRemainingItem)", "crafting", "Use a static crafting remainder for fixed container items; stack-sensitive remainders still need IItemExtension#getCraftingRemainingItem.", "net/minecraft/world/item/Item.Properties.html", "Item#setContainerItem"),
+    t!("Item.Properties", "setNoRepair", "Item.Properties setNoRepair()", "repair", "Disable anvil and crafting-grid repair for items whose legacy constructor called setNoRepair.", "net/minecraft/world/item/Item.Properties.html", "Item#setNoRepair"),
     t!("IItemExtension", "getCraftingRemainingItem", "ItemStack getCraftingRemainingItem(ItemStack)", "crafting", "The stack-aware extension supports dynamic container items; static remainders use Item.Properties#craftRemainder.", "net/neoforged/neoforge/common/extensions/IItemExtension.html", "Item#getContainerItem; Item#hasContainerItem"),
     t!("IItemExtension", "getDefaultAttributeModifiers", "ItemAttributeModifiers getDefaultAttributeModifiers(ItemStack)", "attributes", "Build modern attribute entries with equipment slots, operations and stack-sensitive conditions.", "net/neoforged/neoforge/common/extensions/IItemExtension.html", "Item#getItemAttributeModifiers; Item#getAttributeModifiers"),
     t!("IItemExtension", "getEnchantmentValue", "int getEnchantmentValue(ItemStack)", "enchanting", "Use the stack-sensitive extension for item enchantability.", "net/neoforged/neoforge/common/extensions/IItemExtension.html", "Item#getItemEnchantability"),
@@ -984,6 +989,25 @@ mod tests {
                     entry.owner == "BlockBehaviour.Properties" && entry.method == method
                 ),
                 "missing native construction contract for {alias}"
+            );
+        }
+    }
+
+
+    #[test]
+    fn common_legacy_item_property_aliases_resolve_to_native_properties() {
+        for (alias, method) in [
+            ("Item#setMaxStackSize", "stacksTo"),
+            ("Item#setMaxDamage", "durability"),
+            ("Item#setContainerItem", "craftRemainder"),
+            ("Item#setNoRepair", "setNoRepair"),
+        ] {
+            let matches = find_target_api_methods_by_legacy_alias(alias);
+            assert!(
+                matches.iter().any(|entry|
+                    entry.owner == "Item.Properties" && entry.method == method
+                ),
+                "missing native item property contract for {alias}"
             );
         }
     }

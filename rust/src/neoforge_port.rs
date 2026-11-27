@@ -4385,6 +4385,36 @@ mod tests {
         assert!(resources.join("assets/shapes/models/item/ruby_stairs.json").is_file());
     }
 
+
+    #[test]
+    fn common_legacy_item_setters_resolve_to_native_item_properties() {
+        for version in ["1.7.10", "1.8.9", "1.12.2"] {
+            let mappings = crate::legacy_api_dictionary::legacy_api_dictionary_for_version(version);
+            for (source_method, target_method) in [
+                ("setMaxStackSize", "stacksTo"),
+                ("setMaxDamage", "durability"),
+                ("setContainerItem", "craftRemainder"),
+            ] {
+                let mapping = mappings.iter()
+                    .find(|entry| entry.source_owner == "Item" && entry.source_method == source_method)
+                    .unwrap_or_else(|| panic!("missing {version} Item#{source_method}"));
+                assert!(mapping.target_api_methods.iter().any(|target|
+                    target.owner == "Item.Properties" && target.method == target_method
+                ), "{version} Item#{source_method} did not resolve to Item.Properties#{target_method}");
+            }
+        }
+
+        for version in ["1.8.9", "1.12.2"] {
+            let mappings = crate::legacy_api_dictionary::legacy_api_dictionary_for_version(version);
+            let no_repair = mappings.iter()
+                .find(|entry| entry.source_owner == "Item" && entry.source_method == "setNoRepair")
+                .unwrap_or_else(|| panic!("missing {version} Item#setNoRepair"));
+            assert!(no_repair.target_api_methods.iter().any(|target|
+                target.owner == "Item.Properties" && target.method == "setNoRepair"
+            ), "{version} Item#setNoRepair did not resolve to Item.Properties#setNoRepair");
+        }
+    }
+
     #[test]
     fn ports_registered_items_blocks_and_resources_from_java_source() {
         let temp = tempdir().unwrap();
