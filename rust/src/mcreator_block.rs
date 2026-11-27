@@ -585,7 +585,7 @@ fn resolve_block_drop_reference(
     raw_reference: &str,
     field_registry_map: &BTreeMap<String, BTreeSet<String>>,
 ) -> Option<String> {
-    let mut reference = raw_reference.trim().trim_end_matches(';').trim();
+    let mut reference = raw_reference.trim().trim_end_matches(';').trim().to_owned();
     if reference.is_empty() {
         return None;
     }
@@ -596,7 +596,7 @@ fn resolve_block_drop_reference(
         let (arguments, _) =
             crate::source::java::extract_balanced(reference, open, '(', ')').ok()?;
         reference = crate::source::java::split_top_level(&arguments, ',')
-            .first()?.trim();
+            .first()?.trim().to_owned();
     }
 
     if reference.eq_ignore_ascii_case("null")
@@ -606,7 +606,7 @@ fn resolve_block_drop_reference(
         return Some(String::new());
     }
 
-    let field = reference.rsplit('.').next().unwrap_or(reference).trim();
+    let field = reference.rsplit('.').next().unwrap_or(reference.as_str()).trim();
     if field.eq_ignore_ascii_case("this") || field.eq_ignore_ascii_case("self") {
         return Some(String::new());
     }
