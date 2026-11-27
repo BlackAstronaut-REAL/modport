@@ -4195,6 +4195,7 @@ mod tests {
             properties: Map::new(),
             plant_like: false,
             shape: "cube".to_owned(),
+            source_text: String::new(),
             warnings: Vec::new(),
         }];
         let block_sources = vec![BlockSource {
@@ -4319,6 +4320,7 @@ mod tests {
             properties: Map::new(),
             plant_like: false,
             shape: shape.to_owned(),
+            source_text: String::new(),
             warnings: Vec::new(),
         };
         let blocks = vec![
