@@ -649,7 +649,7 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     let light = if let Some(value) = modern_light {
         value.clamp(0.0, 15.0)
     } else {
-        (legacy_light.unwrap_or(0.0).clamp(0.0, 1.0) * 15.0).round()
+        (legacy_light.unwrap_or(0.0).clamp(0.0, 1.0) * 15.0).floor()
     };
 
     properties.insert("hardness".to_owned(), json!(hardness));
@@ -1124,6 +1124,15 @@ mod tests{
             source_text: "setTickRandomly(false);".to_owned(),
         };
         assert_eq!(source_block_properties(&disabled)["random_ticks"], false);
+
+        let half_light = BlockSource {
+            class_name: "HalfLightBlock".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "half_light".to_owned(),
+            source_path: "HalfLightBlock.java".to_owned(),
+            source_text: "setLightLevel(0.5F);".to_owned(),
+        };
+        assert_eq!(source_block_properties(&half_light)["light_level"], 7.0);
     }
 
     #[test]
