@@ -670,6 +670,10 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
         r"\.resistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\bsetResistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
     ]).unwrap_or(1.0).max(0.0);
+    let friction = number_after(text, &[
+        r"(?i)\b(?:this\s*\.\s*)?slipperiness\s*=\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+        r"(?s)\bgetSlipperiness\s*\([^)]*\)\s*\{[^{}]*\breturn\s+(-?\d+(?:\.\d+)?)[fFdD]?\s*;",
+    ]).map(|value| value.clamp(0.0, 1.0));
     let modern_light = number_after(text, &[
         r"\.lightLevel\s*\(\s*\(\s*\)\s*->\s*(?:\(\s*)?(-?\d+)",
     ]);
@@ -685,6 +689,9 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     properties.insert("hardness".to_owned(), json!(hardness));
     properties.insert("unbreakable".to_owned(), json!(unbreakable));
     properties.insert("resistance".to_owned(), json!(resistance));
+    if let Some(friction) = friction {
+        properties.insert("friction".to_owned(), json!(friction));
+    }
     properties.insert("light_level".to_owned(), json!(light));
     let harvest_level = number_after(text, &[
         r#"(?i)\bsetHarvestLevel\s*\(\s*["'][^"']+["']\s*,\s*(\d+)"#,
@@ -1181,6 +1188,15 @@ mod tests{
             source_text: "setStepSound(Block.soundTypeGravel);".to_owned(),
         };
         assert_eq!(source_block_properties(&legacy_gravel_sound)["step_sound"], "GRAVEL");
+
+        let slippery_ice = BlockSource {
+            class_name: "SlipperyIce".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "slippery_ice".to_owned(),
+            source_path: "SlipperyIce.java".to_owned(),
+            source_text: "this.slipperiness = 0.98F;".to_owned(),
+        };
+        assert_eq!(source_block_properties(&slippery_ice)["friction"], 0.98);
     }
 
     #[test]

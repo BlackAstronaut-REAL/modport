@@ -3155,6 +3155,7 @@ public final class ModBlocks {{
         let field = java_field_name(&block.id, "BLOCK");
         let hardness = block.properties.get("hardness").and_then(Value::as_f64).unwrap_or(1.0).clamp(-1.0, 3600000.0);
         let resistance = block.properties.get("resistance").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 3600000.0);
+        let friction = block.properties.get("friction").and_then(Value::as_f64).map(|value| value.clamp(0.0, 1.0));
         let light = block.properties.get("light_level").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 15.0) as u32;
         let requires_tool = block.properties.get("requires_correct_tool").and_then(Value::as_bool).unwrap_or(false);
         let random_ticks = block.properties.get("random_ticks").and_then(Value::as_bool).unwrap_or(false);
@@ -3163,6 +3164,7 @@ public final class ModBlocks {{
             .map(java_block_sound_type).unwrap_or("STONE");
 
         let mut properties = format!("BlockBehaviour.Properties.of().strength({hardness}F, {resistance}F)");
+        if let Some(friction) = friction { properties.push_str(&format!(".friction({friction}F)")); }
         if light > 0 { properties.push_str(&format!(".lightLevel(state -> {light})")); }
         if requires_tool { properties.push_str(".requiresCorrectToolForDrops()"); }
         if random_ticks { properties.push_str(".randomTicks()"); }
@@ -4501,11 +4503,13 @@ mod tests {
                 public static final Block RUBY_ORE = new RubyOre();
                 public static final Block RUBY_FLOWER = new RubyFlower();
                 public static final Block BEDROCK_COPY = new UnbreakableBlock();
+                public static final Block ICE_COPY = new SlipperyIce();
                 public static final Block STONE_ORE = new StoneOre();
                 public static void register() {
                     GameRegistry.registerBlock(RUBY_ORE, "ruby_ore");
                     GameRegistry.registerBlock(RUBY_FLOWER, "ruby_flower");
                     GameRegistry.registerBlock(BEDROCK_COPY, "bedrock_copy");
+                    GameRegistry.registerBlock(ICE_COPY, "ice_copy");
                     GameRegistry.registerBlock(STONE_ORE, "stone_ore");
                 }
             }
@@ -4516,6 +4520,11 @@ mod tests {
                     setHarvestLevel("pickaxe", 2);
                     setStepSound(Block.soundTypeMetal);
                     randomTicks();
+                }
+            }
+            public class SlipperyIce extends Block {
+                public SlipperyIce() {
+                    this.slipperiness = 0.98F;
                 }
             }
             public class StoneOre extends Block {
@@ -4553,11 +4562,13 @@ mod tests {
         assert_eq!(report.native_projectiles.len(), 1);
         assert_eq!(report.native_projectiles[0].registry_name, "ruby_orb_projectile");
         assert_eq!(report.native_projectiles[0].bound_item.as_deref(), Some("ruby_orb"));
-        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ruby_flower", "ruby_ore", "stone_ore"]);
+        assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ice_copy", "ruby_flower", "ruby_ore", "stone_ore"]);
         let bedrock_copy = report.blocks.iter().find(|entry| entry.registry_name == "bedrock_copy").unwrap();
         assert_eq!(bedrock_copy.hardness, -1.0);
         assert!(bedrock_copy.random_ticks);
         assert_eq!(bedrock_copy.light_level, 12);
+        let ice_copy = report.blocks.iter().find(|entry| entry.registry_name == "ice_copy").unwrap();
+        assert_eq!(ice_copy.properties["friction"], 0.98);
         let stone_ore = report.blocks.iter().find(|entry| entry.registry_name == "stone_ore").unwrap();
         assert_eq!(stone_ore.harvest_level, 1);
         assert_eq!(stone_ore.destroy_tool.as_deref(), Some("Pickaxe"));
@@ -4593,6 +4604,7 @@ mod tests {
         assert!(blocks_java.contains(".randomTicks()"));
         assert!(blocks_java.contains(".sound(SoundType.METAL)"));
         assert!(blocks_java.contains(".sound(SoundType.GRAVEL)"));
+        assert!(blocks_java.contains(".friction(0.98F)"));
         assert!(blocks_java.contains(".strength(-1F, 1F)"));
         assert!(blocks_java.contains(".randomTicks()"));
         assert!(blocks_java.contains(".lightLevel(state -> 12)"));
@@ -4619,7 +4631,7 @@ mod tests {
         assert_eq!(status["behavior_fully_reconstructed"], false);
         assert_eq!(status["converted"]["items"], 2);
         assert_eq!(status["converted"]["throwable_projectiles"], 1);
-        assert_eq!(status["converted"]["blocks"], 4);
+        assert_eq!(status["converted"]["blocks"], 5);
     }
 
     #[test]
