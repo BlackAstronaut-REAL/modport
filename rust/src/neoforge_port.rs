@@ -4572,6 +4572,8 @@ mod tests {
         assert_eq!(report.blocks.iter().map(|entry| entry.registry_name.as_str()).collect::<Vec<_>>(), vec!["bedrock_copy", "ice_copy", "ruby_flower", "ruby_ore", "stone_ore"]);
         let bedrock_copy = report.blocks.iter().find(|entry| entry.registry_name == "bedrock_copy").unwrap();
         assert_eq!(bedrock_copy.hardness, -1.0);
+        let ruby_ore = report.blocks.iter().find(|entry| entry.registry_name == "ruby_ore").unwrap();
+        assert_eq!(ruby_ore.properties["resistance"], 15.0);
         assert!(bedrock_copy.random_ticks);
         assert_eq!(bedrock_copy.light_level, 12);
         let ice_copy = report.blocks.iter().find(|entry| entry.registry_name == "ice_copy").unwrap();
@@ -4613,6 +4615,7 @@ mod tests {
         assert!(blocks_java.contains(".sound(SoundType.GRAVEL)"));
         assert!(blocks_java.contains(".friction(0.98F)"));
         assert!(blocks_java.contains(".strength(-1F, 1F)"));
+        assert!(blocks_java.contains(".strength(3F, 15F)"));
         assert!(blocks_java.contains(".randomTicks()"));
         assert!(blocks_java.contains(".lightLevel(state -> 12)"));
         let mineable: Value = serde_json::from_slice(&fs::read(

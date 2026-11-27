@@ -665,11 +665,18 @@ pub fn source_block_properties(source: &BlockSource) -> Map<String, Value> {
     } else {
         source_hardness.unwrap_or(1.0).max(0.0)
     };
-    let resistance = number_after(text, &[
+    let modern_resistance = number_after(text, &[
         r"\.strength\s*\(\s*-?\d+(?:\.\d+)?[fFdD]?\s*,\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"\.resistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
+    ]);
+    let legacy_resistance = number_after(text, &[
         r"\bsetResistance\s*\(\s*(-?\d+(?:\.\d+)?)[fFdD]?",
-    ]).unwrap_or(1.0).max(0.0);
+    ]);
+    // Forge multiplies the legacy setter argument by three internally.
+    let resistance = modern_resistance
+        .or_else(|| legacy_resistance.map(|value| value * 3.0))
+        .unwrap_or(1.0)
+        .max(0.0);
     let friction = number_after(text, &[
         r"(?i)\b(?:this\s*\.\s*)?slipperiness\s*=\s*(-?\d+(?:\.\d+)?)[fFdD]?",
         r"(?s)\bgetSlipperiness\s*\([^)]*\)\s*\{[^{}]*\breturn\s+(-?\d+(?:\.\d+)?)[fFdD]?\s*;",
@@ -1197,6 +1204,15 @@ mod tests{
             source_text: "this.slipperiness = 0.98F;".to_owned(),
         };
         assert_eq!(source_block_properties(&slippery_ice)["friction"], 0.98);
+
+        let legacy_resistance = BlockSource {
+            class_name: "BlastResistantBlock".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "blast_resistant".to_owned(),
+            source_path: "BlastResistantBlock.java".to_owned(),
+            source_text: "setResistance(5.0F);".to_owned(),
+        };
+        assert_eq!(source_block_properties(&legacy_resistance)["resistance"], 15.0);
 
         let constant_method_ice = BlockSource {
             class_name: "ConstantMethodIce".to_owned(),
