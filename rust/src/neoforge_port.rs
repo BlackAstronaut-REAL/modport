@@ -3124,20 +3124,10 @@ fn generate_blocks_java(
     blocks: &[BlockRecord],
     block_entities: &[NativeBlockEntityPlan],
 ) -> String {
-    let needs_block_entity_package = blocks.iter().any(|block| {
-        block_entities.iter().any(|entity| {
-            entity.associated_blocks.iter().any(|id| id == &block.id)
-        })
-    });
-    let block_entity_import = if needs_block_entity_package {
-        format!("import {package}.blockentity.*;\n")
-    } else {
-        String::new()
-    };
     let mut body = format!(r#"package {package}.registry;
 
 import {package}.NeoForgeMod;
-{block_entity_import}import net.minecraft.core.BlockPos;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -3216,7 +3206,7 @@ public final class ModBlocks {{
             return new {entity_class}(ModBlockEntities.{be_field}.get(), pos, state);
         }}
 "#,
-                entity_class = entity.generated_class
+                entity_class = format!("{package}.blockentity.{}", entity.generated_class)
             ));
             if entity.gui.is_some() {
                 body.push_str(r#"
@@ -4292,7 +4282,7 @@ mod tests {
         let without_entity = generate_blocks_java(
             "com.example.machine", "machine", &[make_block()], &[]
         );
-        assert!(!without_entity.contains("import com.example.machine.blockentity.*;"));
+        assert!(!without_entity.contains("blockentity"));
 
         let entity = NativeBlockEntityPlan {
             registry_name: "ruby_machine".to_owned(),
@@ -4307,8 +4297,10 @@ mod tests {
         let with_entity = generate_blocks_java(
             "com.example.machine", "machine", &[make_block()], &[entity]
         );
-        assert!(with_entity.contains("import com.example.machine.blockentity.*;"));
-        assert!(with_entity.contains("new ConvertedRubyMachineBlockEntity"));
+        assert!(!with_entity.contains("import com.example.machine.blockentity.*;"));
+        assert!(with_entity.contains(
+            "new com.example.machine.blockentity.ConvertedRubyMachineBlockEntity"
+        ));
     }
 
     #[test]
