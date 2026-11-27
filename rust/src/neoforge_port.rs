@@ -459,7 +459,7 @@ pub fn port_to_neoforge(
         tool.source_path = prepared.display_source_path(&tool.source_path);
     }
     let mut item_records = collect_items(
-        &equipment, &armor_sources, &language_lore, &mut warnings
+        &equipment, &armor_sources, &language_lore, &mut warnings, &source_version.api_release
     );
     let mut all_block_sources = block_sources.clone();
     let registered_block_ids: BTreeSet<String> = all_block_sources.iter()
@@ -1289,7 +1289,7 @@ fn recover_food_effects(source_text: &str) -> (Vec<FoodEffectRecord>, Vec<String
     (effects, warnings)
 }
 
-fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
+fn recover_food_properties(source: &EquipmentSource, source_release: &str) -> Option<FoodRecord> {
     let identity = format!("{} {}", source.class_name, source.superclass).to_ascii_lowercase();
     if !identity.contains("itemfood") && !identity.contains("fooditem")
         && !source.source_text.to_ascii_lowercase().contains("foodproperties") {
@@ -1308,21 +1308,25 @@ fn recover_food_properties(source: &EquipmentSource) -> Option<FoodRecord> {
         .and_then(|capture| capture.get(1))
         .map(|capture| capture.as_str())
         .unwrap_or("");
-    let numeric = Regex::new(r"-?\d+(?:\.\d+)?")
-        .expect("static food numeric argument regex");
     let constructor_arguments = crate::source::java::split_top_level(args, ',');
     let wolf_constructor_flag = constructor_arguments.last()
         .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"));
-    let values: Vec<f64> = numeric.find_iter(args)
-        .filter_map(|value| value.as_str().parse::<f64>().ok())
-        .filter(|value| value.is_finite())
-        .collect();
+    let legacy_item_id_constructor = matches!(source_release, "1.7.10" | "1.8.9")
+        || (source_release.is_empty() && constructor_arguments.len() >= 4);
+    // 1.7.10/1.8.9 ItemFood constructors start with the numeric item ID.
+    // 1.12.2 constructors start directly with nutrition.
+    let nutrition_index = if legacy_item_id_constructor { 1 } else { 0 };
+    let saturation_index = if legacy_item_id_constructor { 2 } else { 1 };
+    let nutrition_argument = constructor_arguments.get(nutrition_index)
+        .and_then(|value| legacy_food_number(value));
+    let saturation_argument = constructor_arguments.get(saturation_index)
+        .and_then(|value| legacy_food_number(value));
 
     let nutrition = recover_constant_getter(&source.source_text, "getHealAmount")
-        .or_else(|| values.first().copied())
+        .or(nutrition_argument)
         .unwrap_or(4.0).round().clamp(0.0, 40.0) as u32;
     let saturation = recover_constant_getter(&source.source_text, "getSaturationModifier")
-        .or_else(|| values.get(1).copied())
+        .or(saturation_argument)
         .unwrap_or(0.6).clamp(0.0, 20.0) as f32;
     let lower = source.source_text.to_ascii_lowercase();
     Some(FoodRecord {
@@ -1447,6 +1451,7 @@ fn collect_items(
     armor_sources: &[ArmorSetSource],
     language_lore: &LegacyLanguageLoreIndex,
     warnings: &mut Vec<String>,
+    source_release: &str,
 ) -> Vec<ItemRecord> {
     let armor_classes: BTreeSet<String> = armor_sources.iter()
         .flat_map(|armor| armor.fields.values())
@@ -1472,7 +1477,7 @@ fn collect_items(
             record_warnings.push("Tool/weapon registry recovered, but its legacy combat stats, mining rules, durability and use behavior are not yet transferred.".to_owned());
         }
         let lore = collect_source_lore(&source.source_text, language_lore, &source.registry_name);
-        let mut food = recover_food_properties(source);
+        let mut food = recover_food_properties(source, source_release);
         let (food_effects, food_effect_warnings) = recover_food_effects(&source.source_text);
         if let Some(food) = food.as_mut() {
             food.effects = food_effects;
@@ -5075,7 +5080,7 @@ mod tests {
             }
             public class ItemFoodMeat extends ItemFood {
                 public ItemFoodMeat() {
-                    super(4, 0.6F, true);
+                    super(1001, 4, 0.6F, true);
                     setPotionEffect(Potion.hunger.id, 30, 0, 0.3F);
                 }
             }
@@ -5085,7 +5090,10 @@ mod tests {
             &[source], &output, None, None, None, DEFAULT_NEOFORGE_VERSION, None, false
         ).unwrap();
         let food = report.items.iter().find(|item| item.registry_name == "meat").unwrap();
-        let effect = &food.food.as_ref().unwrap().effects[0];
+        let food_properties = food.food.as_ref().unwrap();
+        assert_eq!(food_properties.nutrition, 4);
+        assert!((food_properties.saturation - 0.6).abs() < 0.001);
+        let effect = &food_properties.effects[0];
         assert_eq!(effect.effect, "HUNGER");
         assert!(food.food.as_ref().unwrap().wolf_favorite_meat);
         assert_eq!(effect.duration_ticks, 600);
