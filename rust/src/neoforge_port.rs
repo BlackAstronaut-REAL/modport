@@ -4267,7 +4267,7 @@ mod tests {
     }
 
     #[test]
-    fn block_registry_imports_block_entity_package_only_for_generated_block_entities() {
+    fn block_registry_uses_qualified_block_entity_classes_without_package_imports() {
         let make_block = || BlockRecord {
             id: "ruby_machine".to_owned(),
             class_name: "RubyMachine".to_owned(),
