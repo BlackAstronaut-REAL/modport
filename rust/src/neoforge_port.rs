@@ -4483,6 +4483,7 @@ mod tests {
                 public StoneOre() {
                     setHardness(2.0F);
                     setHarvestLevel("pickaxe", 1);
+                    setStepSound(Block.soundTypeGravel);
                 }
             }
             public class UnbreakableBlock extends Block {
@@ -4551,7 +4552,7 @@ mod tests {
         let blocks_java = fs::read_to_string(output.join("src/main/java/com/modport/oldmod/registry/ModBlocks.java")).unwrap();
         assert!(blocks_java.contains(".requiresCorrectToolForDrops()"));
         assert!(blocks_java.contains(".randomTicks()"));
-        assert!(blocks_java.contains(".sound(SoundType.METAL)"));\n        assert!(blocks_java.contains(".sound(SoundType.GRAVEL)") == false);
+        assert!(blocks_java.contains(".sound(SoundType.METAL)"));\n        assert!(blocks_java.contains(".sound(SoundType.GRAVEL)"));
         assert!(blocks_java.contains(".strength(-1F, 1F)"));
         assert!(blocks_java.contains(".randomTicks()"));
         assert!(blocks_java.contains(".lightLevel(state -> 12)"));
