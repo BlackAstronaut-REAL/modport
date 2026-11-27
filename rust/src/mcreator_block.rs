@@ -441,6 +441,35 @@ fn block_sound_type(source_text: &str) -> Option<&'static str> {
     if source_text.contains("woodSoundType") {
         return Some("WOOD");
     }
+
+    // 1.7.10 and 1.8.9 use Block.soundTypeStone / soundTypeWood / etc.
+    // 1.12.2 uses setSoundType(SoundType.*), which is matched below.
+    let legacy_pattern = Regex::new(
+        r"(?i)(?:\bBlock\s*\.\s*)?soundType([A-Za-z0-9_]+)\b",
+    ).ok()?;
+    if let Some(raw) = legacy_pattern.captures(source_text).and_then(|capture| capture.get(1)) {
+        return Some(match raw.as_str().to_ascii_uppercase().as_str() {
+            "STONE" => "STONE",
+            "WOOD" => "WOOD",
+            "GRAVEL" => "GRAVEL",
+            "GRASS" => "GRASS",
+            "PISTON" => "PISTON",
+            "METAL" => "METAL",
+            "GLASS" => "GLASS",
+            "CLOTH" => "WOOL",
+            "SAND" => "SAND",
+            "SNOW" => "SNOW",
+            "LADDER" => "LADDER",
+            "ANVIL" => "ANVIL",
+            _ => "STONE",
+        });
+    }
+    if Regex::new(r"(?i)\b(?:Block\s*\.\s*)?SLIME_SOUND\b")
+        .ok()?.is_match(source_text)
+    {
+        return Some("SLIME");
+    }
+
     let pattern = Regex::new(
         r"(?:net\.minecraft\.world\.level\.block\.)?SoundType\.([A-Za-z0-9_]+)",
     ).ok()?;
@@ -450,6 +479,7 @@ fn block_sound_type(source_text: &str) -> Option<&'static str> {
         "GRASS" | "WET_GRASS" => "GRASS",
         "WOOD" => "WOOD",
         "LEAVES" => "LEAVES",
+        "GRAVEL" => "GRAVEL",
         "GLASS" => "GLASS",
         "METAL" => "METAL",
         "PISTON" => "PISTON",
@@ -1133,6 +1163,24 @@ mod tests{
             source_text: "setLightLevel(0.5F);".to_owned(),
         };
         assert_eq!(source_block_properties(&half_light)["light_level"], 7.0);
+
+        let legacy_wood_sound = BlockSource {
+            class_name: "WoodSoundBlock".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "wood_sound".to_owned(),
+            source_path: "WoodSoundBlock.java".to_owned(),
+            source_text: "setStepSound(Block.soundTypeWood);".to_owned(),
+        };
+        assert_eq!(source_block_properties(&legacy_wood_sound)["step_sound"], "WOOD");
+
+        let legacy_gravel_sound = BlockSource {
+            class_name: "GravelSoundBlock".to_owned(),
+            superclass: "Block".to_owned(),
+            registry_name: "gravel_sound".to_owned(),
+            source_path: "GravelSoundBlock.java".to_owned(),
+            source_text: "setStepSound(Block.soundTypeGravel);".to_owned(),
+        };
+        assert_eq!(source_block_properties(&legacy_gravel_sound)["step_sound"], "GRAVEL");
     }
 
     #[test]
