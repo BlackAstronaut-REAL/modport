@@ -85,7 +85,7 @@ const DEFINITIONS: &[Definition] = &[
     Definition { source: "onPlayerStoppedUsing", target: "Item#releaseUsing(ItemStack, Level, LivingEntity, int)", category: "use_animation", status: "signature_adapter_required", notes: "Preserve the remaining-use-ticks countdown passed by the legacy hook; derive elapsed charge as useDuration minus timeLeft only where the legacy body does so. Retain bow release events and side-specific effects.", docs: "items/index.md" },
     Definition { source: "getToolClasses", target: "Item.Properties#component(DataComponents.TOOL, Tool) / Tool.Rule", category: "mining", status: "manual_adapter_required", notes: "Translate the legacy stack-sensitive tool-class set into block tags and Tool.Rule entries. NeoForge 1.21.1 has no Item.Properties#tool method; write the Tool data component with component(DataComponents.TOOL, tool). Preserve custom tool classes through generated tags.", docs: "items/tools.md" },
     Definition { source: "getHarvestLevel", target: "Item.Properties#component(DataComponents.TOOL, Tool) / Tool.Rule#correctForDrops", category: "mining", status: "manual_adapter_required", notes: "Map legacy harvest levels to Tool.Rule correctForDrops predicates and preserve each tool class as a block tag. The 1.12.2 overload also receives player and block state, so player- or state-dependent decisions cannot be represented by a static Tool component alone and require a runtime adapter.", docs: "items/tools.md" },
-    Definition { source: "getArmorModel", target: "IClientItemExtensions#getHumanoidArmorModel(LivingEntity, ItemStack, EquipmentSlot, HumanoidModel<?>)", category: "armor_rendering", status: "client_adapter_required", notes: "Translate the wearing entity, stack, armor slot, and original model in the exact target order. Preserve model properties or use getGenericArmorModel when a non-humanoid model is required.", docs: "items/tools.md" },
+    Definition { source: "getArmorModel", target: "IClientItemExtensions#getHumanoidArmorModel(LivingEntity, ItemStack, EquipmentSlot, HumanoidModel<?>)", category: "armor_rendering", status: "client_adapter_required", notes: "Translate the wearing entity, stack, armor slot, and original model in the exact target order. Convert legacy numeric armor slots (1.8.9) or EntityEquipmentSlot values (1.12.2) to EquipmentSlot. Preserve model properties or use getGenericArmorModel when a non-humanoid model is required.", docs: "items/tools.md" },
     Definition { source: "getColorFromItemStack", target: "RegisterColorHandlersEvent.Item#register(ItemColor, ItemLike...)", category: "rendering", status: "client_adapter_required", notes: "Translate the legacy render-pass argument to the modern tint index and register a client-side ItemColor handler. Ensure the generated item model declares matching tint indices.", docs: "items/index.md" },
     Definition { source: "getIcon", target: "Item model JSON and model predicate / override definitions", category: "rendering", status: "resource_adapter_required", notes: "Legacy icon selection is resource-driven in modern clients. Recover metadata and state predicates into model overrides or custom model registration.", docs: "items/index.md" },
     Definition { source: "getIconIndex", target: "Item model JSON and model predicate / override definitions", category: "rendering", status: "resource_adapter_required", notes: "Translate metadata-dependent icon selection into model overrides; do not emit a runtime icon-index call.", docs: "items/index.md" },
@@ -226,6 +226,36 @@ mod tests {
         assert!(names.contains("onUpdate"));
         assert!(names.contains("getIsRepairable"));
         assert_eq!(names.len(), 3);
+    }
+
+    #[test]
+    fn detects_all_added_legacy_item_method_declarations() {
+        let source = r#"
+            class LegacyItem extends Item {
+                public void onPlayerStoppedUsing(ItemStack stack, World world, EntityLivingBase entity, int timeLeft) { }
+                public Set<String> getToolClasses(ItemStack stack) { return Collections.emptySet(); }
+                public int getHarvestLevel(ItemStack stack, String toolClass, EntityPlayer player, IBlockState state) { return 0; }
+                public ModelBiped getArmorModel(EntityLivingBase entity, ItemStack stack, EntityEquipmentSlot slot, ModelBiped original) { return original; }
+                public int getColorFromItemStack(ItemStack stack, int tintIndex) { return -1; }
+                public IIcon getIcon(ItemStack stack, int pass) { return null; }
+                public IIcon getIconIndex(ItemStack stack) { return null; }
+                public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged) { return true; }
+                public boolean isBookEnchantable(ItemStack stack, ItemStack book) { return true; }
+                public boolean isRepairable() { return true; }
+                public void onHorseArmorTick(World world, EntityLiving horse, ItemStack armor) { }
+                public Entity createEntity(World world, Entity location, ItemStack stack) { return null; }
+            }
+        "#;
+        let detected: BTreeSet<String> = map_legacy_item_methods(source).into_iter()
+            .map(|entry| entry.source_method).collect();
+        for expected in [
+            "onPlayerStoppedUsing", "getToolClasses", "getHarvestLevel", "getArmorModel",
+            "getColorFromItemStack", "getIcon", "getIconIndex", "shouldCauseReequipAnimation",
+            "isBookEnchantable", "isRepairable", "onHorseArmorTick", "createEntity",
+        ] {
+            assert!(detected.contains(expected), "declaration scanner missed: {expected}");
+        }
+        assert_eq!(detected.len(), 12);
     }
 
     #[test]
