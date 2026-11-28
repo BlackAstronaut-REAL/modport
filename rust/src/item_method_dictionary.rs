@@ -82,26 +82,18 @@ const DEFINITIONS: &[Definition] = &[
     Definition { source: "setMaxDamage", target: "Item.Properties#durability(int) / DataComponents#MAX_DAMAGE", category: "durability", status: "automatic_property", notes: "Static max-damage values can be transferred to Item.Properties#durability; per-stack dynamic behavior requires a component adapter.", docs: "items/index.md" },
     Definition { source: "setMaxStackSize", target: "Item.Properties#stacksTo(int) / DataComponents#MAX_STACK_SIZE", category: "stacking", status: "automatic_property", notes: "Static stack limits can be transferred to Item.Properties#stacksTo.", docs: "items/index.md" },
     Definition { source: "setContainerItem", target: "Item.Properties#craftRemainder(Item) / IItemExtension#getCraftingRemainingItem(ItemStack)", category: "crafting", status: "automatic_or_dynamic_adapter", notes: "Use a property for fixed vanilla remainder items; dynamic stack-dependent remainder behavior needs the extension hook.", docs: "items/index.md" },
-    Definition { source: "onPlayerStoppedUsing", target: "Item#releaseUsing(ItemStack, Level, LivingEntity, int)", category: "use_animation", status: "signature_adapter_required", notes: "Translate the remaining-use-ticks convention and preserve charge release, bow firing, and side-specific effects.", docs: "items/index.md" },
+    Definition { source: "onPlayerStoppedUsing", target: "Item#releaseUsing(ItemStack, Level, LivingEntity, int)", category: "use_animation", status: "signature_adapter_required", notes: "Preserve the remaining-use-ticks countdown passed by the legacy hook; derive elapsed charge as useDuration minus timeLeft only where the legacy body does so. Retain bow release events and side-specific effects.", docs: "items/index.md" },
     Definition { source: "getToolClasses", target: "DataComponents#TOOL / Item.Properties#tool(Tool)", category: "mining", status: "manual_adapter_required", notes: "Convert legacy tool-class strings into Tool rules and tags; retain modded block compatibility rather than reducing the item to a vanilla tier.", docs: "items/tools.md" },
     Definition { source: "getHarvestLevel", target: "DataComponents#TOOL / Tool.Rule", category: "mining", status: "manual_adapter_required", notes: "Translate per-tool-class harvest levels into ordered block-tag or state predicates and correct-drop flags.", docs: "items/tools.md" },
-    Definition { source: "getArmorModel", target: "IClientItemExtensions#getHumanoidArmorModel(ItemStack, EquipmentSlot, HumanoidModel)", category: "armor_rendering", status: "client_adapter_required", notes: "Move custom armor model selection into client item extensions and preserve slot-specific model geometry.", docs: "items/tools.md" },
-    Definition { source: "getArmorColor", target: "IItemExtension#getArmorTexture(...) / client armor layer tint adapter", category: "armor_rendering", status: "client_adapter_required", notes: "Recreate per-stack armor tinting in the client armor rendering path; preserve the legacy sentinel for no tint.", docs: "items/tools.md" },
-    Definition { source: "getColorFromItemStack", target: "ItemColors#register(ItemColor, Item...) / item tint registration", category: "rendering", status: "client_adapter_required", notes: "Determine whether the old color is a static layer tint or dynamic stack color, then register the corresponding modern tint source.", docs: "items/index.md" },
+    Definition { source: "getArmorModel", target: "IClientItemExtensions#getHumanoidArmorModel(LivingEntity, ItemStack, EquipmentSlot, HumanoidModel<?>)", category: "armor_rendering", status: "client_adapter_required", notes: "Translate the wearing entity, stack, armor slot, and original model in the exact target order. Preserve model properties or use getGenericArmorModel when a non-humanoid model is required.", docs: "items/tools.md" },
+    Definition { source: "getColorFromItemStack", target: "RegisterColorHandlersEvent.Item#register(ItemColor, ItemLike...)", category: "rendering", status: "client_adapter_required", notes: "Translate the legacy render-pass argument to the modern tint index and register a client-side ItemColor handler. Ensure the generated item model declares matching tint indices.", docs: "items/index.md" },
     Definition { source: "getIcon", target: "Item model JSON and model predicate / override definitions", category: "rendering", status: "resource_adapter_required", notes: "Legacy icon selection is resource-driven in modern clients. Recover metadata and state predicates into model overrides or custom model registration.", docs: "items/index.md" },
     Definition { source: "getIconIndex", target: "Item model JSON and model predicate / override definitions", category: "rendering", status: "resource_adapter_required", notes: "Translate metadata-dependent icon selection into model overrides; do not emit a runtime icon-index call.", docs: "items/index.md" },
-    Definition { source: "shouldCauseReequipAnimation", target: "Item#shouldCauseReequipAnimation(ItemStack, ItemStack, boolean)", category: "rendering", status: "client_adapter_required", notes: "Preserve slot-sensitive hand animation suppression when stack state changes without changing the equipped item.", docs: "items/index.md" },
-    Definition { source: "canElytraFly", target: "IItemExtension#canElytraFly(ItemStack, LivingEntity)", category: "equipment", status: "signature_adapter_required", notes: "Preserve stack and entity checks and ensure the item is equipped in the chest slot before granting flight.", docs: "items/index.md" },
-    Definition { source: "elytraFlightTick", target: "IItemExtension#elytraFlightTick(ItemStack, LivingEntity, int)", category: "equipment", status: "signature_adapter_required", notes: "Translate flight tick parameters and preserve durability consumption, boost behavior, and server-authoritative state.", docs: "items/index.md" },
+    Definition { source: "shouldCauseReequipAnimation", target: "IItemExtension#shouldCauseReequipAnimation(ItemStack, ItemStack, boolean)", category: "rendering", status: "client_adapter_required", notes: "Preserve the old-stack/new-stack order and slotChanged semantics when deciding whether the hand re-equip animation plays.", docs: "items/index.md" },
     Definition { source: "isBookEnchantable", target: "IItemExtension#isBookEnchantable(ItemStack, ItemStack)", category: "enchanting", status: "signature_adapter_required", notes: "Preserve restrictions on applying enchanted books, including stack-specific and enchantment-specific conditions.", docs: "items/tools.md" },
-    Definition { source: "isRepairable", target: "Item#isValidRepairItem(ItemStack, ItemStack)", category: "repair", status: "signature_adapter_required", notes: "Map the legacy stack repairability predicate to the modern candidate-repair-stack query without losing custom material checks.", docs: "items/tools.md" },
-    Definition { source: "onHorseArmorTick", target: "LivingEntity/horse tick event adapter", category: "equipment", status: "event_adapter_required", notes: "Move horse armor periodic behavior to a server-side entity tick handler and retain the equipped stack and horse type checks.", docs: "items/index.md" },
-    Definition { source: "onItemExpire", target: "ItemEntity lifespan / ItemExpireEvent adapter", category: "item_entity", status: "event_adapter_required", notes: "Preserve the legacy ability to cancel or alter item despawning using the modern item-entity lifecycle event.", docs: "items/index.md" },
+    Definition { source: "isRepairable", target: "IItemExtension#isRepairable(ItemStack)", category: "repair", status: "signature_adapter_required", notes: "The legacy no-argument predicate controls whether the item can be repaired at all; preserve that broad eligibility separately from the per-candidate anvil check exposed by isValidRepairItem.", docs: "items/tools.md" },
+    Definition { source: "onHorseArmorTick", target: "IItemExtension#onAnimalArmorTick(ItemStack, Level, Mob)", category: "equipment", status: "signature_adapter_required", notes: "Translate the legacy World/horse/armor argument order to stack/level/mob. This is a direct per-tick item extension hook, not a global tick-event substitute.", docs: "items/index.md" },
     Definition { source: "createEntity", target: "IItemExtension#hasCustomEntity(ItemStack) and Item#createEntity(Level, Entity, ItemStack)", category: "item_entity", status: "manual_adapter_required", notes: "Port custom dropped-entity construction and keep it paired with hasCustomEntity so the hook is actually invoked.", docs: "items/index.md" },
-    Definition { source: "getItemUseSound", target: "Item#getDrinkingSound() / Item#getEatingSound()", category: "use_animation", status: "semantic_adapter_required", notes: "Choose the modern eating or drinking sound based on the recovered use action; custom sounds require registered SoundEvent references.", docs: "items/index.md" },
-    Definition { source: "canFitInsideContainerItems", target: "Item#canFitInsideContainerItems()", category: "stacking", status: "signature_adapter_required", notes: "Preserve container nesting restrictions; do not assume all items are valid contents of shulker-like containers.", docs: "items/index.md" },
-    Definition { source: "getFoodProperties", target: "Item#getFoodProperties(ItemStack, LivingEntity) / FoodProperties", category: "food", status: "stack_sensitive_adapter_required", notes: "Recover dynamic food values and effects per stack; static nutrition and saturation belong in the registered FoodProperties definition.", docs: "items/index.md" },
-    Definition { source: "getEnchantmentValue", target: "IItemExtension#getEnchantmentValue(ItemStack)", category: "enchanting", status: "stack_sensitive_adapter_required", notes: "Retain the stack-sensitive enchantability calculation and avoid confusing it with enchantment level or enchantment eligibility.", docs: "items/tools.md" },
 ];
 
 fn property_call_regex() -> &'static Regex {
@@ -169,13 +161,39 @@ mod tests {
             "getMaxDamage", "getItemStackLimit", "getDamageVsEntity",
             "getHealAmount", "getSaturationModifier",
             "onPlayerStoppedUsing", "getToolClasses", "getHarvestLevel",
-            "getArmorModel", "getArmorColor", "getColorFromItemStack", "getIcon",
-            "getIconIndex", "shouldCauseReequipAnimation", "canElytraFly",
-            "elytraFlightTick", "isBookEnchantable", "isRepairable",
-            "onHorseArmorTick", "onItemExpire", "createEntity", "getItemUseSound",
-            "canFitInsideContainerItems", "getFoodProperties", "getEnchantmentValue",
+            "getArmorModel", "getColorFromItemStack", "getIcon", "getIconIndex",
+            "shouldCauseReequipAnimation", "isBookEnchantable", "isRepairable",
+            "onHorseArmorTick", "createEntity",
         ] {
             assert!(names.contains(expected), "missing dictionary entry: {expected}");
+        }
+    }
+
+    #[test]
+    fn newer_item_method_entries_use_verified_21_1_api_hooks() {
+        let entries = item_method_dictionary();
+        let target = |source: &str| entries.iter()
+            .find(|entry| entry.source_method == source)
+            .map(|entry| entry.target_api.as_str())
+            .unwrap_or_else(|| panic!("missing dictionary entry: {source}"));
+
+        assert_eq!(target("getArmorModel"),
+            "IClientItemExtensions#getHumanoidArmorModel(LivingEntity, ItemStack, EquipmentSlot, HumanoidModel<?>)");
+        assert_eq!(target("getColorFromItemStack"),
+            "RegisterColorHandlersEvent.Item#register(ItemColor, ItemLike...)");
+        assert_eq!(target("shouldCauseReequipAnimation"),
+            "IItemExtension#shouldCauseReequipAnimation(ItemStack, ItemStack, boolean)");
+        assert_eq!(target("isRepairable"), "IItemExtension#isRepairable(ItemStack)");
+        assert_eq!(target("onHorseArmorTick"),
+            "IItemExtension#onAnimalArmorTick(ItemStack, Level, Mob)");
+
+        for unsupported_legacy_override in [
+            "getArmorColor", "canElytraFly", "elytraFlightTick", "onItemExpire",
+            "getItemUseSound", "canFitInsideContainerItems", "getFoodProperties",
+            "getEnchantmentValue",
+        ] {
+            assert!(!entries.iter().any(|entry| entry.source_method == unsupported_legacy_override),
+                "invented/non-legacy override should not be present: {unsupported_legacy_override}");
         }
     }
 
